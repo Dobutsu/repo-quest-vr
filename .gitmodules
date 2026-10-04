@@ -1,0 +1,6 @@
+[submodule "external/RepoXR"]
+	path = external/RepoXR
+	url = https://github.com/DaXcess/RepoXR.git
+[submodule "external/RepoXR-Unity"]
+	path = external/RepoXR-Unity
+	url = https://github.com/DaXcess/RepoXR-Unity.git

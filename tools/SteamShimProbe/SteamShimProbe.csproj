@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Stage 0 of multiplayer on Quest: drives the Steam shim (tools/SteamShim, the Facepunch.Steamworks.Win64 that
+        ships in the APK) with its SteamKit2 backend exactly the way R.E.P.O. does, then connects to Photon with the
+        ticket, all from the Mac.
+    -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <GameManaged Condition="'$(GameManaged)' == ''">$(MSBuildThisFileDirectory)../../work/game/REPO_Data/Managed</GameManaged>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../SteamShim/SteamShim.csproj" />
+        <ProjectReference Include="../UnityEngineStub/CoreModule/UnityEngine.CoreModule.csproj" />
+        <ProjectReference Include="../UnityEngineStub/Facade/UnityEngine.csproj" />
+        <!-- Same Photon connection as the game (and as spike 1) -->
+        <Compile Include="../SteamPhotonProbe/PhotonProbe.cs" Link="PhotonProbe.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="Photon3Unity3D">
+            <HintPath>$(GameManaged)/Photon3Unity3D.dll</HintPath>
+        </Reference>
+        <Reference Include="PhotonRealtime">
+            <HintPath>$(GameManaged)/PhotonRealtime.dll</HintPath>
+        </Reference>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,89 @@
+diff -ruN a/Source/Config.cs b/Source/Config.cs
+--- a/Source/Config.cs	2026-09-27 23:10:23
++++ b/Source/Config.cs	2026-09-27 23:10:23
+@@ -127,6 +127,10 @@
+             "How many lights can light an object at full quality. Too few and lights compete (a surface darkens when the flashlight comes near); more costs performance. The PC game uses 12.",
+             new AcceptableValueRange<int>(1, 12)));
+ 
++    [ConfigDescriptor(customName: "Other Flashlight Shadows")]
++    public ConfigEntry<bool> OtherFlashlightShadows { get; } = file.Create("Rendering", nameof(OtherFlashlightShadows), false,
++        "Whether other players' flashlights cast shadows. Each one renders the scene again into its own shadow map: with a full lobby this cost 7-10 ms of GPU time per frame on Quest. Their light stays either way.");
++
+     [ConfigDescriptor(customName: "Post Processing")]
+     public ConfigEntry<bool> PostProcessing { get; } = file.Create("Rendering", nameof(PostProcessing), false,
+         "The game's post-processing: color grading, vignette, grain and the other screen effects. Off gives a brighter image and saves about 5 ms of GPU time per frame on Quest.");
+@@ -184,6 +188,7 @@
+         QualitySettings.pixelLightCount = PixelLightCount.Value;
+         PixelLightCount.SettingChanged += (_, _) => QualitySettings.pixelLightCount = PixelLightCount.Value;
+         PostProcessing.SettingChanged += (_, _) => Rendering.PostProcessingSetting.Update();
++        OtherFlashlightShadows.SettingChanged += (_, _) => Rendering.FlashlightShadows.Update();
+ 
+         CameraResolution.SettingChanged += (_, _) =>
+         {
+diff -ruN a/Source/Patches/Player/FlashlightPatches.cs b/Source/Patches/Player/FlashlightPatches.cs
+--- a/Source/Patches/Player/FlashlightPatches.cs	2026-09-24 23:31:04
++++ b/Source/Patches/Player/FlashlightPatches.cs	2026-09-27 23:10:23
+@@ -27,6 +27,16 @@
+         __instance.GetComponentInChildren<FlashlightSprint>().enabled = false;
+         __instance.GetComponentInChildren<FlashlightTilt>().enabled = false;
+     }
++
++    /// <summary>
++    /// Other players' flashlights drop their shadows unless Rendering.OtherFlashlightShadows is on
++    /// </summary>
++    [HarmonyPatch(typeof(FlashlightController), nameof(FlashlightController.Start))]
++    [HarmonyPostfix]
++    private static void OnFlashlightStarted(FlashlightController __instance)
++    {
++        RepoXR.Rendering.FlashlightShadows.Register(__instance);
++    }
+ }
+ 
+ [RepoXRPatch(RepoXRPatchTarget.Universal)]
+diff -ruN a/Source/Rendering/FlashlightShadows.cs b/Source/Rendering/FlashlightShadows.cs
+--- a/Source/Rendering/FlashlightShadows.cs	1970-01-01 01:00:00
++++ b/Source/Rendering/FlashlightShadows.cs	2026-09-27 23:10:23
+@@ -0,0 +1,43 @@
++using System.Collections.Generic;
++using UnityEngine;
++
++namespace RepoXR.Rendering;
++
++/// <summary>
++/// Other players' flashlights cast shadows only if Rendering.OtherFlashlightShadows is on. Every shadow-casting
++/// flashlight renders the scene once more into its own shadow map: with a full lobby of six that cost 7-10 ms of GPU
++/// time per frame on Quest. Their light stays either way; your own flashlight is left alone.
++/// </summary>
++internal static class FlashlightShadows
++{
++    private static readonly Dictionary<Light, LightShadows> Original = new();
++
++    public static void Register(FlashlightController flashlight)
++    {
++        if (flashlight.PlayerAvatar.isLocal || !flashlight.spotlight)
++            return;
++
++        Original[flashlight.spotlight] = flashlight.spotlight.shadows;
++        Apply(flashlight.spotlight);
++    }
++
++    public static void Update()
++    {
++        var gone = new List<Light>();
++        foreach (var light in Original.Keys)
++        {
++            if (light)
++                Apply(light);
++            else
++                gone.Add(light);
++        }
++
++        foreach (var light in gone)
++            Original.Remove(light);
++    }
++
++    private static void Apply(Light light)
++    {
++        light.shadows = Plugin.Config.OtherFlashlightShadows.Value ? Original[light] : LightShadows.None;
++    }
++}

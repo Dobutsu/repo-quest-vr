@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- The builder's pipeline from a terminal: our own builds on the Mac (scripts/build.sh) and tests -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <RootNamespace>RepoQuest.Builder.Cli</RootNamespace>
+        <AssemblyName>QuestBuilder.Cli</AssemblyName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../QuestBuilder.Core/QuestBuilder.Core.csproj" />
+    </ItemGroup>
+
+    <!-- Published with a runtime id, the Cli is the players' builder's tools: a self-contained folder that
+         scripts/release.sh zips into the window's exe (tools.zip). With -p:SingleFile=true it is instead a single-file
+         builder for testing the players' flow on the Mac (player-build, update), carrying the kit and those tools -->
+    <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+        <SelfContained>true</SelfContained>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(SingleFile)' == 'true'">
+        <PublishSingleFile>true</PublishSingleFile>
+        <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    </PropertyGroup>
+    <ItemGroup>
+        <EmbeddedResource Include="$(KitZip)" LogicalName="kit.zip" Condition="'$(KitZip)' != ''" />
+        <EmbeddedResource Include="$(ToolsZip)" LogicalName="tools.zip" Condition="'$(ToolsZip)' != ''" />
+        <EmbeddedResource Include="../release-public-key.txt" LogicalName="release-public-key.txt" Condition="Exists('../release-public-key.txt')" />
+        <AssemblyMetadata Include="RepoQuestUpdateSource" Value="$(UpdateSource)" Condition="'$(UpdateSource)' != ''" />
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <!-- The game's Photon assemblies are loaded from the local install, never committed -->
+        <GameManaged Condition="'$(GameManaged)' == ''">$(MSBuildThisFileDirectory)../../work/game/REPO_Data/Managed</GameManaged>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="SteamKit2" Version="3.4.0" />
+        <PackageReference Include="QRCoder" Version="1.6.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../UnityEngineStub/CoreModule/UnityEngine.CoreModule.csproj" />
+        <ProjectReference Include="../UnityEngineStub/Facade/UnityEngine.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="Photon3Unity3D">
+            <HintPath>$(GameManaged)/Photon3Unity3D.dll</HintPath>
+        </Reference>
+        <Reference Include="PhotonRealtime">
+            <HintPath>$(GameManaged)/PhotonRealtime.dll</HintPath>
+        </Reference>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,6 @@
+# Python packages the pipeline's scripts import (scripts/*.py): UnityPy reads the game's assets (shader states,
+# Resources names), dnfile reads package DLLs, certifi gives urllib a CA store.
+# Lock (hashes for Windows and macOS): uv pip compile requirements.in --universal --python-version 3.13 --generate-hashes -o requirements.lock
+UnityPy==1.25.3
+dnfile==0.18.0
+certifi

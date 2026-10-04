@@ -1,0 +1,239 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="using:RepoQuest.Builder.App.Localization"
+        xmlns:vm="using:RepoQuest.Builder.App.ViewModels"
+        x:Class="RepoQuest.Builder.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="REPO Quest Builder"
+        Icon="/Assets/app.ico"
+        Width="920" Height="720" MinWidth="720" MinHeight="560"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Styles>
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="#14808080" />
+            <Setter Property="BorderBrush" Value="#30808080" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16,12" />
+        </Style>
+        <Style Selector="Border.banner">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.info">
+            <Setter Property="Background" Value="#262F7BF6" />
+            <Setter Property="BorderBrush" Value="#662F7BF6" />
+        </Style>
+        <Style Selector="Border.warning">
+            <Setter Property="Background" Value="#26F0A000" />
+            <Setter Property="BorderBrush" Value="#66F0A000" />
+        </Style>
+        <Style Selector="Border.success">
+            <Setter Property="Background" Value="#2622A04A" />
+            <Setter Property="BorderBrush" Value="#6622A04A" />
+        </Style>
+        <Style Selector="TextBlock.heading">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.dim">
+            <Setter Property="Opacity" Value="0.7" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.problem">
+            <Setter Property="Foreground" Value="#D13438" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.icon">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="Width" Value="22" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+    </Window.Styles>
+
+    <DockPanel>
+        <!-- Header: name, version, language -->
+        <Border DockPanel.Dock="Top" Padding="18,12" Background="#10808080" BorderBrush="#25808080" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Image Source="/Assets/logo.png" Width="44" Height="44" />
+                <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
+                    <TextBlock Text="REPO Quest Builder" FontSize="20" FontWeight="SemiBold" />
+                    <TextBlock Text="{l:Tr app.subtitle}" Classes="dim" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding VersionText}" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ToggleButton Content="RU" IsChecked="{Binding IsRussian}" ToolTip.Tip="{l:Tr lang.tooltip}" />
+                    <ToggleButton Content="EN" IsChecked="{Binding IsEnglish}" ToolTip.Tip="{l:Tr lang.tooltip}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Actions -->
+        <Border DockPanel.Dock="Bottom" Padding="18,10" BorderBrush="#25808080" BorderThickness="0,1,0,0">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+                <Button Classes="accent" Content="{l:Tr button.build}" Command="{Binding BuildCommand}"
+                        IsVisible="{Binding !IsBuilding}" IsEnabled="{Binding GameFound}" Padding="18,8" FontWeight="SemiBold" />
+                <Button Content="{l:Tr button.cancelBuild}" Command="{Binding CancelBuildCommand}"
+                        IsVisible="{Binding IsBuilding}" Padding="18,8" />
+                <Button Grid.Column="1" Margin="8,0,0,0" Content="{l:Tr button.install}" Command="{Binding InstallCommand}"
+                        IsEnabled="{Binding HasApk}" Padding="14,8" />
+                <Button Grid.Column="2" Margin="8,0,0,0" Content="{l:Tr button.openApkFolder}"
+                        Command="{Binding OpenApkFolderCommand}" IsEnabled="{Binding HasApk}" Padding="14,8" />
+                <Button Grid.Column="4" Margin="8,0,0,0" Content="{l:Tr button.checkUpdates}"
+                        Command="{Binding CheckUpdatesCommand}" Padding="12,8" />
+                <Button Grid.Column="5" Margin="8,0,0,0" Content="{l:Tr button.report}" Command="{Binding ReportCommand}"
+                        Padding="12,8" />
+            </Grid>
+        </Border>
+
+        <!-- What is happening right now -->
+        <Border DockPanel.Dock="Bottom" Padding="18,6" IsVisible="{Binding BusyText, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <ProgressBar IsIndeterminate="True" Width="80" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding BusyText}" VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
+        <!-- Log -->
+        <Expander DockPanel.Dock="Bottom" Header="{l:Tr log.title}" Margin="18,0,18,8" HorizontalAlignment="Stretch">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="0,0,0,6">
+                    <CheckBox Content="{l:Tr log.debug}" IsChecked="{Binding Log.ShowDebug}" />
+                    <Button Content="{l:Tr log.copy}" Click="OnCopyLog" />
+                </StackPanel>
+                <ListBox x:Name="LogList" ItemsSource="{Binding Log.Lines}" Height="200"
+                         FontFamily="Consolas, Menlo, monospace" FontSize="11">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LogLine">
+                            <TextBlock Text="{Binding Display}" TextWrapping="NoWrap"
+                                       Opacity="{Binding IsDebug, Converter={x:Static vm:Converters.DebugOpacity}}"
+                                       Foreground="{Binding Level, Converter={x:Static vm:Converters.LevelBrush}}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="Padding" Value="4,0" />
+                            <Setter Property="MinHeight" Value="0" />
+                        </Style>
+                    </ListBox.Styles>
+                </ListBox>
+            </DockPanel>
+        </Expander>
+
+        <ScrollViewer>
+            <StackPanel Margin="18,14" Spacing="12">
+
+                <!-- Banners -->
+                <Border Classes="banner info" IsVisible="{Binding HasUpdate}">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{Binding UpdateTitle}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding UpdateNotes}" Classes="dim" />
+                            <TextBlock Text="{Binding UpdateProgressText}" Classes="dim"
+                                       IsVisible="{Binding UpdateProgressText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="accent" Content="{l:Tr banner.update.button}"
+                                Command="{Binding UpdateNowCommand}" IsEnabled="{Binding IsIdle}" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Classes="banner warning" IsVisible="{Binding ShowGameChanged}">
+                    <TextBlock Text="{l:Tr banner.gameChanged}" TextWrapping="Wrap" />
+                </Border>
+                <Border Classes="banner info" IsVisible="{Binding ShowBuilderChanged}">
+                    <TextBlock Text="{l:Tr banner.builderChanged}" TextWrapping="Wrap" />
+                </Border>
+                <Border Classes="banner warning" IsVisible="{Binding UntestedText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <TextBlock Text="{Binding UntestedText}" TextWrapping="Wrap" />
+                </Border>
+                <Border Classes="banner success" IsVisible="{Binding ShowSuccess}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{l:Tr success.title}" FontWeight="SemiBold" FontSize="15" />
+                        <SelectableTextBlock Text="{Binding SuccessPath}" TextWrapping="Wrap" />
+                        <TextBlock Text="{l:Tr success.noShare}" Classes="dim" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Game -->
+                <Border Classes="card">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{l:Tr game.title}" Classes="heading" />
+                            <SelectableTextBlock Text="{Binding GamePathText}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding GameDetailText}" Classes="dim"
+                                       IsVisible="{Binding GameDetailText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                            <TextBlock Text="{Binding GameProblemText}" Classes="problem"
+                                       IsVisible="{Binding GameProblemText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="{l:Tr game.choose}" Command="{Binding ChooseGameCommand}"
+                                IsEnabled="{Binding IsIdle}" VerticalAlignment="Top" />
+                    </Grid>
+                </Border>
+
+                <!-- Workspace -->
+                <Border Classes="card">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{l:Tr ws.title}" Classes="heading" />
+                            <TextBlock Text="{l:Tr ws.about}" Classes="dim" />
+                            <SelectableTextBlock Text="{Binding WorkspacePathText}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding SpaceText}" Classes="dim" />
+                            <TextBlock Text="{l:Tr ws.spaceLow}" Classes="problem" IsVisible="{Binding SpaceLow}" />
+                            <TextBlock Text="{Binding WorkspaceProblemText}" Classes="problem"
+                                       IsVisible="{Binding WorkspaceProblemText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="{l:Tr ws.change}" Command="{Binding ChangeWorkspaceCommand}"
+                                IsEnabled="{Binding IsIdle}" VerticalAlignment="Top" />
+                    </Grid>
+                </Border>
+
+                <!-- Build -->
+                <Border Classes="card">
+                    <StackPanel Spacing="10">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{l:Tr build.title}" Classes="heading" />
+                            <TextBlock Text="{l:Tr build.about}" Classes="dim" />
+                            <TextBlock Text="{Binding LastApkText}" Classes="dim"
+                                       IsVisible="{Binding LastApkText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding Steps}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="10" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:StepViewModel">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto">
+                                        <Panel Grid.RowSpan="3" Margin="0,1,10,0">
+                                            <TextBlock Classes="icon" Text="○" Opacity="0.45"
+                                                       IsVisible="{Binding Status, Converter={x:Static vm:Converters.IsPending}}" />
+                                            <TextBlock Classes="icon" Text="●" Foreground="#2F7BF6" IsVisible="{Binding IsRunning}" />
+                                            <TextBlock Classes="icon" Text="✓" Foreground="#22A04A" IsVisible="{Binding IsDone}" />
+                                            <TextBlock Classes="icon" Text="✓" Opacity="0.55" IsVisible="{Binding IsUpToDate}" />
+                                            <TextBlock Classes="icon" Text="✕" Foreground="#D13438" IsVisible="{Binding IsFailed}" />
+                                            <TextBlock Classes="icon" Text="–" Opacity="0.6" IsVisible="{Binding IsCancelled}" />
+                                        </Panel>
+                                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Column="2" Text="{Binding ElapsedText}" Opacity="0.6" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding About}"
+                                                   Classes="dim" FontSize="12" />
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Spacing="3" Margin="0,3,0,0">
+                                            <ProgressBar IsVisible="{Binding IsRunning}" IsIndeterminate="{Binding IsIndeterminate}"
+                                                         Value="{Binding Percent}" Minimum="0" Maximum="100" />
+                                            <TextBlock Text="{Binding StateText}" FontSize="12" Opacity="0.85" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="{l:Tr common.checking}" Classes="dim" IsVisible="{Binding IsChecking}" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

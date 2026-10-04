@@ -1,0 +1,82 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- Starts RepoXR without BepInEx's preloader/chainloader, for builds where its patches are baked in -->
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <Nullable>disable</Nullable>
+        <LangVersion>latest</LangVersion>
+        <RootNamespace>RepoXR.Standalone</RootNamespace>
+        <GameManaged Condition="'$(GameManaged)' == ''">$(MSBuildThisFileDirectory)../../work/game/REPO_Data/Managed</GameManaged>
+        <RepoXRRuntimeDeps Condition="'$(RepoXRRuntimeDeps)' == ''">$(MSBuildThisFileDirectory)../../work/downloads/RepoXR-1.2.3/BepInEx/plugins/RepoXR/RuntimeDeps</RepoXRRuntimeDeps>
+        <BepInExCore Condition="'$(BepInExCore)' == ''">$(MSBuildThisFileDirectory)../../work/downloads/BepInEx5/BepInEx/core</BepInExCore>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Overrides name RepoXR's internal types; compile against a publicized copy of the mod -->
+        <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.3" PrivateAssets="all" />
+        <Reference Include="RepoXR" Publicize="true">
+            <!-- RepoXR with patches/repoxr applied (scripts/prepare-repoxr.sh) -->
+            <HintPath>$(MSBuildThisFileDirectory)../../work/repoxr-src/bin/Release/netstandard2.1/RepoXR.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <!-- RepoXR's XR dependencies as shipped in its release (RuntimeDeps); internals are needed for OpenXR features -->
+        <Reference Include="Unity.XR.OpenXR" Publicize="true">
+            <HintPath>$(RepoXRRuntimeDeps)/Unity.XR.OpenXR.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="Unity.XR.Management">
+            <HintPath>$(RepoXRRuntimeDeps)/Unity.XR.Management.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <!-- The game itself, for overrides of game methods and the Steam menus (renamed to REPO.Game when staged for
+             Quest); publicized for the menu internals those use -->
+        <Reference Include="Assembly-CSharp" Publicize="true">
+            <HintPath>$(GameManaged)/Assembly-CSharp.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="PhotonVoice">
+            <HintPath>$(GameManaged)/PhotonVoice.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>$(GameManaged)/UnityEngine.CoreModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <!-- The game's menus: uGUI buttons and TextMeshPro texts -->
+        <Reference Include="UnityEngine.UI">
+            <HintPath>$(GameManaged)/UnityEngine.UI.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.UIModule">
+            <HintPath>$(GameManaged)/UnityEngine.UIModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.TextRenderingModule">
+            <HintPath>$(GameManaged)/UnityEngine.TextRenderingModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="Unity.TextMeshPro">
+            <HintPath>$(GameManaged)/Unity.TextMeshPro.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="BepInEx">
+            <HintPath>$(BepInExCore)/BepInEx.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <!-- The Steam shim (Facepunch.Steamworks.Win64 on Quest) and SteamKit2, for SteamSetup (Android only) -->
+        <Reference Include="Facepunch.Steamworks.Win64">
+            <HintPath>$(MSBuildThisFileDirectory)../SteamShim/bin/Release/netstandard2.1/Facepunch.Steamworks.Win64.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="SteamKit2">
+            <HintPath>$(MSBuildThisFileDirectory)../SteamShim/bin/Release/netstandard2.1/SteamKit2.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <!-- The HarmonyX that ships with BepInEx 5 (and in the APK); target of an Android override -->
+        <Reference Include="0Harmony">
+            <HintPath>$(BepInExCore)/0Harmony.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+
+</Project>

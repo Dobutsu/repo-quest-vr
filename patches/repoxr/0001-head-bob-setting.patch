@@ -1,0 +1,54 @@
+diff --git a/Source/Config.cs b/Source/Config.cs
+index 3b36792..9d7efd2 100644
+--- a/Source/Config.cs
++++ b/Source/Config.cs
+@@ -35,6 +35,12 @@ public class Config(string assemblyPath, ConfigFile file)
+     public ConfigEntry<bool> ReducedAimImpact { get; } = file.Create("Gameplay", nameof(ReducedAimImpact), false,
+         "When enabled, lowers the severity of force-look events (like the ceiling eye), which can be helpful for people with motion sickness");
+ 
++    [ConfigDescriptor(customName: "Head Bob", stepSize: 5f, suffix: "%")]
++    public ConfigEntry<int> HeadBob { get; } = file.Create("Gameplay", nameof(HeadBob), 25,
++        new ConfigDescription(
++            "How much the camera bobs and sways while walking, relative to the game's own camera bob. Lower it if walking makes you feel sick, 0% turns it off.",
++            new AcceptableValueRange<int>(0, 100)));
++
+     [ConfigDescriptor]
+     public ConfigEntry<bool> RoomscaleCrouch { get; } = file.Create("Gameplay", nameof(RoomscaleCrouch), true,
+         "When enabled, allows for the player to physically crouch to also crouch in-game");
+diff --git a/Source/Patches/CameraEffectsPatches.cs b/Source/Patches/CameraEffectsPatches.cs
+index 5a70acb..68f9528 100644
+--- a/Source/Patches/CameraEffectsPatches.cs
++++ b/Source/Patches/CameraEffectsPatches.cs
+@@ -1,4 +1,5 @@
+-﻿using System.Collections.Generic;
++﻿using System;
++using System.Collections.Generic;
+ using System.Reflection.Emit;
+ using HarmonyLib;
+ using RepoXR.Managers;
+@@ -49,7 +50,8 @@ internal static class CameraEffectsPatches
+     }
+ 
+     /// <summary>
+-    /// Reduce camera bobbing by 75%
++    /// Scale camera bobbing by the Head Bob setting (25% by default). Only the camera offset is scaled: CameraBob also
++    /// drives the footstep sounds, which keep playing
+     /// </summary>
+     [HarmonyPatch(typeof(CameraBob), nameof(CameraBob.Update))]
+     [HarmonyTranspiler]
+@@ -59,12 +61,14 @@ internal static class CameraEffectsPatches
+             .MatchForward(false,
+                 new CodeMatch(OpCodes.Ldfld, Field(typeof(GameplayManager), nameof(GameplayManager.cameraAnimation))))
+             .Repeat(matcher => matcher.Advance(1).InsertAndAdvance(
+-                new CodeInstruction(OpCodes.Ldc_R4, 0.25f),
++                new CodeInstruction(OpCodes.Call, ((Func<float>)GetHeadBobMultiplier).Method),
+                 new CodeInstruction(OpCodes.Mul)
+             ))
+             .InstructionEnumeration();
+     }
+ 
++    private static float GetHeadBobMultiplier() => Plugin.Config.HeadBob.Value / 100f;
++
+     /// <summary>
+     /// Reduce camera jump effects by 75%
+     /// </summary>

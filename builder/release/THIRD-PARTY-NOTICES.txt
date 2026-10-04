@@ -1,0 +1,29 @@
+REPO Quest Builder - third-party software
+=========================================
+
+Inside RepoQuestBuilder.exe
+- .NET runtime, System.Collections.Immutable (MIT) - https://github.com/dotnet/runtime
+- Avalonia (MIT) - https://github.com/AvaloniaUI/Avalonia
+- CommunityToolkit.Mvvm (MIT) - https://github.com/CommunityToolkit/dotnet
+- HarmonyX (MIT) - https://github.com/BepInEx/HarmonyX
+- MonoMod (MIT) - https://github.com/MonoMod/MonoMod
+- Mono.Cecil (MIT) - https://github.com/jbevain/cecil
+- RepoXR by DaXcess, with the port's patches (GPL-3.0) - https://github.com/DaXcess/RepoXR
+- RepoXR's assets built for Android, from RepoXR-Unity (GPL-3.0) - https://github.com/DaXcess/RepoXR-Unity
+- SteamKit2 2.5.0 (LGPL-2.1) - https://github.com/SteamRE/SteamKit
+- protobuf-net (Apache-2.0) - https://github.com/protobuf-net/protobuf-net
+- libopus 1.5.2 (BSD-3-Clause) - https://opus-codec.org
+The license texts are in the kit the builder unpacks into its working folder (kit\<version>\licenses).
+
+Downloaded by the builder from their publishers (not included; their own licenses apply)
+- Unity Hub and Unity 2022.3.62f3 with Android Build Support - Unity's terms: https://unity.com/legal
+- Android SDK and NDK (via Unity Hub) - https://developer.android.com/studio/terms
+- AssetRipper 2.0.0 (GPL-3.0) - https://github.com/AssetRipper/AssetRipper
+- uv and a Python 3.13 build (MIT/Apache-2.0; PSF license) - https://github.com/astral-sh/uv
+- Python packages: UnityPy (MIT), dnfile (MIT), certifi (MPL-2.0) and their dependencies
+- RepoXR 1.2.3 release (GPL-3.0) - https://thunderstore.io/c/repo/p/DaXcess/RepoXR/
+- BepInEx 5.4.23.5 (LGPL-2.1) - https://github.com/BepInEx/BepInEx
+- BepInEx.BaseLib, CustomDiscoverStateLib (NuGet packages RepoXR builds against)
+
+R.E.P.O. is a game by semiwork. This builder is a fan project, not affiliated with semiwork, Valve, Meta or Unity.
+It contains no part of the game: the game's files come from the player's own copy and stay on the player's computer.

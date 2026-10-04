@@ -1,0 +1,207 @@
+diff -ruN a/Source/Config.cs b/Source/Config.cs
+--- a/Source/Config.cs	2026-09-28 17:23:45
++++ b/Source/Config.cs	2026-09-28 17:23:45
+@@ -127,6 +127,10 @@
+             "How many lights can light an object at full quality. Too few and lights compete (a surface darkens when the flashlight comes near); more costs performance. The PC game uses 12.",
+             new AcceptableValueRange<int>(1, 12)));
+ 
++    [ConfigDescriptor(customName: "Lamp Lighting")]
++    public ConfigEntry<bool> LampLighting { get; } = file.Create("Rendering", nameof(LampLighting), true,
++        "Light the lamps nearest to you per pixel, all in one pass, instead of Unity lighting each object with a few of them in extra passes: no seams between objects and less work for the headset, but lamps cast no shadows. Flashlights are unchanged.");
++
+     [ConfigDescriptor(customName: "Other Flashlight Shadows")]
+     public ConfigEntry<bool> OtherFlashlightShadows { get; } = file.Create("Rendering", nameof(OtherFlashlightShadows), false,
+         "Whether other players' flashlights cast shadows. Each one renders the scene again into its own shadow map: with a full lobby this cost 7-10 ms of GPU time per frame on Quest. Their light stays either way.");
+@@ -189,6 +193,7 @@
+         PixelLightCount.SettingChanged += (_, _) => QualitySettings.pixelLightCount = PixelLightCount.Value;
+         PostProcessing.SettingChanged += (_, _) => Rendering.PostProcessingSetting.Update();
+         OtherFlashlightShadows.SettingChanged += (_, _) => Rendering.FlashlightShadows.Update();
++        Rendering.LampLighting.Create();
+ 
+         CameraResolution.SettingChanged += (_, _) =>
+         {
+diff -ruN a/Source/Rendering/LampLighting.cs b/Source/Rendering/LampLighting.cs
+--- a/Source/Rendering/LampLighting.cs	1970-01-01 01:00:00
++++ b/Source/Rendering/LampLighting.cs	2026-09-28 18:24:54
+@@ -0,0 +1,181 @@
++using System.Collections.Generic;
++using UnityEngine;
++
++namespace RepoXR.Rendering;
++
++/// <summary>
++/// Lamps lit per pixel in one pass (Rendering.LampLighting). Built-in forward rendering gives each per-pixel light a
++/// pass of its own over every object it reaches, chooses per object which lights get one (Pixel Lights) and
++/// approximates the rest per vertex: expensive on Quest, and neighbouring objects visibly disagree about a lamp.
++/// Instead the lamps nearest the camera go to every shader as arrays, evaluated per pixel in the base pass
++/// (RepoQuestLamps.cginc in the Quest build), and Unity itself no longer lights with them (culling mask Nothing, which
++/// also skips their shadow maps). Flashlights and lights with cookies stay Unity lights, with shadows.
++/// </summary>
++internal class LampLighting : MonoBehaviour
++{
++    private const int MaxLamps = 16; // REPOQUEST_MAX_LAMPS
++    private const float ScanInterval = 2f;
++
++    private static readonly int PositionId = Shader.PropertyToID("_RQLampPosition");
++    private static readonly int ColorId = Shader.PropertyToID("_RQLampColor");
++    private static readonly int SpotId = Shader.PropertyToID("_RQLampSpot");
++    private static readonly int CountId = Shader.PropertyToID("_RQLampCount");
++
++    private readonly Vector4[] positions = new Vector4[MaxLamps];
++    private readonly Vector4[] colors = new Vector4[MaxLamps];
++    private readonly Vector4[] spots = new Vector4[MaxLamps];
++    private readonly Dictionary<Light, int> managed = new(); // lamp -> its own culling mask
++    private readonly List<Light> gone = new();
++
++    // This frame's lit lamps, gathered once for all cameras
++    private readonly List<Light> lit = new();
++    private readonly List<Vector3> litPositions = new();
++    private readonly List<float> litRanges = new();
++
++    // The nearest lamps to one camera, by how close their light reaches to it
++    private readonly int[] nearest = new int[MaxLamps];
++    private readonly float[] nearestDistances = new float[MaxLamps];
++
++    private float nextScan;
++    private bool active;
++
++    public static void Create()
++    {
++        var host = new GameObject("RepoXR Lamp Lighting") { hideFlags = HideFlags.HideAndDontSave };
++        DontDestroyOnLoad(host);
++        host.AddComponent<LampLighting>();
++    }
++
++    private void OnEnable() => Camera.onPreCull += OnCameraPreCull;
++
++    private void OnDisable() => Camera.onPreCull -= OnCameraPreCull;
++
++    private void LateUpdate()
++    {
++        var on = Plugin.Config.LampLighting.Value;
++        if (on != active)
++        {
++            active = on;
++            nextScan = 0;
++            if (!on)
++            {
++                Release();
++                lit.Clear();
++                Shader.SetGlobalInt(CountId, 0);
++            }
++        }
++
++        if (!on)
++            return;
++
++        if (Time.unscaledTime >= nextScan)
++        {
++            Scan();
++            nextScan = Time.unscaledTime + ScanInterval;
++        }
++
++        lit.Clear();
++        litPositions.Clear();
++        litRanges.Clear();
++        foreach (var lamp in managed.Keys)
++        {
++            if (!lamp || !lamp.isActiveAndEnabled || lamp.intensity <= 0)
++                continue;
++            lit.Add(lamp);
++            litPositions.Add(lamp.transform.position);
++            litRanges.Add(lamp.range);
++        }
++    }
++
++    /// <summary>
++    /// Each camera gets the lamps nearest to it: the menu's player preview is rendered by its own camera, lit by its
++    /// own lamps far from the player's
++    /// </summary>
++    private void OnCameraPreCull(Camera camera)
++    {
++        if (!active)
++            return;
++
++        var eye = camera.transform.position;
++        var count = 0;
++        for (var i = 0; i < lit.Count; i++)
++        {
++            var distance = Vector3.Distance(litPositions[i], eye) - litRanges[i];
++            if (count == MaxLamps && distance >= nearestDistances[MaxLamps - 1])
++                continue;
++
++            // Insert in order, dropping the farthest when full
++            var k = count < MaxLamps ? count++ : MaxLamps - 1;
++            for (; k > 0 && nearestDistances[k - 1] > distance; k--)
++            {
++                nearestDistances[k] = nearestDistances[k - 1];
++                nearest[k] = nearest[k - 1];
++            }
++            nearestDistances[k] = distance;
++            nearest[k] = i;
++        }
++
++        var linear = QualitySettings.activeColorSpace == ColorSpace.Linear;
++        for (var k = 0; k < count; k++)
++        {
++            var lamp = lit[nearest[k]];
++            if (!lamp)
++            {
++                colors[k] = Vector4.zero;
++                continue;
++            }
++
++            var position = litPositions[nearest[k]];
++            positions[k] = new Vector4(position.x, position.y, position.z, 1f / Mathf.Max(lamp.range * lamp.range, 1e-4f));
++            var color = (linear ? lamp.color.linear : lamp.color) * lamp.intensity;
++            colors[k] = new Vector4(color.r, color.g, color.b, 0);
++            if (lamp.type == LightType.Spot)
++            {
++                var direction = lamp.transform.forward;
++                spots[k] = new Vector4(direction.x, direction.y, direction.z,
++                    1f / Mathf.Tan(Mathf.Clamp(lamp.spotAngle, 1f, 179f) * 0.5f * Mathf.Deg2Rad));
++            }
++            else
++                spots[k] = Vector4.zero;
++        }
++
++        Shader.SetGlobalVectorArray(PositionId, positions);
++        Shader.SetGlobalVectorArray(ColorId, colors);
++        Shader.SetGlobalVectorArray(SpotId, spots);
++        Shader.SetGlobalInt(CountId, count);
++    }
++
++    /// <summary>Takes over lamps that appeared since the last scan (level generation, spawned items)</summary>
++    private void Scan()
++    {
++        foreach (var lamp in FindObjectsByType<Light>(FindObjectsSortMode.None))
++        {
++            if (managed.ContainsKey(lamp) || !IsLamp(lamp))
++                continue;
++            managed[lamp] = lamp.cullingMask;
++            lamp.cullingMask = 0;
++        }
++
++        gone.Clear();
++        foreach (var lamp in managed.Keys)
++            if (!lamp)
++                gone.Add(lamp);
++        foreach (var lamp in gone)
++            managed.Remove(lamp);
++    }
++
++    private static bool IsLamp(Light light) =>
++        light.type is LightType.Point or LightType.Spot && light.cookie == null && light.cullingMask != 0 &&
++        light.renderMode != LightRenderMode.ForcePixel && !light.GetComponentInParent<FlashlightController>();
++
++    /// <summary>Hands the lamps back to Unity</summary>
++    private void Release()
++    {
++        foreach (var pair in managed)
++            if (pair.Key)
++                pair.Key.cullingMask = pair.Value;
++        managed.Clear();
++    }
++
++    private void OnDestroy() => Release();
++}

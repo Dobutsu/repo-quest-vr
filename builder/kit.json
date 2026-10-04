@@ -1,0 +1,81 @@
+{
+  "version": "dev",
+  "unity": {
+    "version": "2022.3.62f3",
+    "changeset": "96770f904ca7"
+  },
+  "python": "3.13",
+  "downloads": {
+    "assetRipper": {
+      "version": "2.0.0",
+      "files": {
+        "win-x64": {
+          "url": "https://github.com/AssetRipper/AssetRipper/releases/download/2.0.0/AssetRipper_win_x64.zip",
+          "sha256": "9a7ef0e7c5c3ea5b90b4e6d855e2d98d5f7ec8c3f9e26fccbc194c6a7b01baf7"
+        },
+        "osx-arm64": {
+          "url": "https://github.com/AssetRipper/AssetRipper/releases/download/2.0.0/AssetRipper_mac_arm64.tar.xz",
+          "sha256": "237a6da404bf089c5e5c71a5a9a698c2ea580872292dfa5ce21e25fd1dbe9045"
+        },
+        "osx-x64": {
+          "url": "https://github.com/AssetRipper/AssetRipper/releases/download/2.0.0/AssetRipper_mac_x64.tar.xz",
+          "sha256": "1b3836f135d16845cb57595fadff5739cbb86d28caaf621005b4301dba9b5a56"
+        }
+      }
+    },
+    "uv": {
+      "version": "0.12.22",
+      "files": {
+        "win-x64": {
+          "url": "https://github.com/astral-sh/uv/releases/download/0.12.22/uv-x86_64-pc-windows-msvc.zip",
+          "sha256": "ea1397797a0ca15f63516dd0f49c2dde9776db9be5861cab152ebe8ad199894d"
+        },
+        "osx-arm64": {
+          "url": "https://github.com/astral-sh/uv/releases/download/0.12.22/uv-aarch64-apple-darwin.tar.gz",
+          "sha256": "5d714de09501a59393ceca78f4bc232a50478729640d251907160299b2a93ddd"
+        },
+        "osx-x64": {
+          "url": "https://github.com/astral-sh/uv/releases/download/0.12.22/uv-x86_64-apple-darwin.tar.gz",
+          "sha256": "1b8a5b316883df2daf20fb9a446e5b230e01d947d57aba2694977c5ac5a7e98c"
+        }
+      }
+    },
+    "repoXR": {
+      "version": "1.2.3",
+      "url": "https://thunderstore.io/package/download/DaXcess/RepoXR/1.2.3/",
+      "sha256": "bc6459b97a7663d25059fc7d8c362bbd42d5159b12c5969ad1448a498f77f35e"
+    },
+    "bepInEx": {
+      "version": "5.4.23.5",
+      "url": "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.5/BepInEx_win_x64_5.4.23.5.zip",
+      "sha256": "82f9878551030f54657792c0740d9d51a09500eeae1fba21106b0c441e6732c4"
+    },
+    "nuGet": [
+      {
+        "id": "bepinex.baselib",
+        "version": "5.4.20",
+        "url": "https://nuget.bepinex.dev/v3/package/bepinex.baselib/5.4.20/bepinex.baselib.5.4.20.nupkg",
+        "sha256": "de7bd7bed7e27f7f92682ea0ad2c1c9ed2740101e1e73f1d43ef0a6fbd615ecd",
+        "lib": "lib/netstandard2.0"
+      },
+      {
+        "id": "customdiscoverstatelib",
+        "version": "1.0.1",
+        "url": "https://nuget.daxcess.io/v3/package/customdiscoverstatelib/1.0.1/customdiscoverstatelib.1.0.1.nupkg",
+        "sha256": "98e5b9624dd933041a2bf690bd2b33d27a9dc2b90e3eda6c66d66b3e9a0fdc16",
+        "lib": "lib/netstandard2.1"
+      }
+    ],
+    "builtinShaders": {
+      "version": "2022.3.62f3",
+      "url": "https://download.unity3d.com/download_unity/96770f904ca7/builtin_shaders-2022.3.62f3.zip",
+      "sha256": "e2f98242a6ca7edc2c581e761ab7cc0dc6feca6572d0c1ab765e4d6a9adb9a31"
+    }
+  },
+  "testedGames": [
+    {
+      "name": "v0.4.4.3",
+      "assemblyCSharp": "ce995a182ddc884ea965e87786f1986248d9616300fa825bcc04bca671ee6526"
+    }
+  ]
+}

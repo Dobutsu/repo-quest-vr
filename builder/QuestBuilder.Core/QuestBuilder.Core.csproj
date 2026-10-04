@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- Everything the builder does, without UI: setup (downloads, Unity, Python), the build pipeline, updates, Quest -->
+    <PropertyGroup>
+        <RootNamespace>RepoQuest.Builder</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../tools/HarmonyBaker/HarmonyBaker.csproj" />
+        <ProjectReference Include="../../tools/AssemblyRenamer/AssemblyRenamer.csproj" />
+        <ProjectReference Include="../../tools/Il2CppFixes/Il2CppFixes.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="QuestBuilder.Tests" />
+    </ItemGroup>
+
+</Project>

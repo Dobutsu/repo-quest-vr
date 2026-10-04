@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Stand-in for Facepunch.Steamworks.Win64 (which P/Invokes steam_api64, absent on Quest). Same assembly
+        name, version and public API surface the game and RepoXR use; the Steam side is a pluggable backend.
+    -->
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <AssemblyName>Facepunch.Steamworks.Win64</AssemblyName>
+        <RootNamespace>Steamworks</RootNamespace>
+        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <FileVersion>1.0.0.0</FileVersion>
+        <LangVersion>latest</LangVersion>
+        <Nullable>disable</Nullable>
+        <!-- Ship SteamKit2 and its dependencies next to the shim (scripts/apply-quest-runtime.sh copies them) -->
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Real Steam for the Quest (RepoQuest.Steam.SteamKitBackend). 2.5 is the last SteamKit with a netstandard
+             build Unity can use; 3.x targets .NET 8 only -->
+        <PackageReference Include="SteamKit2" Version="2.5.0" />
+    </ItemGroup>
+
+</Project>

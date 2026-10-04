@@ -1,0 +1,19 @@
+<Project>
+
+    <!-- The .NET tools (HarmonyBaker, AssemblyRenamer, Il2CppFixes) are referenced exe projects: the SDK brings along
+         their apphosts, deps.json and runtimeconfig.json, once per runtime id, which publishing refuses as duplicates.
+         The builder runs the tools inside its own process (ToolHost), so none of these files are needed. -->
+    <Target Name="RepoQuestDropToolHostFiles" AfterTargets="ComputeResolvedFilesToPublishList">
+        <ItemGroup>
+            <_RepoQuestToolHostFile Include="@(ResolvedFileToPublish)"
+                Condition="'%(ResolvedFileToPublish.RelativePath)' == 'HarmonyBaker' or '%(ResolvedFileToPublish.RelativePath)' == 'HarmonyBaker.exe'
+                           or '%(ResolvedFileToPublish.RelativePath)' == 'HarmonyBaker.deps.json' or '%(ResolvedFileToPublish.RelativePath)' == 'HarmonyBaker.runtimeconfig.json'
+                           or '%(ResolvedFileToPublish.RelativePath)' == 'AssemblyRenamer' or '%(ResolvedFileToPublish.RelativePath)' == 'AssemblyRenamer.exe'
+                           or '%(ResolvedFileToPublish.RelativePath)' == 'AssemblyRenamer.deps.json' or '%(ResolvedFileToPublish.RelativePath)' == 'AssemblyRenamer.runtimeconfig.json'
+                           or '%(ResolvedFileToPublish.RelativePath)' == 'Il2CppFixes' or '%(ResolvedFileToPublish.RelativePath)' == 'Il2CppFixes.exe'
+                           or '%(ResolvedFileToPublish.RelativePath)' == 'Il2CppFixes.deps.json' or '%(ResolvedFileToPublish.RelativePath)' == 'Il2CppFixes.runtimeconfig.json'" />
+            <ResolvedFileToPublish Remove="@(_RepoQuestToolHostFile)" />
+        </ItemGroup>
+    </Target>
+
+</Project>

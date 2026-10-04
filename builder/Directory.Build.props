@@ -1,0 +1,18 @@
+<Project>
+
+    <!-- Shared by the builder's projects (not by tools/, which they reference) -->
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <LangVersion>latest</LangVersion>
+        <!-- One version for the builder, its kit and the APK it builds (scripts/release.sh passes it) -->
+        <Version Condition="'$(Version)' == ''">0.0.0</Version>
+        <Product>REPO Quest Builder</Product>
+        <Company>Dobutsu</Company>
+        <!-- HarmonyBaker, AssemblyRenamer and Il2CppFixes are framework-dependent exes; the builder runs them as its
+             own child processes (see ToolHost), also when it is published self-contained -->
+        <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+    </PropertyGroup>
+
+</Project>

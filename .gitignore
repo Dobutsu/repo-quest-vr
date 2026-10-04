@@ -1,0 +1,23 @@
+# Game files and anything derived from them must never be committed
+work/
+*.assets
+*.resS
+*.resource
+*.bundle
+REPO_Data/
+
+# .NET build output
+bin/
+obj/
+*.user
+
+# Unity
+Library/
+Temp/
+Logs/
+UserSettings/
+
+.DS_Store
+
+# Python
+__pycache__/

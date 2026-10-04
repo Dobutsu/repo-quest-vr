@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- Unity's UnityEngine.dll is a facade forwarding to the module assemblies; Photon3Unity3D references it. -->
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <AssemblyName>UnityEngine</AssemblyName>
+        <AssemblyVersion>0.0.0.0</AssemblyVersion>
+        <FileVersion>0.0.0.0</FileVersion>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CoreModule/UnityEngine.CoreModule.csproj" />
+    </ItemGroup>
+
+</Project>
