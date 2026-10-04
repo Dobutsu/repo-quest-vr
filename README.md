@@ -5,8 +5,6 @@ your friends' games on PC. Their game stays vanilla, with no mods.
 
 The game is built **from your own copy of R.E.P.O.** on Steam. This repository and its releases contain no game files.
 
-> **Русский** ниже: [кратко по-русски](#по-русски).
-
 ## Built on RepoXR by DaXcess
 
 This port is built on **[RepoXR](https://github.com/DaXcess/RepoXR)** by **[DaXcess](https://github.com/DaXcess)**,
@@ -79,8 +77,8 @@ your R.E.P.O. (Steam)
 - `tools/SteamShim` replaces Facepunch.Steamworks with a SteamKit2 backend: lobbies, auth tickets for Photon, friends.
 - `tools/HarmonyBaker`, `tools/AssemblyRenamer` and `tools/Il2CppFixes` make the Mono mod work under IL2CPP.
 - `patches/repoxr` holds the changes to RepoXR. `unity-tools/` holds the Unity editor and runtime helpers.
-- `docs/` contains the design notes, in Russian: `feasibility.md` (how the port came together), `builder.md` and
-  `public-release.md`.
+- `docs/` contains the design notes: `feasibility.md` (how the port came together), `builder.md` (the builder and
+  releases) and `public-release.md` (the legal side).
 
 Development happens on a Mac with the same pipeline (`scripts/build.sh`). The Windows builder is the supported way for
 players.
@@ -104,23 +102,3 @@ modifies. Third-party components and their licenses are listed in [`builder/SOUR
   [BepInEx](https://github.com/BepInEx/BepInEx) and [HarmonyX](https://github.com/BepInEx/HarmonyX),
   [Avalonia](https://github.com/AvaloniaUI/Avalonia) and [Opus](https://opus-codec.org/).
 - Port by **[Dobutsu](https://github.com/Dobutsu)**.
-
----
-
-## По-русски
-
-Автономная VR-версия R.E.P.O. для Meta Quest 3: игра идёт на самом шлеме, без ПК, и можно заходить к друзьям,
-у которых обычная игра на ПК без модов. APK собирается **из вашей копии игры** в Steam. В репозитории и выпусках
-файлов игры нет.
-
-**Весь VR здесь — это [RepoXR](https://github.com/DaXcess/RepoXR) от [DaXcess](https://github.com/DaXcess)**.
-Трекинг, управление, VR-меню, физический захват предметов и совместная игра VR и обычных игроков — всё это его
-работа. Порт только запускает RepoXR на самом шлеме. Если вам нравится R.E.P.O. в VR, поставьте RepoXR звезду и
-скажите спасибо в его [Discord](https://discord.gg/2DxNgpPZUF). **С проблемами порта не ходите к DaXcess**, пишите
-сюда в Issues.
-
-Как получить: скачайте **RepoQuestBuilder** для Windows из [Releases](../../releases/latest) и следуйте `README.txt`.
-Вход в Steam в шлеме идёт через неофициальный клиент (SteamKit2). Правила Steam это формально запрещают. Риск для
-аккаунта небольшой, но он есть. Не передавайте APK другим: в нём файлы игры.
-
-Подробности о том, как устроен порт, лежат в `docs/`.

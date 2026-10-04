@@ -46,7 +46,7 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
         this.view = view;
         if (options.Workspace is not null)
             settings.WorkspacePath = options.Workspace;
-        Loc.Instance.SetLanguage(options.Language ?? settings.Language ?? Loc.SystemLanguage());
+        Loc.Instance.SetLanguage(options.Language ?? settings.Language ?? "en"); // English unless the player chose Russian
         Loc.Instance.LanguageChanged += OnLanguageChanged;
         Steps = new ObservableCollection<StepViewModel>(BuilderService.Steps.Select(id => new StepViewModel(id)));
         clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };

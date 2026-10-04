@@ -129,7 +129,7 @@ public partial class MainWindow : Window, IWindowServices
     {
         Directory.CreateDirectory(folder);
         var vm = ViewModel!;
-        foreach (var language in new[] { "ru", "en" })
+        foreach (var language in new[] { "en", "ru" })
         {
             Loc.Instance.SetLanguage(language);
             await Task.Delay(800);

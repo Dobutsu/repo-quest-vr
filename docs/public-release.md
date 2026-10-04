@@ -1,123 +1,125 @@
-# Публичный проект: каждый собирает Quest-версию из своей копии игры
+# A public project: everyone builds the Quest version from their own copy of the game
 
-Заметки от 2026-09-26. Вопрос: можно ли выложить проект на GitHub так, чтобы другие игроки из своих купленных в Steam
-файлов R.E.P.O. собирали сборку для себя и играли, не нарушая прав разработчиков, и чтобы это было совсем просто
-(положить файлы игры в папку, поставить APK на шлем).
+Notes from 2026-09-26. The question: can the project go on GitHub so that other players build the Quest version from
+the R.E.P.O. files they bought on Steam and play, without infringing on the developers' rights? And can that be made
+really simple (put the game files in a folder, install the APK on the headset)?
 
-Короткий ответ: модель «каждый собирает из своей купленной копии» реализуема, но «положить файлы в папку и поставить
-APK» не получится, а «не нарушая прав» без разрешения разработчиков гарантировать нельзя. Это не юридическая
-консультация, а понимание ситуации на эту дату.
+The short answer: the "everyone builds from their own copy" model is feasible. "Put the files in a folder and install
+the APK" is not possible. "Without infringing" cannot be guaranteed without the developers' permission. This is not
+legal advice, only an understanding of the situation as of that date.
 
-## Техническая часть: насколько просто можно сделать
+## Technical side: how simple it can get
 
-**Совсем просто, без сборки, не выйдет.** Файлы игры с ПК на Quest не работают как есть:
-- **Шейдеры** скомпилированы под DirectX 11, Quest их не понимает, их нужно пересоздать.
-- **Текстуры** сжаты в BC/DXT, видеокарта Quest таких не поддерживает, их нужно пережать в ASTC.
-- **Код игры** на ПК работает на Mono, а на Quest нужен IL2CPP, то есть компиляция в нативный ARM64-код.
+**Fully simple, with no build step, is not possible.** The PC game's files do not work on the Quest as they are:
+- **Shaders** are compiled for DirectX 11, which the Quest does not understand. They have to be recreated.
+- **Textures** are compressed as BC/DXT, which the Quest's GPU does not support. They have to be recompressed as ASTC.
+- **The game's code** runs on Mono on PC. The Quest needs IL2CPP, that is, compilation to native ARM64 code.
 
-Всё это делает только Unity Editor. Поэтому у каждого игрока на компьютере должна пройти настоящая сборка.
+Only the Unity Editor can do all of this. So every player's computer has to run a real build.
 
-**Реально достижимый вариант** — сборщик в один клик:
-1. Программа ставит нужное: Unity 2022.3 с модулем Android через Unity Hub, .NET, Python, AssetRipper. Лицензию
-   Unity игрок принимает сам.
-2. Игрок указывает папку REPO из Steam и нажимает «Собрать».
-3. Подключает Quest в режиме разработчика и нажимает «Установить».
+**What is realistically achievable** is a one-click builder:
+1. The program installs what is needed: Unity 2022.3 with the Android module through Unity Hub, .NET, Python,
+   AssetRipper. The player accepts the Unity license themselves.
+2. The player points it at the REPO folder from Steam and clicks "Build".
+3. They connect the Quest in developer mode and click "Install".
 
-Требования: Mac или Windows, ~50 ГБ на диске, первая сборка около часа. После каждого обновления REPO пересобирать:
-версия должна совпадать с друзьями на ПК. Наши скрипты в `scripts/` — уже почти такой конвейер, не хватает обёртки и
-проверки на чистой машине. Режим разработчика на Quest бесплатный, APK можно ставить и через SideQuest.
+Requirements: Mac or Windows, ~50 GB of disk, about an hour for the first build. Rebuild after every REPO update: the
+version has to match friends on PC. Our scripts in `scripts/` are already almost such a pipeline. What is missing is a
+wrapper and a test on a clean machine. Developer mode on the Quest is free, and the APK can also be installed with
+SideQuest.
 
-## Правовая часть
+## Legal side
 
-**Что в модели «свои файлы» хорошо:**
-- В репозитории только наш код, скрипты и патчи. Ни файлов игры, ни APK, ни экспорта (всё из `work/`) мы не
-  распространяем. Так устроены многие фанатские порты, где движок собирается из оригинальных данных игрока.
-- Играть онлайн может только владелец игры: вход идёт в его Steam-аккаунт, а Photon принимает настоящий билет Steam.
-  Ничего не взламывается, и проверку владения мы не обходим.
-- Лицензии нашего кода совместимы с публикацией: RepoXR под GPL-3.0, так что наш порт тоже будет GPL с открытым кодом.
-  SteamKit2 под LGPL, Opus под BSD, HarmonyX под MIT.
+**What is good about the "own files" model:**
+- The repository holds only our code, scripts and patches. We do not distribute game files, APKs or the export
+  (everything in `work/`). Many fan ports work this way: the engine is built from the player's original game data.
+- Only the game's owner can play online: they log in to their own Steam account, and Photon accepts a genuine Steam
+  ticket. Nothing is cracked, and we do not bypass the ownership check.
+- The licenses of our code allow publishing. RepoXR is GPL-3.0, so our port is GPL as well, with open source code.
+  SteamKit2 is LGPL, Opus is BSD, HarmonyX is MIT.
 
-**Что остаётся рискованным:**
-1. **Лицензионное соглашение игры (EULA)** может запрещать реверс-инжиниринг, модификацию и производные работы. Моды к
-   REPO разработчики терпят (RepoXR, Thunderstore), но терпеть моды — не то же самое, что разрешить порт на другую
-   платформу.
-2. **Серверы Photon** оплачивает разработчик за каждого одновременного игрока. Игроки с Quest легальные владельцы, но
-   подключаются неофициальным клиентом к их серверам.
-3. **Правила Steam:** SteamKit2 — сторонний клиент. Им пользуются массово, но формально правила Valve стороннее ПО не
-   одобряют, и риск для аккаунта ненулевой.
-4. **Юрисдикция:** допустимость реверс-инжиниринга ради совместимости сильно зависит от страны.
+**What stays risky:**
+1. **The game's license agreement (EULA)** may forbid reverse engineering, modification and derivative works. The
+   developers tolerate REPO mods (RepoXR, Thunderstore), but tolerating mods is not the same as allowing a port to
+   another platform.
+2. **Photon servers** are paid for by the developer, per concurrent player. Quest players are legitimate owners, but
+   they connect to those servers with an unofficial client.
+3. **Steam's rules:** SteamKit2 is a third-party client. It is widely used, but formally Valve's rules do not approve of
+   third-party software, and the risk to the account is not zero.
+4. **Jurisdiction:** whether reverse engineering for interoperability is allowed depends heavily on the country.
 
-## Разбор соглашения (2026-09-29)
+## The agreement, examined (2026-09-29)
 
-**Отдельного EULA у R.E.P.O. нет.** В магазине Steam нет ссылки на соглашение игры (адрес `store.steampowered.com/eula/3241660_eula_0`
-пустой), в данных магазина нет юридических пометок, в файлах игры тоже ничего. Действует только соглашение подписчика
-Steam (Steam Subscriber Agreement, SSA; разбиралась редакция от 10.09.2026). Его принимает каждый покупатель, а semiwork
-в нём фигурирует как лицензиар Valve.
+**R.E.P.O. has no EULA of its own.** The Steam store has no link to a game agreement (the address
+`store.steampowered.com/eula/3241660_eula_0` is empty), the store data has no legal notes, and the game files have
+nothing either. Only the Steam Subscriber Agreement (SSA) applies; the version of 2026-09-10 was examined. Every buyer
+accepts it, and semiwork appears in it as Valve's licensor.
 
-**Что публично говорили semiwork** (письменным разрешением ничто из этого не является):
-- апрель 2025, Q&A на YouTube: «We encourage mods», и просьба к авторам модов не раздувать трафик на серверы;
-- v0.4.0 (май 2026): при модах в главном меню появляется пометка [MODDED], то есть моды считаются нормой;
-- март 2026: версии для консолей «в планах», за них возьмутся ближе к 1.0. Неофициальный порт на другую платформу
-  затрагивает эти планы сильнее, чем обычный мод.
+**What semiwork has said publicly** (none of it is written permission):
+- April 2025, a Q&A on YouTube: "We encourage mods", along with a request to mod authors not to inflate server traffic;
+- v0.4.0 (May 2026): a [MODDED] marker appears in the main menu when mods are installed, so mods are treated as normal;
+- March 2026: console versions are "planned" and will be taken on closer to 1.0. An unofficial port to another
+  platform touches those plans more than an ordinary mod does.
 
-**Какие пункты SSA касаются порта:**
+**SSA clauses that concern the port:**
 
-| Пункт | Что сказано | Что у нас |
+| Clause | What it says | Our situation |
 |---|---|---|
-| 2.A | Лицензия только на личное некоммерческое использование | Соблюдается |
-| 2.G, абз. 1 | Без письменного согласия **Valve** нельзя копировать, переводить, реверс-инжинирить, извлекать исходный код, модифицировать, декомпилировать и создавать производные работы, «кроме случаев, разрешённых применимым законом» | Под это попадает весь конвейер: AssetRipper, декомпиляция, IL2CPP, замена шейдеров. Формально это нарушает и любой мод с Thunderstore, включая RepoXR |
-| 2.G(ii) | Нельзя эмулировать протоколы Valve в сетевых функциях «через эмуляцию протокола… добавление компонентов… для любых целей, включая сетевую игру» | Под это почти дословно подпадает SteamShim на SteamKit2 |
-| 4.B | Нельзя вмешиваться в работу Steam и контента без разрешения Valve и управлять процессами Steam сторонним ПО | Снова SteamShim. Читов нет, игра кооперативная |
-| 1.C | Нельзя давать пользоваться своим аккаунтом другим | Каждый входит своим аккаунтом на своём шлеме. Сборщик не должен никуда передавать пароли |
-| 4.D | Valve может ограничить или закрыть аккаунт без предупреждения | Под риском весь аккаунт со всей библиотекой, не только R.E.P.O. |
-| 10 | Для ЕС и Великобритании действует право страны проживания, для остальных — право штата Вашингтон | — |
+| 2.A | The license is for personal, non-commercial use only | Complied with |
+| 2.G, para. 1 | Without **Valve's** written consent you may not copy, translate, reverse engineer, derive source code, modify, disassemble, decompile or create derivative works, "except as permitted by applicable law" | The whole pipeline falls under this: AssetRipper, decompilation, IL2CPP, replacing shaders. Formally, every mod on Thunderstore breaks it too, RepoXR included |
+| 2.G(ii) | You may not emulate Valve's protocols for network features "through protocol emulation… adding components… for any purpose, including network play" | SteamShim on SteamKit2 falls under this almost word for word |
+| 4.B | You may not interfere with Steam or content without Valve's permission, or control Steam processes with third-party software | SteamShim again. No cheats; the game is co-op |
+| 1.C | You may not let others use your account | Everyone logs in with their own account on their own headset. The builder must never send passwords anywhere |
+| 4.D | Valve may restrict or close an account without notice | The whole account with its whole library is at risk, not only R.E.P.O. |
+| 10 | The law of the country of residence applies in the EU and the UK; elsewhere, the law of Washington State | — |
 
-**Выводы:**
-1. **Разрешения semiwork недостаточно.** По SSA согласие даёт Valve. semiwork как правообладатель решает судьбу
-   репозитория: у них есть жалоба DMCA на GitHub. Использование SteamKit2 — вопрос между каждым игроком и Valve, и
-   разрешение semiwork его не закрывает.
-2. **Риски у всех разные.** SSA не запрещает автору публиковать собственные инструменты, так что для репозитория главный
-   риск — претензия semiwork по авторскому праву. Игроки рискуют аккаунтом: это договорный риск. На практике Valve не
-   трогает кооперативные моды, а SteamKit2 годами используют открытые проекты (ArchiSteamFarm, DepotDownloader), но
-   гарантий нет.
-3. **Исключение «применимый закон» порт, скорее всего, не покрывает.** В ЕС договор не может запретить декомпиляцию ради
-   совместимости с независимо созданной программой (Директива 2009/24/EC, ст. 6 и 8). Но порт — это адаптация самой
-   игры, а не совместимость с чужой программой. В России ст. 1280 ГК разрешает изменять программу «для функционирования
-   на технических средствах пользователя», однако «если иное не предусмотрено договором», а SSA как раз запрещает.
-4. **Защита не обходится.** У игры нет DRM (в Steam `drm_notice` пустое), вход в Steam идёт настоящим аккаунтом. Этим
-   проект отличается от кряков и не попадает под нормы против обхода защиты (DMCA §1201 и аналоги).
-5. **В репозитории нет кода игры.** Проверено 29.09: и отслеживаемые файлы, и новые неотслеживаемые (ShaderOverrides,
-   лампы) совпадают с декомпилированной игрой лишь в тривиальных строках вроде
-   `if (SemiFunc.RunIsShop() || ...)`.
+**Conclusions:**
+1. **semiwork's permission is not enough.** Under the SSA, consent comes from Valve. As the rights holder, semiwork
+   decides the repository's fate: they can file a DMCA notice with GitHub. Using SteamKit2 is a matter between each
+   player and Valve, and semiwork's permission does not settle it.
+2. **The risks differ by party.** The SSA does not forbid the author from publishing their own tools, so the main risk
+   for the repository is a copyright claim from semiwork. Players risk their accounts: that is a contractual risk. In
+   practice Valve leaves co-op mods alone, and open projects have used SteamKit2 for years (ArchiSteamFarm,
+   DepotDownloader), but there are no guarantees.
+3. **The "applicable law" exception most likely does not cover the port.** In the EU, a contract cannot forbid
+   decompilation for interoperability with an independently created program (Directive 2009/24/EC, Articles 6 and 8).
+   But the port adapts the game itself; it is not interoperability with another program. In Russia, Article 1280 of the
+   Civil Code allows modifying a program "to make it work on the user's hardware", but only "unless the contract
+   provides otherwise", and the SSA does.
+4. **No protection is circumvented.** The game has no DRM (Steam's `drm_notice` is empty), and Steam login uses a real
+   account. This sets the project apart from cracks and keeps it outside anti-circumvention law (DMCA §1201 and its
+   equivalents).
+5. **The repository contains no game code.** Checked on 2026-09-29: both tracked files and new untracked ones
+   (ShaderOverrides, lamps) match the decompiled game only in trivial lines such as `if (SemiFunc.RunIsShop() || ...)`.
 
-## Что сделать перед публикацией
+## What to do before publishing
 
-1. **Написать разработчикам (semiwork)** и спросить разрешения. Они дружелюбны к модам, и их «да» снимает главный риск
-   для репозитория — претензию по авторскому праву. Риск по SSA из-за SteamKit2 оно не снимает (см. разбор выше).
-   Спросить конкретно: можно ли публиковать сборщик «из своей копии», можно ли подключать Quest-клиенты к их Photon и
-   не мешает ли это их планам на другие платформы.
-2. **Вынести сетевую часть (SteamShim/SteamKit2) в отдельный модуль**, который игрок включает сам, с явным
-   предупреждением о риске для аккаунта. Офлайн-сборка работает без него. Письменного согласия Valve почти наверняка не
-   получить, поэтому честнее предупредить.
-3. **Связаться с DaXcess, автором RepoXR.** GPL это разрешает, но лучше договориться. Часть наших патчей, например
-   ползунки Head Bob и Pixel Lights (`patches/repoxr/`), можно отдать в основной RepoXR.
-4. **Проверить перед публикацией,** что в репозиторий не попадает ничего из игры: декомпилированный код, экспорт, данные
-   о шейдерах, Steam-сессия. Сейчас всё это лежит в `work/`, и его нужно надёжно исключить.
+1. **Write to the developers (semiwork)** and ask for permission. They are friendly to mods, and their "yes" removes
+   the main risk for the repository, a copyright claim. It does not remove the SSA risk from SteamKit2 (see above). Ask
+   specifically: may we publish a builder that uses the player's own copy, may Quest clients connect to their Photon,
+   and does this get in the way of their plans for other platforms.
+2. **Move the network part (SteamShim/SteamKit2) into a separate module** that the player turns on themselves, with a
+   clear warning about the risk to their account. The offline build works without it. Valve's written consent is
+   almost certainly out of reach, so warning players is the honest option.
+3. **Get in touch with DaXcess, the author of RepoXR.** The GPL allows the port, but it is better to talk. Some of our
+   patches, such as the Head Bob and Pixel Lights sliders (`patches/repoxr/`), could go into RepoXR itself.
+4. **Check before publishing** that nothing from the game gets into the repository: decompiled code, the export,
+   shader data, the Steam session. All of it lives in `work/` now and must be reliably excluded.
 
-## Сборщик (с 03.10.2026)
+## The builder (since 2026-10-03)
 
-Сборщик в один клик сделан для Windows: `RepoQuestBuilder.exe`, устройство и выпуск версий — в `docs/builder.md`.
-Сетевая часть оставлена, но включается только входом в Steam в шлеме; на странице входа и в сборщике есть
-предупреждение о риске для аккаунта. Сборщик ничего не отправляет и не передаёт пароли: вход идёт в шлеме,
-напрямую в Steam.
+A one-click builder exists for Windows: `RepoQuestBuilder.exe`. Its design and release process are described in
+`docs/builder.md`. The network part stayed in, but it only turns on when the player logs in to Steam in the headset.
+The login page and the builder both warn about the risk to the account. The builder sends nothing anywhere and never
+handles passwords: the login happens in the headset, directly with Steam.
 
-**Опубликовано 2026-10-05:** открытый репозиторий https://github.com/Dobutsu/repo-quest-vr (GPL-3.0, как у RepoXR;
-история начата заново, полная — в закрытом репозитории), выпуск сборщика 1.0.2 в GitHub Releases. Сборщик ищет
-обновления там же (`releases/latest/download`). semiwork и DaXcess заранее не спрашивали; в README — благодарность
-DaXcess и просьба не нести ему проблемы порта.
+**Published 2026-10-05:** the public repository https://github.com/Dobutsu/repo-quest-vr (GPL-3.0, like RepoXR; its
+history starts fresh, the full history is in the private repository) and the builder in GitHub Releases (from
+1.0.2; since 1.0.3 its window opens in English). The builder looks for updates there too
+(`releases/latest/download`). An email to semiwork went out on 2026-09-29; no reply as of 2026-10-05. DaXcess has not
+been contacted yet. The README thanks DaXcess and asks people not to take the port's problems to him.
 
-## Открытые вопросы на потом
+## Open questions
 
-- Набросать письмо semiwork.
-- Набросать план публичного репозитория со сборщиком (установка зависимостей, выбор папки игры, сборка, установка
-  на шлем).
+- Follow up with semiwork (no reply to the 2026-09-29 email), possibly through another channel.
+- Get in touch with DaXcess.

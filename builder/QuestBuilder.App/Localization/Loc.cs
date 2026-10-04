@@ -4,9 +4,10 @@ using System.Globalization;
 namespace RepoQuest.Builder.App.Localization;
 
 /// <summary>
-/// The window's texts in Russian and English. XAML shows them with <c>{l:Tr key}</c> (bound to <see cref="Table"/>, so
-/// switching the language re-renders every text at once); code asks <see cref="T"/> and <see cref="F"/>, and view
-/// models listen to <see cref="LanguageChanged"/> for the texts they compose.
+/// The window's texts in English (the default) and Russian (the EN/RU switch in the header, remembered in the
+/// settings). XAML shows them with <c>{l:Tr key}</c> (bound to <see cref="Table"/>, so switching the language
+/// re-renders every text at once); code asks <see cref="T"/> and <see cref="F"/>, and view models listen to
+/// <see cref="LanguageChanged"/> for the texts they compose.
 /// </summary>
 public sealed class Loc : INotifyPropertyChanged
 {
@@ -44,10 +45,6 @@ public sealed class Loc : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Language)));
         LanguageChanged?.Invoke();
     }
-
-    /// <summary>Russian on a Russian system, English everywhere else</summary>
-    public static string SystemLanguage() =>
-        CultureInfo.CurrentUICulture.Name.StartsWith("ru", StringComparison.OrdinalIgnoreCase) ? "ru" : "en";
 
     /// <summary>The text for a key; English if the current language lacks it, the key itself if both do</summary>
     public static string T(string key) => TryT(key) ?? key;

@@ -1,156 +1,166 @@
-# REPO Quest Builder: сборщик для игроков
+# REPO Quest Builder: the players' builder
 
-_Начат 2026-10-03._ Программа для Windows, которая собирает Quest-версию R.E.P.O. из копии игры самого игрока. Игрок
-запускает `RepoQuestBuilder.exe`, программа находит игру, сама скачивает нужное, собирает APK и ставит его на шлем.
-Новые версии ставятся через неё же. Инструкция для игроков лежит в `builder/release/README.txt` (входит в архив).
+_Started 2026-10-03._ A Windows program that builds the Quest version of R.E.P.O. from the player's own copy of the
+game. The player runs `RepoQuestBuilder.exe`; the program finds the game, downloads what it needs, builds the APK and
+installs it on the headset. New versions are installed through it as well. The players' instructions are in
+`builder/release/README.txt` (shipped in the zip).
 
-Версию для Mac пока не выпускаем (решение пользователя от 03.10). Mac остаётся машиной разработки: наши сборки идут
-тем же конвейером из терминала (`scripts/build.sh`), окно запускается из исходников для проверки.
+The window is in English by default; the EN/RU switch in its header turns on Russian, and the choice is remembered.
 
-## Как устроено
+There is no Mac release for now (the author's decision of 2026-10-03). The Mac stays the development machine: our
+builds run the same pipeline from the terminal (`scripts/build.sh`), and the window is run from source for testing.
+
+## Design
 
 ```
 builder/
-  QuestBuilder.Core/   вся логика: конвейер, загрузки, Unity, Python, обновления, установка на Quest
-  QuestBuilder.App/    окно (Avalonia), exe для игроков: RepoQuestBuilder.exe
-  QuestBuilder.Cli/    тот же конвейер из терминала (наши сборки, тесты, инструменты выпуска)
-  QuestBuilder.Tests/  модульные тесты (dotnet test builder/QuestBuilder.Tests)
-  kit.json             версии и SHA-256 всего, что скачивается; список проверенных версий игры
-  python/              requirements.in + requirements.lock (хеши под Windows и macOS)
-  release/             README.txt и THIRD-PARTY-NOTICES.txt для архива игрока
-  licenses/, SOURCES.md  тексты лицензий и происхождение содержимого kit
+  QuestBuilder.Core/   all the logic: pipeline, downloads, Unity, Python, updates, installing on the Quest
+  QuestBuilder.App/    the window (Avalonia), the players' exe: RepoQuestBuilder.exe
+  QuestBuilder.Cli/    the same pipeline from the terminal (our builds, tests, release tools)
+  QuestBuilder.Tests/  unit tests (dotnet test builder/QuestBuilder.Tests)
+  kit.json             versions and SHA-256 of everything downloaded; the list of tested game versions
+  python/              requirements.in + requirements.lock (hashes for Windows and macOS)
+  release/             README.txt and THIRD-PARTY-NOTICES.txt for the players' zip
+  licenses/, SOURCES.md  license texts and where the kit's contents come from
 ```
 
-**Конвейер** (`QuestBuilder.Core/Pipeline`). Это перенос bash-скриптов `make-quest-project.sh`, `make-quest-vr.sh`,
-`apply-quest-runtime.sh` и `build-quest.sh` (удалены, остались в истории git) на C#:
+**The pipeline** (`QuestBuilder.Core/Pipeline`) is a C# port of the bash scripts `make-quest-project.sh`,
+`make-quest-vr.sh`, `apply-quest-runtime.sh` and `build-quest.sh` (deleted; they remain in git history):
 
-| Шаг | Что делает | Пересобирается, когда меняются |
+| Step | What it does | Rebuilt when these change |
 |---|---|---|
-| export | AssetRipper 2.0.0 без окна (`--headless`, локальный HTTP API: `/Settings/Update`, `/LoadFolder`, `/Export/UnityProject`) | файлы игры (размеры и даты), версия AssetRipper, настройки |
-| bake | HarmonyBaker: патчи RepoXR запекаются в сборки игры | DLL игры, RepoXR.dll и RepoXR.Standalone.dll из kit, зависимости, сам baker |
-| project | копия экспорта + Python-скрипты + плагины, `link.xml`, ассеты RepoXR; Library сохраняется | экспорт, результат bake (содержимое DLL), содержимое kit |
-| unity | два запуска редактора: `QuestBuild.Prepare`, `QuestBuild.BuildApk` (`-versionName/-versionCode`) | проект, версия, флаги сборки |
+| export | AssetRipper 2.0.0 without a window (`--headless`, local HTTP API: `/Settings/Update`, `/LoadFolder`, `/Export/UnityProject`) | the game's files (sizes and dates), AssetRipper's version, settings |
+| bake | HarmonyBaker: RepoXR's patches are baked into the game's assemblies | the game's DLLs, RepoXR.dll and RepoXR.Standalone.dll from the kit, dependencies, the baker itself |
+| project | a copy of the export + Python scripts + plugins, `link.xml`, RepoXR's assets; Library is kept | the export, the bake output (DLL contents), the kit's contents |
+| unity | two editor runs: `QuestBuild.Prepare`, `QuestBuild.BuildApk` (`-versionName/-versionCode`) | the project, the version, build flags |
 
-Каждый шаг записывает «штамп» входов в `state.json` рабочей папки. Шаг с прежним штампом пропускается, а прерванная
-сборка продолжается с упавшего шага. Значит, обновление сборщика пересобирает начиная с bake (экспорт остаётся),
-обновление игры — с экспорта.
+Each step writes a "stamp" of its inputs to the workspace's `state.json`. A step with an unchanged stamp is skipped,
+and an interrupted build resumes from the step that failed. So a builder update rebuilds from bake onward (the export
+stays), and a game update rebuilds from the export.
 
-**AssetRipper раздаёт ассетам случайные GUID при каждом экспорте** (проверено 03.10: два экспорта подряд расходятся в
-23 тыс. файлов, в основном .meta). Внутри одного экспорта ссылки согласованы, так что на результат это не влияет. Но
-после нового экспорта Unity импортирует всё заново (~12 минут на M-серии). Обновления сборщика экспорт не трогают.
-Если повторный импорт после обновлений игры станет проблемой, можно сделать скрипт, который заменяет случайные GUID на
-производные от пути ассета.
+**AssetRipper gives assets random GUIDs on every export** (checked 2026-10-03: two exports in a row differ in 23,000
+files, mostly .meta). References are consistent within one export, so the result is unaffected. But after a new export,
+Unity reimports everything (~12 minutes on an M-series Mac). Builder updates do not touch the export. If reimports after
+game updates become a problem, a script could replace the random GUIDs with ones derived from the asset path.
 
-**Python-скрипты** остаются листовыми шагами. Пути они берут из `scripts/lib/paths.py`: переменные `REPOQUEST_WORK`,
-`REPOQUEST_GAME`, `REPOQUEST_UNITY_EDITOR`, `REPOQUEST_TOOL`; без них работают со старыми путями на Mac. Текст пишется
-с `newline="\n"`, а Python запускается в режиме UTF-8 (`PYTHONUTF8=1`), поэтому Windows даёт те же байты, что Mac.
-`make-kit.sh` проверяет, что ни одна запись текста не забыла `newline=`. `stereo_halos.py` делает ID компонентов из
-хеша (раньше они были случайными, и Unity при каждой сборке заново импортировал 136 префабов).
+**Python scripts** stay as leaf steps. They take their paths from `scripts/lib/paths.py`: the variables
+`REPOQUEST_WORK`, `REPOQUEST_GAME`, `REPOQUEST_UNITY_EDITOR`, `REPOQUEST_TOOL`; without them they use the old Mac paths.
+Text is written with `newline="\n"`, and Python runs in UTF-8 mode (`PYTHONUTF8=1`), so Windows produces the same bytes
+as the Mac. `make-kit.sh` checks that no text write forgot `newline=`. `stereo_halos.py` derives component IDs from a
+hash (they used to be random, and Unity reimported 136 prefabs on every build).
 
-**Сверка переноса (03.10):** старый bash-конвейер и новый на одном и том же экспорте дали одинаковые хеши всех 32 502
-файлов проекта (без Library). Запечённые DLL, `addressables-entries.json` и `shader-states.json` тоже совпали, а
-зависимости, скачанные с сайтов издателей, совпали байт в байт с тем, что лежало в `work/`.
+**Checking the port (2026-10-03):** the old bash pipeline and the new one, on the same export, produced identical
+hashes for all 32,502 project files (excluding Library). The baked DLLs, `addressables-entries.json` and
+`shader-states.json` matched too, and the dependencies downloaded from their publishers' sites matched what was in
+`work/` byte for byte.
 
-**Kit** (`scripts/make-kit.sh` → `work/kit`): `scripts/`, `unity-tools/` и то, что мы собираем из исходников:
-RepoXR.dll с патчами, RepoXR.Standalone.dll, SteamShim и SteamKit2, libopus, Android-ассеты RepoXR. Плюс kit.json,
-lock-файл Python и лицензии. Файлов игры в нём нет: `make-kit.sh` это проверяет. В выпуске kit вшит в exe как ресурс
-`kit.zip` и распаковывается в `<рабочая папка>\kit\<версия>`.
+**The kit** (`scripts/make-kit.sh` → `work/kit`): `scripts/`, `unity-tools/` and what we build from source: RepoXR.dll
+with patches, RepoXR.Standalone.dll, SteamShim and SteamKit2, libopus, RepoXR's Android assets. Plus kit.json, the
+Python lock file and licenses. It contains no game files: `make-kit.sh` checks that. In a release, the kit is embedded
+in the exe as the `kit.zip` resource and unpacked to `<workspace>\kit\<version>`.
 
-**Что скачивается у игрока** (SHA-256 закреплены в `kit.json`): AssetRipper (GitHub), uv (GitHub) → управляемый
-Python 3.13 и пакеты по `requirements.lock` с хешами, всё внутри рабочей папки. Ещё релиз RepoXR 1.2.3 с Thunderstore
-(RuntimeDeps), BepInEx 5.4.23.5 (GitHub), NuGet-пакеты BepInEx.BaseLib (nuget.bepinex.dev) и CustomDiscoverStateLib
-(nuget.daxcess.io), исходники встроенных шейдеров Unity, пакеты Unity с packages.unity.com. .NET игроку не нужен.
-HarmonyBaker, AssemblyRenamer и Il2CppFixes вызываются как `<exe> --tool <имя> ...`. Окно — однофайловый exe, а в
-нём MonoMod (детуры HarmonyX, на которых держится HarmonyBaker) не находит JIT: в однофайловом приложении `clrjit`
-вшит в сам exe (проверено под CrossOver 03.10: «Could not locate clrjit library»). Поэтому инструменты едут внутри
-exe отдельно: `tools.zip` — QuestBuilder.Cli, опубликованный как обычная самодостаточная папка. При первой сборке
-программа распаковывает его в `<рабочая папка>\tools\builder-tools-<версия>` (`ToolLauncher.For`). Наши сборки на
-Mac запускают инструменты прямо из Cli.
+**What the player downloads** (SHA-256 pinned in `kit.json`): AssetRipper (GitHub), uv (GitHub) → a managed Python 3.13
+and packages from `requirements.lock` with hashes, all inside the workspace. Also the RepoXR 1.2.3 release from
+Thunderstore (RuntimeDeps), BepInEx 5.4.23.5 (GitHub), the NuGet packages BepInEx.BaseLib (nuget.bepinex.dev) and
+CustomDiscoverStateLib (nuget.daxcess.io), the source of Unity's built-in shaders, and Unity packages from
+packages.unity.com. The player does not need .NET. HarmonyBaker, AssemblyRenamer and Il2CppFixes are called as
+`<exe> --tool <name> ...`. The window is a single-file exe, and inside it MonoMod (HarmonyX's detours, which
+HarmonyBaker relies on) cannot find the JIT: in a single-file app, `clrjit` is embedded in the exe itself (checked
+under CrossOver on 2026-10-03: "Could not locate clrjit library"). So the tools travel inside the exe separately:
+`tools.zip` is QuestBuilder.Cli published as an ordinary self-contained folder. On the first build the program unpacks
+it to `<workspace>\tools\builder-tools-<version>` (`ToolLauncher.For`). Our Mac builds run the tools straight from the
+Cli.
 
-**Unity** ставится через Hub CLI (`Setup/UnitySetup.cs`):
-1. Установщик Hub берётся из `latest.yml` на CDN Unity и проверяется по sha512 и подписи Authenticode «Unity
-   Technologies».
-2. Hub ставится тихо (`/S`), Windows спрашивает UAC.
-3. Редактор ставится командой
+**Unity** is installed through the Hub CLI (`Setup/UnitySetup.cs`):
+1. The Hub installer comes from `latest.yml` on Unity's CDN and is checked against its sha512 and the "Unity
+   Technologies" Authenticode signature.
+2. Hub is installed silently (`/S`); Windows asks for UAC.
+3. The editor is installed with
    `Unity Hub -- --headless install --version 2022.3.62f3 --changeset 96770f904ca7 --module android android-sdk-ndk-tools android-open-jdk`.
 
-Лицензию Personal из командной строки получить нельзя: игрок один раз входит в Unity Hub. Программа проверяет файл
-`UnityEntitlementLicense.xml`, а если Unity всё же отказался работать, распознаёт это в логе и снова показывает
-инструкцию. Пока Unity качается, параллельно идут экспорт и запекание.
+A Personal license cannot be obtained from the command line: the player signs in to Unity Hub once. The program checks
+the `UnityEntitlementLicense.xml` file, and if Unity refuses to work anyway, it recognizes that in the log and shows the
+instructions again. While Unity downloads, the export and the bake run in parallel.
 
-**Windows-особенности.**
-- Рабочая папка по умолчанию — `<диск с наибольшим свободным местом>:\RepoQuest`. Путь должен быть из ASCII и не
-  длиннее 40 символов: Unity, Gradle и NDK ломаются на кириллице в имени пользователя.
-- В Library пути доходят до ~240 символов от корня проекта. Поэтому программа предлагает включить `LongPathsEnabled`
-  (системная настройка, через UAC).
-- Программа не даёт компьютеру уснуть во время сборки.
-- Сборщик не подписан платным сертификатом, поэтому SmartScreen покажет предупреждение (объяснено в README).
+**Windows specifics.**
+- The default workspace is `<drive with the most free space>:\RepoQuest`. The path must be ASCII and at most 40
+  characters: Unity, Gradle and the NDK break on Cyrillic in the user name.
+- Paths in Library reach ~240 characters from the project root. So the program offers to turn on `LongPathsEnabled`
+  (a system setting, through UAC).
+- The program keeps the computer awake during a build.
+- The builder is not signed with a paid certificate, so SmartScreen shows a warning (explained in the README).
 
-**Обновления** (`Updates/`):
-- `latest.json` содержит версию, заметки RU/EN, имя zip и его SHA-256 для каждой платформы. `latest.json.sig` —
-  подпись ECDSA P-256. Публичный ключ — `builder/release-public-key.txt`, он вшит в exe. Приватный ключ лежит в
-  `~/.config/repoquest/release-signing-key.pem`, вне репозитория. **Нужна резервная копия: без ключа выпустить
-  обновление нельзя.**
-- Источник обновлений вшивается при выпуске (`--update-source`). Его заменяют файл `update-source.txt` рядом с exe или
-  ключ `--update-source` (URL или папка). Пока на GitHub ничего не выкладываем, источник пустой.
-- Самообновление: работающий exe переименовывается в `.old`, новый встаёт на его место и запускается. После этого
-  программа видит, что APK собран прежним kit, и предлагает пересобрать.
+**Updates** (`Updates/`):
+- `latest.json` holds the version, RU/EN notes, and the zip's name and SHA-256 for each platform. `latest.json.sig` is
+  an ECDSA P-256 signature. The public key is `builder/release-public-key.txt`, compiled into the exe. The private key
+  lives in `~/.config/repoquest/release-signing-key.pem`, outside the repository. **Keep a backup: without the key, no
+  update can be released.**
+- The update source is compiled in at release time (`--update-source`). An `update-source.txt` file next to the exe or
+  the `--update-source` option (a URL or a folder) overrides it. Public releases use
+  `https://github.com/Dobutsu/repo-quest-vr/releases/latest/download`.
+- Self-update: the running exe is renamed to `.old`, the new one takes its place and starts. The program then sees that
+  the APK was built with the previous kit and offers to rebuild.
 
-**Установка на Quest** идёт через adb из Android SDK Unity. Если на шлеме сборка с другой подписью (отладочные ключи
-Android свои на каждом компьютере), программа сохраняет `/sdcard/Android/data/io.repoxr.quest/files` (сохранения,
-настройки RepoXR, вход в Steam, косметику), переустанавливает игру и возвращает данные. versionCode =
-major·10000 + minor·100 + patch; у наших dev-сборок он равен 1.
+**Installing on the Quest** goes through adb from Unity's Android SDK. If the headset has a build with a different
+signature (Android debug keys differ on every computer), the program saves `/sdcard/Android/data/io.repoxr.quest/files`
+(saves, RepoXR settings, the Steam login, cosmetics), reinstalls the game and restores the data. versionCode =
+major·10000 + minor·100 + patch; our dev builds use 1.
 
-**В шлеме:**
-- на странице входа в Steam есть предупреждение о риске для аккаунта (неофициальный клиент);
-- над кнопкой Steam в главном меню показана версия порта и автор: «REPO Quest <версия> by Dobutsu» (`Application.version`: версия сборщика или `dev-<commit>`).
+**In the headset:**
+- the Steam login page warns about the risk to the account (an unofficial client);
+- above the Steam button in the main menu, the port's version and author are shown: `REPO Quest <version> by Dobutsu`
+  (`Application.version`: the builder's version or `dev-<commit>`).
 
-**Замеры (Mac M-серии, 03.10).** Сценарий игрока с пустой рабочей папкой (`player-build`, выпуск 1.0.0): экспорт
-50 с, запекание 4 с, проект около минуты, Unity 50 минут (импорт 8,5 минуты, сборка APK ~41 минута). Всего 52
-минуты. Самообновление 1.0.0 → 1.0.1 (`update --then-build`): подпись проверена, exe заменён, экспорт переиспользован,
-пересборка 38 минут. На Windows-ПК, скорее всего, дольше. **Что ускорить:** при каждой сборке Unity заново
-компилирует ~75 шейдеров (в основном наши сгенерированные: `Semiwork/*`, `Hurtable/*`, `W/*`), хотя Library
-сохранена. Проект каждый раз пересоздаётся из экспорта, и кэш шейдеров не используется повторно. Это 15–20 минут
-каждой пересборки.
+**Measurements (M-series Mac, 2026-10-03).** The player's flow with an empty workspace (`player-build`, release 1.0.0):
+export 50 s, bake 4 s, project about a minute, Unity 50 minutes (import 8.5 minutes, APK build ~41 minutes). 52 minutes
+in total. Self-update 1.0.0 → 1.0.1 (`update --then-build`): signature checked, exe replaced, export reused, rebuild
+38 minutes. A Windows PC is likely slower. **What to speed up:** on every build Unity recompiles ~75 shaders (mostly our
+generated ones: `Semiwork/*`, `Hurtable/*`, `W/*`) even though Library is kept. The project is recreated from the export
+every time, and the shader cache is not reused. That is 15–20 minutes of every rebuild.
 
-## Наша сборка на Mac
+## Our build on the Mac
 
 ```sh
 scripts/build.sh [<apk name>] [-developmentBuild] [-profiling] [--force] [--only export,bake,project,unity]
 ```
 
-Скрипт обновляет kit из текущего кода (`make-kit.sh`), собирает Cli и запускает конвейер с рабочей папкой `work/`. Шаги
-без изменений пропускаются. Результат: `work/build/<имя>.apk` (по умолчанию `repo-quest-vr`), логи в `work/logs/`
-(`builder.log`, `unity-prepare.log`, `unity-build.log`, `assetripper.log`). Python берётся тот же, что у игрока
-(`work/tools/venv` через uv), а не `work/.venv`. `bake.sh` и `make-crossover-test.sh` остались для плоского теста в
-CrossOver.
+The script refreshes the kit from the current code (`make-kit.sh`), builds the Cli and runs the pipeline with `work/` as
+the workspace. Unchanged steps are skipped. Output: `work/build/<name>.apk` (default `repo-quest-vr`), logs in
+`work/logs/` (`builder.log`, `unity-prepare.log`, `unity-build.log`, `assetripper.log`). Python is the same one the
+player gets (`work/tools/venv` through uv), not `work/.venv`. `bake.sh` and `make-crossover-test.sh` remain for the
+flatscreen test in CrossOver.
 
-## Выпуск версии
+## Releasing a version
 
 ```sh
 scripts/release.sh 1.0.1 --notes-ru notes-ru.txt --notes-en notes-en.txt [--update-source <url>] [--mac-test]
 ```
 
-Результат лежит в `work/release/1.0.1/`: `RepoQuestBuilder-1.0.1-win-x64.zip` (exe с kit + README), `latest.json`,
-`latest.json.sig`, с `--mac-test` ещё сборка для этого Mac. Ничего не публикуется.
+The output goes to `work/release/1.0.1/`: `RepoQuestBuilder-1.0.1-win-x64.zip` (the exe with the kit + README),
+`latest.json`, `latest.json.sig`, and with `--mac-test` also a build for this Mac. Nothing is published by the script.
+Public releases are uploaded to GitHub Releases (`gh release create`) with those three files.
 
-Как проверить обновление без публикации:
-1. Положить старый exe в папку, рядом `update-source.txt` с путём к `work/release/<новая версия>`, либо раздать эту
-   папку через `python3 -m http.server`.
-2. Запустить старый exe: он должен предложить обновление, заменить себя и пересобрать APK.
+To test an update without publishing:
+1. Put the old exe in a folder with an `update-source.txt` next to it holding the path to
+   `work/release/<new version>`, or serve that folder with `python3 -m http.server`.
+2. Run the old exe: it should offer the update, replace itself and rebuild the APK.
 
-## Проверка
+## Testing
 
-- `dotnet test builder/QuestBuilder.Tests`: VDF и поиск игры (в том числе в бутылках CrossOver), GUID плагинов как у
-  bash-конвейера, подпись манифеста, версии, adb, kit.json, рабочая папка, state.json, источник-папка обновлений.
-- `scripts/crossover-windows-check.sh`: Windows-сборка инструментов сборщика под CrossOver (Windows-версии uv,
-  Python и .NET) делает bake и project из того же экспорта и kit, что и Mac, и проекты сравниваются по хешам.
-  03.10 так нашлась ошибка путей в `restore_resource_names.py`; после исправления результат совпал: 32 502 файла.
-- Сверка с эталоном при изменении конвейера: снимок хешей файлов проекта (без Library) до и после.
-- Сценарий игрока без окна: `scripts/release.sh X.Y.Z --mac-test` даёт однофайловый `QuestBuilder.Cli` для Mac
-  с kit и инструментами внутри. Дальше `QuestBuilder.Cli player-build --workspace <папка> --yes`, а для
-  самообновления `QuestBuilder.Cli update --update-source work/release/<новая> --workspace <папка> --then-build --yes`.
-- Окно без дисплея: `RepoQuestBuilder --kit work/kit --screenshot <папка>` рисует окно, состояние сборки и все
-  диалоги на обоих языках в PNG.
-- Windows проверяет друг пользователя. При сбое он нажимает «Собрать отчёт» и присылает zip: только логи и сводка, без
-  файлов игры.
+- `dotnet test builder/QuestBuilder.Tests`: VDF and finding the game (including in CrossOver bottles), plugin GUIDs
+  matching the bash pipeline, manifest signing, versions, adb, kit.json, the workspace, state.json, a folder as the
+  update source.
+- `scripts/crossover-windows-check.sh`: the Windows build of the builder's tools under CrossOver (Windows versions of
+  uv, Python and .NET) runs bake and project from the same export and kit as the Mac, and the projects are compared by
+  hash. On 2026-10-03 this found a path bug in `restore_resource_names.py`; after the fix the results matched: 32,502
+  files.
+- Comparing against a reference when the pipeline changes: a snapshot of project file hashes (excluding Library)
+  before and after.
+- The player's flow without the window: `scripts/release.sh X.Y.Z --mac-test` produces a single-file
+  `QuestBuilder.Cli` for the Mac with the kit and tools inside. Then `QuestBuilder.Cli player-build --workspace <folder>
+  --yes`, and for self-update `QuestBuilder.Cli update --update-source work/release/<new> --workspace <folder>
+  --then-build --yes`.
+- The window without a display: `RepoQuestBuilder --kit work/kit --screenshot <folder>` renders the window, the build
+  state and every dialog in both languages to PNG.
+- A friend tests on Windows. If something fails, they click "Create report" and send the zip: only logs and a summary,
+  no game files.

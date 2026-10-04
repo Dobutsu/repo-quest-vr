@@ -65,8 +65,8 @@
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <TextBlock Text="{Binding VersionText}" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <ToggleButton Content="RU" IsChecked="{Binding IsRussian}" ToolTip.Tip="{l:Tr lang.tooltip}" />
                     <ToggleButton Content="EN" IsChecked="{Binding IsEnglish}" ToolTip.Tip="{l:Tr lang.tooltip}" />
+                    <ToggleButton Content="RU" IsChecked="{Binding IsRussian}" ToolTip.Tip="{l:Tr lang.tooltip}" />
                 </StackPanel>
             </Grid>
         </Border>

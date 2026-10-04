@@ -164,7 +164,7 @@ public sealed partial class UnityBuildStep : BuildStep
 
     /// <summary>
     /// Windows: Gradle's cache and the temp folder inside the workspace. Under a user name with non-Latin letters
-    /// (C:\Users\Дмитрий) the Android tools (aapt2, the NDK) fail on their own paths; the workspace path is ASCII.
+    /// (C:\Users\Пользователь) the Android tools (aapt2, the NDK) fail on their own paths; the workspace path is ASCII.
     /// </summary>
     private static Dictionary<string, string?> UnityEnvironment(Workspace workspace)
     {

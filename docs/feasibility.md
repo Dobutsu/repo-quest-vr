@@ -1,328 +1,338 @@
-# REPO + RepoXR на Meta Quest 3 без ПК: насколько это реально
+# REPO + RepoXR on a Meta Quest 3 without a PC: how realistic is it
 
-_Состояние на 25.09.2026. Игра: R.E.P.O. v0.4.4.3 (Unity 2022.3.67f2). Мод: RepoXR v1.2.3._
+_As of 2026-09-25. Game: R.E.P.O. v0.4.4.3 (Unity 2022.3.67f2). Mod: RepoXR v1.2.3._
 
-## Коротко
+## In short
 
-Перенос реален, и переписывать мод с нуля не нужно. RepoXR можно взять целиком: его Harmony-патчи
-заранее «запекаются» в файлы игры. Это уже работает: применяются 74 класса патчей из 75
-(75-й чинит сам HarmonyX и в новой версии не нужен) и все 7 сетевых RPC-префиксов,
-в `Assembly-CSharp` запечено 221 метод, и запечённая игра запускается без BepInEx.
+The port is realistic, and the mod does not need to be rewritten. RepoXR can be taken whole: its Harmony patches are
+"baked" into the game's files ahead of time. This already works: 74 of 75 patch classes apply (the 75th fixes HarmonyX
+itself and is not needed in the newer version), as do all 7 network RPC prefixes. 221 methods are baked into
+`Assembly-CSharp`, and the baked game starts without BepInEx.
 
-Играть с друзьями на обычной PC-версии тоже возможно. Сервер Photon у REPO не пускает анонимов,
-но принимает Steam-тикет, который шлем получает сам, входя в твой аккаунт по QR-коду без клиента Steam.
-Это уже проверено: проба нашла лобби друга и зашла в его комнату к ванильному хосту.
+Playing with friends on the regular PC version is possible too. REPO's Photon server does not let anonymous players
+in, but it accepts a Steam ticket, which the headset gets by itself, logging in to the player's account with a QR code
+and no Steam client. This is already tested: the probe found a friend's lobby and joined their room with a vanilla host.
 
-Главное, что ещё не проверено: как игра будет выглядеть и работать на железе Quest 3
-(шейдеры, производительность). Это проверка 3, и для неё нужно место на диске и Unity.
+The main thing not yet tested is how the game will look and run on Quest 3 hardware (shaders, performance). That is
+test 3, and it needs disk space and Unity.
 
-## Почему не подходит готовый APK (R.E.P.O.E.V.R)
+## Why the existing APK (R.E.P.O.E.V.R) does not fit
 
-- Код закрыт. Это пересобранная копия игры, а не RepoXR, и общей базы у них нет.
-- VR в нём телефонный, в духе Google Cardboard, без контроллеров Quest.
-- Он застрял на старой версии игры. Чтобы поиграть с ним, друзья должны откатить REPO через
-  `download_depot 3241660 3241661 4154963422191387469` и поставить мод EVRMod.
-  Для игры с ванильными друзьями это не подходит.
+- It is closed source. It is a rebuilt copy of the game, not RepoXR, and they share no code.
+- Its VR is phone-style, like Google Cardboard, without Quest controllers.
+- It is stuck on an old game version. To play with it, friends have to roll REPO back with
+  `download_depot 3241660 3241661 4154963422191387469` and install the EVRMod mod. That does not work for playing
+  with vanilla friends.
 
-## Что мешает запустить RepoXR на Quest и как это обходится
+## What stops RepoXR from running on a Quest, and the way around it
 
-| # | Препятствие | Решение | Статус |
+| # | Obstacle | Solution | Status |
 |---|---|---|---|
-| 1 | Quest — это ARM64 Android. Mono в Unity на ARM64 Android не работает, поэтому остаётся только IL2CPP. А в IL2CPP нет Harmony: код нельзя менять во время работы игры | Патчи RepoXR заранее «запекаются» в DLL игры инструментом `tools/HarmonyBaker`. Патчи ищет и применяет сам HarmonyX, как в игре, а мы забираем готовый IL и записываем его в файлы | ✅ работает (проверка 2) |
-| 2 | Шейдеры и текстуры в игре собраны под Windows/DirectX 11 | Экспорт через AssetRipper в Unity-проект 2022.3.67f2 с оригинальными DLL и пересборка под Android/Vulkan | ⏳ проверка 3 |
-| 3 | На Quest нет Steam, а без Steam-тикета Photon не пускает в игру | Прямой вход в Steam через SteamKit2 (QR-код из мобильного Steam): лобби друзей, авторизационный тикет | ✅ вход в комнату ванильного друга работает (проверка 1) |
-| 4 | Нативные библиотеки только под Windows (`steam_api64`, `discord_partner_sdk`, `opus_egpv`, `webrtc-audio`, `AudioIn`) | Под Android: голос через Photon Voice (есть версии для arm64), Steam и Discord — замена или заглушка | 📋 после проверок |
-| 5 | RepoXR запускает OpenXR «по-ПК-шному» и вызывает Win32 API | В APK встраивается Unity OpenXR с поддержкой Meta Quest, Win32-вызовы отключаются | 📋 после проверок |
+| 1 | The Quest is ARM64 Android. Unity's Mono does not work on ARM64 Android, so IL2CPP is the only option. And IL2CPP has no Harmony: code cannot be changed while the game runs | RepoXR's patches are "baked" into the game's DLLs ahead of time by `tools/HarmonyBaker`. HarmonyX itself finds and applies the patches, as in the game, and we take the resulting IL and write it to the files | ✅ works (test 2) |
+| 2 | The game's shaders and textures are built for Windows/DirectX 11 | Export with AssetRipper to a Unity 2022.3.67f2 project with the original DLLs, and rebuild for Android/Vulkan | ⏳ test 3 |
+| 3 | The Quest has no Steam, and without a Steam ticket Photon does not let you into the game | Direct Steam login through SteamKit2 (QR code from the Steam mobile app): friends' lobbies, an auth ticket | ✅ joining a vanilla friend's room works (test 1) |
+| 4 | Native libraries exist for Windows only (`steam_api64`, `discord_partner_sdk`, `opus_egpv`, `webrtc-audio`, `AudioIn`) | On Android: voice through Photon Voice (arm64 builds exist); Steam and Discord replaced or stubbed | 📋 after the tests |
+| 5 | RepoXR starts OpenXR "the PC way" and calls the Win32 API | The APK includes Unity OpenXR with Meta Quest support; Win32 calls are disabled | 📋 after the tests |
 
-## Проверка 1: Steam и Photon без клиента Steam
+## Test 1: Steam and Photon without a Steam client
 
-Как REPO подключается к игре (из `SteamManager` и `NetworkConnect`):
-- хост создаёт Steam-лобби и кладёт туда `RoomName`, `Region`, `BuildName` и `HasPassword`;
-- клиент подключается к Photon с `AuthType = Steam` и тикетом `SteamUser.GetAuthSessionTicket()`;
-- версия Photon-приложения — `BuildName + "_" + PUN-версия`, сейчас это `v0.4.4.3_2.52`.
+How REPO connects to a game (from `SteamManager` and `NetworkConnect`):
+- the host creates a Steam lobby and puts `RoomName`, `Region`, `BuildName` and `HasPassword` in it;
+- the client connects to Photon with `AuthType = Steam` and a `SteamUser.GetAuthSessionTicket()` ticket;
+- the Photon app version is `BuildName + "_" + PUN version`, currently `v0.4.4.3_2.52`.
 
-Что проверено (`tools/SteamPhotonProbe`, работает на Mac на Photon-DLL самой игры):
+What was tested (`tools/SteamPhotonProbe`, which runs on the Mac with the game's own Photon DLLs):
 
-| Шаг | Результат |
+| Step | Result |
 |---|---|
-| Photon-DLL игры работают вне Unity (через заглушку `tools/UnityEngineStub`) | ✅ доходят до `ns.photonengine.io:27000` |
-| Анонимный вход в Photon-приложение REPO | ❌ `Authentication type 'None' not supported`: Steam-тикет обязателен |
-| Вход в Steam по QR через SteamKit2 | ✅ `logon result: OK` |
-| Тикет для приложения 3241660 и вход в Photon с `AuthType = Steam` | ✅ тикет 234 байта, `OnConnectedToMaster` в регионе `eu`: Photon принимает тикет, полученный без клиента Steam |
-| Поиск лобби друга через список друзей Steam (`game_lobby_id` в статусе друга) | ✅ найдено лобби, прочитаны `BuildName=v0.4.4.3`, `Region=eu`, `RoomName` |
-| Вход в комнату Photon к ванильному хосту на ПК и выход | ✅ `OnJoinedRoom`, `players=2/6`: `#1 <друг> (host)`, `#2 Dobutsu` |
+| The game's Photon DLLs work outside Unity (through the `tools/UnityEngineStub` stub) | ✅ they reach `ns.photonengine.io:27000` |
+| Anonymous login to REPO's Photon app | ❌ `Authentication type 'None' not supported`: a Steam ticket is required |
+| Steam login by QR through SteamKit2 | ✅ `logon result: OK` |
+| A ticket for app 3241660 and Photon login with `AuthType = Steam` | ✅ a 234-byte ticket, `OnConnectedToMaster` in region `eu`: Photon accepts a ticket obtained without a Steam client |
+| Finding a friend's lobby through the Steam friends list (`game_lobby_id` in the friend's status) | ✅ lobby found; `BuildName=v0.4.4.3`, `Region=eu`, `RoomName` read |
+| Joining the Photon room of a vanilla host on PC, and leaving | ✅ `OnJoinedRoom`, `players=2/6`: `#1 <friend> (host)`, `#2 Dobutsu` |
 
-**Итог проверки 1:** устройство без клиента Steam и без самой игры находит лобби друга, проходит
-Steam-авторизацию в Photon и попадает в его комнату. Ванильным друзьям ничего ставить не нужно.
+**Result of test 1:** a device with no Steam client and no game installed finds a friend's lobby, passes Steam
+authentication in Photon and gets into their room. Vanilla friends do not need to install anything.
 
-## Проверка 2: запекание патчей RepoXR
+## Test 2: baking RepoXR's patches
 
-`scripts/bake.sh all` (для Quest: универсальные патчи + VR) и `scripts/bake.sh universal` (для плоского теста):
+`scripts/bake.sh all` (for the Quest: universal patches + VR) and `scripts/bake.sh universal` (for the flatscreen
+test):
 
 | | universal | all |
 |---|---|---|
-| Классов патчей применено | 12 из 12 | 74 из 74* |
-| Сетевых RPC-префиксов | 7 | 7 |
-| Методов запечено в `Assembly-CSharp` | 27 | 221 |
-| Прочие изменённые сборки | RepoXR (7) | RepoXR (7), Unity.InputSystem (2), UnityEngine.UI (1) |
-| Нативный метод движка (`Camera.set_targetTexture`) | нет | обёртка + 13 перенаправленных вызовов |
-| Типы вне netstandard 2.1 | 0 | 0 |
+| Patch classes applied | 12 of 12 | 74 of 74* |
+| Network RPC prefixes | 7 | 7 |
+| Methods baked into `Assembly-CSharp` | 27 | 221 |
+| Other modified assemblies | RepoXR (7) | RepoXR (7), Unity.InputSystem (2), UnityEngine.UI (1) |
+| Native engine method (`Camera.set_targetTexture`) | none | wrapper + 13 redirected calls |
+| Types outside netstandard 2.1 | 0 | 0 |
 
-\* Пропущен только `LeaveMyLeaveAlonePatch`: он патчит сам HarmonyX, а в HarmonyX 2.16 это исправление уже есть.
+\* Only `LeaveMyLeaveAlonePatch` is skipped: it patches HarmonyX itself, and HarmonyX 2.16 already has that fix.
 
-Что пришлось решить по ходу:
-- **Транспайлеры читают состояние движка.** 6 транспайлеров смотрят на `Debug.isDebugBuild`,
-  чтобы выбрать номера инструкций. При запекании движка нет, поэтому baker грузит
-  копию `UnityEngine.CoreModule`, где это значение подставлено заранее. Оно берётся из того,
-  как собрана `Assembly-CSharp` (release).
-- **Патч на нативный метод.** `Camera.set_targetTexture` реализован в C++ движка, у него нет IL.
-  Baker генерирует обёртку (prefix → оригинал → postfix) и перенаправляет на неё все вызовы
-  из C#-сборок игры. На ПК Harmony перехватывает ровно эти вызовы.
-- **Ошибка в MonoMod.** Fault-блоки в итераторах закрываются `leave` вместо `endfinally`.
-  Mono такое прощает, IL2CPP может не простить. Baker это исправляет.
-- **Проверки, которые имеют смысл только под BepInEx.** RepoXR требует мод FixPluginTypesSerialization
-  и без него отключается. Но запечённые патчи работают всегда, поэтому в standalone-сборке
-  эта проверка заменена на `true`, а сборки мода регистрируются в плеере напрямую.
+Problems solved along the way:
+- **Transpilers read engine state.** 6 transpilers look at `Debug.isDebugBuild` to choose instruction indices. There
+  is no engine at bake time, so the baker loads a copy of `UnityEngine.CoreModule` with that value filled in ahead of
+  time. It comes from how `Assembly-CSharp` was built (release).
+- **A patch on a native method.** `Camera.set_targetTexture` is implemented in the engine's C++ and has no IL. The
+  baker generates a wrapper (prefix → original → postfix) and redirects every call from the game's C# assemblies to
+  it. On PC, Harmony intercepts exactly those calls.
+- **A bug in MonoMod.** Fault blocks in iterators are closed with `leave` instead of `endfinally`. Mono forgives this;
+  IL2CPP may not. The baker fixes it.
+- **Checks that only make sense under BepInEx.** RepoXR requires the FixPluginTypesSerialization mod and turns itself
+  off without it. But baked patches always work, so in the standalone build that check is replaced with `true`, and
+  the mod's assemblies are registered with the player directly.
 
-Проверка IL (`scripts/verify-bake.sh`, ILVerify: оригинал против запечённого): **новых ошибок нет**. Две ошибки
-заложены в самих транспайлерах RepoXR, которые отстали от игры: в `ValuableArcticSnowBike.UpdateSteering` на `Transform`
-вызывается `PlayerLocalCamera.GetOverrideTransform()`, в `CosmeticTokenUIElement.OnDestroy` необобщённый
-`Object.Instantiate` возвращает `Object` вместо `GameObject`. Mono типы не проверяет, и на ПК это случайно работает,
-а C++ из IL2CPP с этим не компилируется. Baker исправляет обе ошибки общим проходом (`TypeRepairs`): лишний вызов
-на объекте чужого типа, который возвращает тот же тип, удаляется, а для понижающего приведения вставляется `castclass`.
-Каждое исправление пишется в отчёт запекания.
+IL verification (`scripts/verify-bake.sh`, ILVerify: original vs baked): **no new errors**. Two errors come from
+RepoXR's own transpilers, which have fallen behind the game: in `ValuableArcticSnowBike.UpdateSteering`,
+`PlayerLocalCamera.GetOverrideTransform()` is called on a `Transform`; in `CosmeticTokenUIElement.OnDestroy`, the
+non-generic `Object.Instantiate` returns `Object` instead of `GameObject`. Mono does not check types, so on PC this
+happens to work, but the C++ from IL2CPP does not compile with it. The baker fixes both with a common pass
+(`TypeRepairs`): an extra call on an object of another type that returns the same type is removed, and a `castclass`
+is inserted for a downcast. Every fix is written to the bake report.
 
-**Запуск в CrossOver** (`scripts/make-crossover-test.sh universal`: APFS-клон игры, установка из Steam
-не тронута, сохранения сверены с резервной копией): игра без BepInEx доходит до главного меню,
-RepoXR стартует через `tools/RepoXR.Standalone` (замена chainloader), ассеты и Addressables мода
-грузятся, исключений в логе нет.
+**Running in CrossOver** (`scripts/make-crossover-test.sh universal`: an APFS clone of the game, the Steam
+installation untouched, saves compared against a backup): the game reaches the main menu without BepInEx, RepoXR
+starts through `tools/RepoXR.Standalone` (a chainloader replacement), the mod's assets and Addressables load, and the
+log has no exceptions.
 
-Осталось: пройти IL2CPP-компиляцию набора `all` (проверка 3) и сыграть одиночную партию
-в плоском режиме, чтобы проверить грабер и инвентарь руками.
+Remaining: get the `all` set through IL2CPP compilation (test 3), and play a singleplayer round in flatscreen mode to
+check the grabber and inventory by hand.
 
-## Проверка 3: ассеты под Android
+## Test 3: assets for Android
 
-Инвентаризация (`scripts/inventory.py`): 117 шейдеров, из них 32 собственных (`Semiwork/*`,
-`Hurtable/*`, `W/*`, Shader Graph и т.п.). 824 МБ текстур в DXT1/DXT5/BC7, 5126 источников света,
-741 камера. Addressables используются только для локализации.
+Inventory (`scripts/inventory.py`): 117 shaders, 32 of them the game's own (`Semiwork/*`, `Hurtable/*`, `W/*`, Shader
+Graph and so on). 824 MB of textures in DXT1/DXT5/BC7, 5,126 light sources, 741 cameras. Addressables are used only for
+localization.
 
-Экспорт AssetRipper 2.0.0 (`ScriptExportMode = DllExportWithoutRenaming`) занимает 45 секунд
-и 2.3 ГБ: 14 726 ассетов, 3 сцены, оригинальные DLL в `Assets/Plugins`, Unity 2022.3.67f2.
-Скрипты не декомпилируются, объекты ссылаются на оригинальные сборки, поэтому запечённые DLL
-встанут на их место без изменений.
+The AssetRipper 2.0.0 export (`ScriptExportMode = DllExportWithoutRenaming`) takes 45 seconds and 2.3 GB: 14,726
+assets, 3 scenes, the original DLLs in `Assets/Plugins`, Unity 2022.3.67f2. Scripts are not decompiled; objects
+reference the original assemblies, so the baked DLLs drop into their place unchanged.
 
-**Шейдеры.** Декомпиляция шейдеров в AssetRipper 2.0 — платная функция (Premium). Бесплатная версия
-выгружает заглушки (`//DummyShaderTextExporter`), в которых сохранены имя и все свойства.
-Как их заменить:
-- встроенные (`Standard`, PostProcessing v2 — 24 шт., TextMeshPro — 5 шт.) взять из исходников Unity
-  и пакетов той же версии;
-- собственные (32 шт.: `Semiwork/*`, `Hurtable/*`, `W/*`, `Fresnel*`, `Lava`, `Water` и др.) —
-  в основном это простые шейдеры из Amplify Shader Editor (текстуры, нормали, эмиссия, френель).
-  Варианты: написать заново как surface-шейдеры с теми же свойствами, декомпилировать DXBC открытыми
-  инструментами (извлечь через UnityPy) или купить AssetRipper Premium.
+**Shaders.** Shader decompilation in AssetRipper 2.0 is a paid (Premium) feature. The free version exports stubs
+(`//DummyShaderTextExporter`) that keep the name and all the properties. How to replace them:
+- built-in ones (`Standard`, PostProcessing v2 — 24 of them, TextMeshPro — 5) come from the source of Unity and its
+  packages of the same version;
+- the game's own (32: `Semiwork/*`, `Hurtable/*`, `W/*`, `Fresnel*`, `Lava`, `Water` and others) are mostly simple
+  Amplify Shader Editor shaders (textures, normals, emission, fresnel). Options: rewrite them as surface shaders with
+  the same properties, decompile the DXBC with open tools (extracting it through UnityPy), or buy AssetRipper Premium.
 
-**Версия Unity.** 2022.3.67f2, на которой собрана игра, — сборка Extended LTS: она выдаётся только
-по подписке Unity Enterprise. Поэтому используется последняя публичная 2022.3.62f3. Формат проекта
-тот же, а совместимость с друзьями зависит от кода игры, а не от патч-версии движка.
+**Unity version.** 2022.3.67f2, which the game is built with, is an Extended LTS build: it is only available with a
+Unity Enterprise subscription. So the latest public 2022.3.62f3 is used. The project format is the same, and
+compatibility with friends depends on the game's code, not on the engine's patch version.
 
-**Проект для Quest** (`scripts/make-quest-project.sh`):
-- Первый импорт экспорта под Android занимает 11.5 минут (14 771 файл) и проходит без ошибок.
-- `scripts/package_swap.py` заменяет DLL пакетов из экспорта настоящими пакетами тех же версий
-  (InputSystem 1.14.2, uGUI 1.0.0, TMP 3.0.7, Localization 1.5.9, Addressables 1.27.0,
-  PostProcessing 3.5.0 и др.). Это нужно для XR-пакетов и для сборки Addressables под Android.
-  Ссылки перепривязываются по формуле Unity для скриптов из DLL (MD4 от «namespace + класс»):
-  606 классов, 5678 ссылок в 308 файлах, ни одной неразрешённой. 29 шейдеров-заглушек
-  (PostProcessing, TMP) заменяются настоящими.
-- У DLL игры отключено автоподключение: в `Assembly-CSharp` есть глобальный класс `Version`,
-  и он перекрывал `System.Version` в коде InputSystem.
-- Настройки Addressables в игру не попадают, это данные редактора. Они восстанавливаются из её
-  `catalog.json` (`scripts/addressables_catalog.py` + `AddressablesRestore.cs`):
-  28 записей локализации с теми же адресами, метками и разбивкой по бандлам.
-- Compute-шейдеры PostProcessing AssetRipper выгружает как сериализованные `.asset` с байткодом DX11;
-  они перепривязаны на `.compute` из пакета (у ссылки меняется `type: 2 → 3`).
-- Сборка в два запуска редактора (`scripts/build-quest.sh`): после смены настроек плеера Unity требует
-  перезагрузки домена, а до неё отказывается собирать.
-- Цель — Android API 34: это система Quest 3 (Horizon OS на Android 14), и для неё в SDK Unity
-  есть платформа (API 32 пришлось бы ставить с принятием лицензии).
+**The Quest project** (`scripts/make-quest-project.sh`):
+- The first import of the export for Android takes 11.5 minutes (14,771 files) and finishes without errors.
+- `scripts/package_swap.py` replaces the package DLLs from the export with the real packages of the same versions
+  (InputSystem 1.14.2, uGUI 1.0.0, TMP 3.0.7, Localization 1.5.9, Addressables 1.27.0, PostProcessing 3.5.0 and
+  others). This is needed for the XR packages and for building Addressables for Android. References are rebound with
+  Unity's formula for scripts from DLLs (MD4 of "namespace + class"): 606 classes, 5,678 references in 308 files, none
+  unresolved. 29 stub shaders (PostProcessing, TMP) are replaced with the real ones.
+- Auto-referencing is turned off for the game's DLLs: `Assembly-CSharp` has a global `Version` class, and it shadowed
+  `System.Version` in InputSystem's code.
+- The Addressables settings do not ship with the game; they are editor data. They are restored from its
+  `catalog.json` (`scripts/addressables_catalog.py` + `AddressablesRestore.cs`): 28 localization entries with the same
+  addresses, labels and bundle layout.
+- AssetRipper exports PostProcessing's compute shaders as serialized `.asset` files with DX11 bytecode; they are
+  rebound to the `.compute` files from the package (the reference changes `type: 2 → 3`).
+- The build takes two editor runs (`scripts/build-quest.sh`): after the player settings change, Unity requires a
+  domain reload and refuses to build before it.
+- The target is Android API 34: that is the Quest 3's system (Horizon OS on Android 14), and Unity's SDK has that
+  platform (API 32 would need installing with a license acceptance).
 
-**Первый APK** (ванильная игра, без VR): 388–424 МБ, внутри около 2.3 ГБ данных. Полная сборка — около
-20 минут, повторная — около 15. Ставится на Quest 3 за 15 секунд, на Quest запускается как плоское окно.
-Путь до работающей игры:
+**The first APK** (vanilla game, no VR): 388–424 MB, with about 2.3 GB of data inside. A full build takes about 20
+minutes, a repeat build about 15. It installs on a Quest 3 in 15 seconds and runs on the Quest as a flat window. The
+road to a working game:
 
-| Симптом на Quest | Причина | Решение |
+| Symptom on the Quest | Cause | Solution |
 |---|---|---|
-| `sharedassets0.assets is corrupted! [Position out of bounds!]` | Имена `Assembly-CSharp(-firstpass)` зарезервированы Unity: при сборке плеера все скрипты игры считались «потерянными» (≈106 тыс. предупреждений), данные уходили без раскладки | DLL переименованы в `REPO.Game(.FirstPass)` (`scripts/rename_game_assemblies.py`, `tools/AssemblyRenamer`); ссылки в сценах идут по GUID, поэтому не ломаются; `UnityEvent` (2 559 мест) и список Easy Save 3 переписаны |
-| Закрывается сразу после меню: `Steam not initialized. Quitting game.` | На Android нет `steam_api64` | `tools/SteamShim` — своя `Facepunch.Steamworks.Win64` с тем же API (12 типов, ~50 членов; ILVerify без ошибок); пока офлайн-бэкенд, дальше SteamKit2 |
-| Исключение каждый кадр из `discord_partner_sdk`, `user32` | Нативные библиотеки только для Windows | Android-замены `DiscordManager.Start/UpdateDiscordRichPresence/RefreshDiscordRichPresence`, `WindowManager.Awake` (тела вписываются в игру при запекании) |
-| Не грузятся таблицы локализации (`No Location found for Key=d022236e…`) | Localization ищет таблицы по GUID ассета из оригинального проекта, а AssetRipper раздал новые | Оригинальные GUID берутся из ключей каталога Addressables и возвращаются ассетам (`scripts/restore_guids.py`, 28 ассетов) |
-| Нет 3D-графики, виден только UI | Заглушки шейдеров AssetRipper объявляют матрицы как обычные глобальные переменные; под Vulkan они нулевые, и геометрия не рисуется (562 материала: стены, полы, персонажи, ценности) | `scripts/generate_shaders.py`: 35 заглушек → surface-шейдеры для освещённых и vert/frag для UI и частиц, свойства и GUID сохраняются |
-| Меню работает, но невидимо | UI рисуется в `Render Texture Overlay` формата RGBA32F, в который Adreno не умеет смешивать | Формат переведён на RGBA16F (`scripts/fix_render_textures.py`); на шлеме ещё проверяется |
+| `sharedassets0.assets is corrupted! [Position out of bounds!]` | The names `Assembly-CSharp(-firstpass)` are reserved by Unity: during the player build, all the game's scripts counted as "missing" (≈106,000 warnings), and the data went out without layout | The DLLs are renamed to `REPO.Game(.FirstPass)` (`scripts/rename_game_assemblies.py`, `tools/AssemblyRenamer`); references in scenes go by GUID, so they do not break; `UnityEvent` (2,559 places) and the Easy Save 3 list are rewritten |
+| Closes right after the menu: `Steam not initialized. Quitting game.` | Android has no `steam_api64` | `tools/SteamShim`: our own `Facepunch.Steamworks.Win64` with the same API (12 types, ~50 members; ILVerify clean); an offline backend for now, SteamKit2 next |
+| An exception every frame from `discord_partner_sdk`, `user32` | Windows-only native libraries | Android replacements for `DiscordManager.Start/UpdateDiscordRichPresence/RefreshDiscordRichPresence` and `WindowManager.Awake` (the bodies are written into the game at bake time) |
+| Localization tables do not load (`No Location found for Key=d022236e…`) | Localization looks tables up by the asset GUID from the original project, and AssetRipper handed out new ones | The original GUIDs are taken from the Addressables catalog keys and given back to the assets (`scripts/restore_guids.py`, 28 assets) |
+| No 3D graphics, only the UI is visible | AssetRipper's shader stubs declare the matrices as ordinary globals; under Vulkan they are zero, and no geometry is drawn (562 materials: walls, floors, characters, valuables) | `scripts/generate_shaders.py`: 35 stubs → surface shaders for lit ones and vert/frag for UI and particles, properties and GUIDs kept |
+| The menu works but is invisible | The UI is drawn into a `Render Texture Overlay` in RGBA32F, which Adreno cannot blend into | The format is changed to RGBA16F (`scripts/fix_render_textures.py`); still being checked on the headset |
 
-После этого на Quest работают меню, обучение, звук, физика и локализация. Геймпад REPO не поддерживает
-и на ПК (есть только оси прицела), для плоского теста нужны клавиатура и мышь. В VR управление даёт RepoXR.
+After that, the menu, tutorial, sound, physics and localization work on the Quest. REPO has no gamepad support even on
+PC (only aim axes), so the flatscreen test needs a keyboard and mouse. In VR, RepoXR provides the controls.
 
-Известные мелочи: у 6 динамических шрифтов TMP (Noto Sans JP/KR/TC/Thai/Arabic, LiberationSans Fallback)
-AssetRipper не выгрузил пустые атласы — нужно пересоздать, иначе не будет символов этих языков.
+Known small issues: for 6 dynamic TMP fonts (Noto Sans JP/KR/TC/Thai/Arabic, LiberationSans Fallback), AssetRipper did
+not export the empty atlases. They need to be recreated, or those languages' characters will be missing.
 
-**VR-сборка** (`scripts/bake.sh all android`, `scripts/make-quest-vr.sh`, `scripts/build-quest.sh repo-quest-vr`):
-тот же проект плюс XR Management 4.5.0, OpenXR 1.14.3 (Meta Quest, Touch, Touch Plus) и XR Interaction Toolkit 2.6.4,
-запечённая игра с полным набором патчей (221 метод, 0 ошибок), RepoXR с зависимостями как Android-плагины,
-ассеты мода под Android (`scripts/build-repoxr-assets.sh`) внутри APK. InputSystem и uGUI в проекте собираются
-из исходников, поэтому три патча RepoXR на их код (`XRSupport.Initialize`, `InputSettings.backgroundBehavior`,
-`Button.OnPointerClick`) вносятся правкой исходников встроенных пакетов (`scripts/patch_packages.py`).
-Пропуск `XRSupport.Initialize` безопасен: OpenXR 1.14 сам регистрирует свой `PoseControl` и раскладки контроллеров.
+**The VR build** (`scripts/bake.sh all android`, `scripts/make-quest-vr.sh`, `scripts/build-quest.sh repo-quest-vr`):
+the same project plus XR Management 4.5.0, OpenXR 1.14.3 (Meta Quest, Touch, Touch Plus) and XR Interaction Toolkit
+2.6.4, the baked game with the full patch set (221 methods, 0 errors), RepoXR with its dependencies as Android plugins,
+and the mod's assets built for Android (`scripts/build-repoxr-assets.sh`) inside the APK. InputSystem and uGUI are
+built from source in the project, so RepoXR's three patches on their code (`XRSupport.Initialize`,
+`InputSettings.backgroundBehavior`, `Button.OnPointerClick`) are applied by editing the source of the embedded packages
+(`scripts/patch_packages.py`). Skipping `XRSupport.Initialize` is safe: OpenXR 1.14 registers its own `PoseControl`
+and controller layouts.
 
-Что всплыло на VR-сборке:
-- `typeof(X)` в аргументах атрибутов хранится строкой с именем сборки (`"GameDirector, Assembly-CSharp"`), поэтому
-  после переименования в `REPO.Game` линкер IL2CPP падал на `[HarmonyPatch(typeof(...))]` RepoXR
-  (222 таких места). `tools/AssemblyRenamer` теперь разбирает блобы атрибутов и переписывает и их.
-- XR Management 4.5 не создаёт `XRManagerSettings` вместе с общими настройками — `QuestXRSetup` создаёт их явно.
+What came up in the VR build:
+- `typeof(X)` in attribute arguments is stored as a string with the assembly name (`"GameDirector, Assembly-CSharp"`),
+  so after the rename to `REPO.Game` the IL2CPP linker failed on RepoXR's `[HarmonyPatch(typeof(...))]` (222 such
+  places). `tools/AssemblyRenamer` now parses attribute blobs and rewrites those too.
+- XR Management 4.5 does not create `XRManagerSettings` along with the general settings; `QuestXRSetup` creates them
+  explicitly.
 
-**Первый запуск VR на шлеме** (сборка 2026-09-25): OpenXR-сессия поднимается, меню RepoXR и графика видны в шлеме.
-Что мешало и как исправлено:
+**The first VR run on the headset** (build of 2026-09-25): the OpenXR session comes up, and RepoXR's menu and the
+graphics are visible in the headset. What got in the way and how it was fixed:
 
-| Симптом | Причина | Решение |
+| Symptom | Cause | Solution |
 |---|---|---|
-| Только экран загрузки Quest, звук меню есть | Линкер IL2CPP выбросил `RepoXR.Standalone`: на загрузчик нет ссылок, он запускается через `RuntimeInitializeOnLoadMethod` | `Assets/RepoQuest/link.xml` (загрузчик, RepoXR, BepInEx, XR-сборки) |
-| Картинка «приклеена» к голове | `Could not create a device for 'OpenXR Head Tracking'`: перенос патча RepoXR отключал `XRSupport.Initialize` целиком, а на ПК он пропускает только второй вызов, и раскладки `XRHMD`/`XRController` не регистрировались | Первый вызов выполняется, повторные пропускаются (`patch_packages.py`) |
-| Контроллеры не работают | В OpenXR 1.14.3 `FinishSetup` профилей ждёт `StickControl`, а без символа `USE_STICK_CONTROL_THUMBSTICKS` стик объявлен как `Vector2Control`; привязки RepoXR к тому же используют `primary2DAxis/up` | Символ ставится в `QuestXRSetup` |
-| Кнопки и страницы меню RepoXR «missing script» | Бандл RepoXR ссылается на скрипты игры в `Assembly-CSharp`, а в APK игра — `REPO.Game` | Заглушки игры в проекте ассетов RepoXR собираются в asmdef `REPO.Game`, вызовы `UnityEvent` перенацелены (`build-repoxr-assets.sh`) |
-| `TypeInitializationException` в `HarmonyLib.AccessTools` | Статический конструктор строит быстрый вызов через `DynamicMethodDefinition` (Emit), IL2CPP так не умеет; ломаются страница настроек RepoXR и его реестр RPC | Android-замена `MethodInvoker.GetHandler` на `MethodBase.Invoke` в 0Harmony из BepInEx (`--rewrite` у baker) |
+| Only the Quest loading screen, the menu sound plays | The IL2CPP linker stripped `RepoXR.Standalone`: nothing references the loader, it starts through `RuntimeInitializeOnLoadMethod` | `Assets/RepoQuest/link.xml` (the loader, RepoXR, BepInEx, XR assemblies) |
+| The picture is "stuck" to the head | `Could not create a device for 'OpenXR Head Tracking'`: the port of RepoXR's patch disabled `XRSupport.Initialize` entirely, while on PC it skips only the second call, so the `XRHMD`/`XRController` layouts were never registered | The first call runs, repeated ones are skipped (`patch_packages.py`) |
+| Controllers do not work | In OpenXR 1.14.3, the profiles' `FinishSetup` expects a `StickControl`, but without the `USE_STICK_CONTROL_THUMBSTICKS` symbol the stick is declared as a `Vector2Control`; RepoXR's bindings also use `primary2DAxis/up` | The symbol is set in `QuestXRSetup` |
+| RepoXR's menu buttons and pages show "missing script" | RepoXR's bundle references the game's scripts in `Assembly-CSharp`, but in the APK the game is `REPO.Game` | The game stubs in RepoXR's asset project are built into a `REPO.Game` asmdef, and `UnityEvent` calls are retargeted (`build-repoxr-assets.sh`) |
+| `TypeInitializationException` in `HarmonyLib.AccessTools` | The static constructor builds a fast invoker through `DynamicMethodDefinition` (Emit), which IL2CPP cannot do; RepoXR's settings page and its RPC registry break | An Android replacement of `MethodInvoker.GetHandler` with `MethodBase.Invoke` in BepInEx's 0Harmony (the baker's `--rewrite`) |
 
-**Результат (2026-09-25): REPO с RepoXR работает на Quest 3 автономно.** Трекинг головы и контроллеров, лучи и
-кнопки меню RepoXR, туториал проходится целиком. Открытые вопросы: `NullReferenceException` в `Map.AddValuable` при
-обнаружении ценностей (ценность не появляется на карте; статически причина не видна), производительность (ниже),
-мультиплеер (SteamShim пока офлайн) и голосовой чат (нет нативных библиотек Photon Voice под Android).
+**Result (2026-09-25): REPO with RepoXR runs standalone on a Quest 3.** Head and controller tracking, RepoXR's menu
+rays and buttons work, and the tutorial can be played through. Open questions: a `NullReferenceException` in
+`Map.AddValuable` when valuables are discovered (the valuable does not appear on the map; the cause is not visible
+statically), performance (below), multiplayer (SteamShim is still offline) and voice chat (no Android native libraries
+for Photon Voice).
 
-Производительность в туториале (VR, multi-pass, 100% разрешения): в среднем 43 FPS, минимум 21 при целевых 72, 18,6 мс
-GPU на кадр. В главном меню (VR, multi-pass, 100% разрешения): 62–65 из 72 FPS, GPU загружен на 97% при уровнях
-CPU4/GPU4. Дальше пробуем без пересборки: `SinglePassRendering` (multiview) и `CameraResolution` в конфиге RepoXR,
-графические настройки самой игры. Фовеальный рендеринг на встроенном конвейере через OpenXR требует Meta Core XR SDK
-и не работает с пост-обработкой PPv2, которую использует REPO.
+Performance in the tutorial (VR, multi-pass, 100% resolution): 43 FPS on average, 21 at the minimum, against a target
+of 72; 18.6 ms of GPU per frame. In the main menu (VR, multi-pass, 100% resolution): 62–65 of 72 FPS, the GPU 97% busy
+at CPU4/GPU4 levels. Next, without rebuilding: `SinglePassRendering` (multiview) and `CameraResolution` in RepoXR's
+config, and the game's own graphics settings. Foveated rendering on the built-in pipeline through OpenXR needs the Meta
+Core XR SDK and does not work with the PPv2 post-processing that REPO uses.
 
-**Правки RepoXR.** Сабмодуль `external/RepoXR` остаётся чистым v1.2.3; собственные изменения лежат в
-`patches/repoxr/*.patch`, `scripts/prepare-repoxr.sh` накладывает их на копию в `work/repoxr-src` и собирает её, и уже
-этот RepoXR.dll идёт в запекание. Первый патч — **Head Bob**: в VR камера висит под объектом `CameraBob` игры
-(`… → Bob → Noise → … → Tilt → Camera Main`), и качание при ходьбе (вверх-вниз, рыскание и крен) двигает весь вид.
-RepoXR ослаблял его до 25% зашитой константой; теперь это ползунок 0–100% в Настройках RepoXR → Gameplay (по
-умолчанию 25%, как было). Масштабируется только смещение камеры: в том же `CameraBob.Update` играют шаги.
-Без сборки то же даёт игровая настройка Gameplay → Camera Animation = 0 (заодно выключает приземление и наклоны).
-Проверено на шлеме: при 0% укачивание при ходьбе пропало, шаги слышны.
+**Changes to RepoXR.** The `external/RepoXR` submodule stays a clean v1.2.3; our changes live in
+`patches/repoxr/*.patch`. `scripts/prepare-repoxr.sh` applies them to a copy in `work/repoxr-src` and builds it, and
+that RepoXR.dll is what goes into the bake. The first patch is **Head Bob**: in VR the camera hangs under the game's
+`CameraBob` object (`… → Bob → Noise → … → Tilt → Camera Main`), and the walking sway (up-down, yaw and roll) moves the
+whole view. RepoXR damped it to 25% with a hardcoded constant; now it is a 0–100% slider in RepoXR Settings → Gameplay
+(25% by default, as before). Only the camera offset is scaled: the footsteps play in the same `CameraBob.Update`.
+Without a rebuild, the game's Gameplay → Camera Animation = 0 setting does the same (and also turns off landing and
+tilts). Tested on the headset: at 0%, the motion sickness from walking is gone, and footsteps are still heard.
 
-**Устаревшие артефакты импорта.** Ценности не появлялись на карте, а при ударах предметов падал `ImpactSmoke`.
-Диагностическая замена `Map.AddValuable` показала, что у маркера пуст `spriteRenderer`; в данных APK у этого
-`MapValuable` пусты все ссылки, хотя YAML префаба их задаёт. Причина — `Library` проекта: первый импорт прошёл, когда
-сборка игры ещё называлась `Assembly-CSharp.dll`, а после переименования в `REPO.Game` файлы префабов не менялись и Unity
-их не переимпортировал; редактор держал `MonoBehaviour` без данных (после принудительного переимпорта ссылки на месте,
-`ImportDiagnostics`). Затронуты 1 346 префабов и 1 585 `.asset` со скриптами игры. Сцены не пострадали: при сборке
-они читаются из файлов. `build-quest.sh` теперь один раз на `Library` переимпортирует всё, что использует скрипты игры.
+**Stale import artifacts.** Valuables did not appear on the map, and `ImpactSmoke` failed when items hit things. A
+diagnostic replacement of `Map.AddValuable` showed that the marker's `spriteRenderer` was empty; in the APK's data,
+every reference of that `MapValuable` was empty, although the prefab's YAML sets them. The cause was the project's
+`Library`: the first import happened while the game's assembly was still called `Assembly-CSharp.dll`, and after the
+rename to `REPO.Game` the prefab files did not change, so Unity did not reimport them; the editor held `MonoBehaviour`s
+with no data (after a forced reimport the references are there, per `ImportDiagnostics`). 1,346 prefabs and 1,585
+`.asset` files with the game's scripts were affected. Scenes were not: they are read from the files at build time.
+`build-quest.sh` now reimports everything that uses the game's scripts, once per `Library`.
 
-**Мультиплеер: Steam без клиента (этап 0, 2026-09-25).** Сценарий — зайти к другу, который хостит на ПК. В SteamShim
-(`Facepunch.Steamworks.Win64` в APK) добавлен бэкенд `RepoQuest.Steam.SteamKitBackend` на SteamKit2 2.5 (последняя
-версия со сборкой netstandard, пригодной для Unity): вход по refresh-токену QR-логина со своим `LoginID` и id машины
-устройства (SteamKit 2.5 на macOS падал на IOKit), статус «играет в R.E.P.O.», вход в лобби друга с данными,
-участниками и событиями, список друзей с их лобби (`game_lobby_id` из `CMsgClientPersonaState`). Тикет авторизации
-перенесён из SteamKit 3.4 (`AuthTicketHandler`: game connect token + заголовок сессии, регистрация через
-`ClientAuthList`, тикет владения). `tools/SteamShimProbe` гоняет заглушку так же, как игра: вход, ник, тикет →
-Photon `OnConnectedToMaster: authenticated`, в том числе с protobuf-net без генерации кода (`AutoCompile = false`,
-как под IL2CPP). Осталось с другом: вход в его лобби и комнату, формат приглашения.
-В APK: SteamKit2, protobuf-net(.Core), System.Collections.Immutable как Android-плагины (System.Memory/Buffers —
-шимы Unity, Registry/AccessControl — фасады AOT-профиля), `link.xml`; вход переносится на шлем
-`scripts/quest-steam-login.sh`, зайти к другу до появления меню в VR — `scripts/quest-join.sh <ник>`.
+**Multiplayer: Steam without a client (stage 0, 2026-09-25).** The scenario is joining a friend who hosts on PC.
+SteamShim (`Facepunch.Steamworks.Win64` in the APK) got a `RepoQuest.Steam.SteamKitBackend` backend on SteamKit2 2.5
+(the last version with a netstandard build that works in Unity): login with a QR login's refresh token using the
+device's own `LoginID` and machine id (SteamKit 2.5 crashed on IOKit on macOS), a "playing R.E.P.O." status, joining a
+friend's lobby with its data, members and events, and the friends list with their lobbies (`game_lobby_id` from
+`CMsgClientPersonaState`). The auth ticket is ported from SteamKit 3.4 (`AuthTicketHandler`: a game connect token +
+session header, registration through `ClientAuthList`, the ownership ticket). `tools/SteamShimProbe` drives the shim
+the way the game does: login, name, ticket → Photon `OnConnectedToMaster: authenticated`, including with protobuf-net
+without code generation (`AutoCompile = false`, as under IL2CPP). Left to do with a friend: joining their lobby and
+room, the invite format. In the APK: SteamKit2, protobuf-net(.Core), System.Collections.Immutable as Android plugins
+(System.Memory/Buffers are Unity's shims, Registry/AccessControl are AOT-profile facades), `link.xml`. The login is
+copied to the headset with `scripts/quest-steam-login.sh`, and `scripts/quest-join.sh <name>` joins a friend before
+the VR menu exists.
 
-**Этап 1 (Steam на шлеме, 2026-09-26): пройден.** Шлем сам входит в Steam за ~2 с и регистрирует тикет авторизации.
-Что пришлось исправить под IL2CPP (`tools/Il2CppFixes`, правка IL копий в APK): `Process.StartTime` в конструкторе
-`SteamKit2.SteamClient` (→ `DateTime.Now`), `ParameterInfo.GetRequiredCustomModifiers` в распознавании кортежей
-protobuf-net (→ нет модификаторов); асинхронный код SteamKit2 без `ConfigureAwait(false)` привязывался к главному
-потоку Unity, поэтому первое подключение запускается из пула потоков.
-**Зайти к другу в VR:** кнопка главного меню «Join friend» у игры открывает Steam-оверлей через
-`SteamFriends.OpenOverlay("friends")` — это вызов заглушки, так что без патчей игры на Quest она показывает друзей,
-сидящих в лобби R.E.P.O., во всплывающем окне игры (JOIN / NEXT); JOIN делает то же, что «Присоединиться» в Steam.
+**Stage 1 (Steam on the headset, 2026-09-26): done.** The headset logs in to Steam by itself in ~2 s and registers the
+auth ticket. What had to be fixed for IL2CPP (`tools/Il2CppFixes`, editing the IL of the copies in the APK):
+`Process.StartTime` in the `SteamKit2.SteamClient` constructor (→ `DateTime.Now`), and
+`ParameterInfo.GetRequiredCustomModifiers` in protobuf-net's tuple detection (→ no modifiers). SteamKit2's async code
+without `ConfigureAwait(false)` bound itself to Unity's main thread, so the first connection is started from the
+thread pool.
+**Joining a friend in VR:** the game's "Join friend" main menu button opens the Steam overlay through
+`SteamFriends.OpenOverlay("friends")`. That is a call into the shim, so without patching the game, on the Quest it
+shows friends sitting in R.E.P.O. lobbies in the game's popup (JOIN / NEXT); JOIN does the same as "Join Game" in
+Steam.
 
-**Вход в Steam на шлеме (2026-09-30).** Кнопка «Steam: …» справа от Quit game в главном меню (и Join friend, пока
-входа нет) открывает вход прямо в игре. Имя аккаунта и пароль вводятся на странице, собранной из игровой «Rename save
-file»: клавиатура VR из RepoXR, пароль отображается звёздочками. Дальше Steam Guard: подтверждение в приложении Steam
-или код из приложения или из письма. `RepoQuest.Steam.PasswordLogin` обращается к сервису аутентификации Steam
-обычными unified-сообщениями (`Authentication.*#1`). `SteamAuthentication` из SteamKit 2.5 не подходит: он строит
-вызовы из компилируемых деревьев выражений и `MakeGenericMethod`, а под IL2CPP это ненадёжно. Пароль уходит только в
-Steam, зашифрованный RSA-ключом аккаунта; на шлеме остаётся refresh-токен (`steam-session.json`). После входа игра
-переключается на аккаунт без перезапуска. LOG OUT отзывает токен (`Authentication.RevokeToken`), но SteamID и ник
-остаются: апгрейды в одиночных сохранениях привязаны к SteamID. С Mac тот же путь проходит
-`SteamShimProbe login` / `logout` со своим файлом `work/steam-session-password.json`. На Mac проверено: неверный пароль
-даёт понятную ошибку. Вход с паролем и Steam Guard ждёт проверки в шлеме.
+**Steam login on the headset (2026-09-30).** A "Steam: …" button to the right of Quit game in the main menu (and Join
+friend, while there is no login) opens the login right in the game. The account name and password are entered on a
+page built from the game's "Rename save file" page: RepoXR's VR keyboard, the password shown as asterisks. Then Steam
+Guard: confirmation in the Steam app, or a code from the app or from email. `RepoQuest.Steam.PasswordLogin` talks to
+Steam's authentication service with plain unified messages (`Authentication.*#1`). SteamKit 2.5's
+`SteamAuthentication` does not fit: it builds calls from compiled expression trees and `MakeGenericMethod`, which is
+unreliable under IL2CPP. The password goes only to Steam, encrypted with the account's RSA key; the headset keeps a
+refresh token (`steam-session.json`). After login, the game switches to the account without a restart. LOG OUT revokes
+the token (`Authentication.RevokeToken`), but the SteamID and name stay: upgrades in singleplayer saves are tied to
+the SteamID. On the Mac, `SteamShimProbe login` / `logout` goes the same way with its own
+`work/steam-session-password.json`. Tested on the Mac: a wrong password gives a clear error. Tested on the headset on
+2026-10-04: log out, a wrong password, then a correct one with Steam Guard confirmation in the app, and the game
+reconnected without a restart.
 
-**Голос.** Photon Voice в игре вызывает из `opus_egpv` только стандартный API libopus (`opus_encoder_create`,
-`opus_decode`, `opus_encoder_ctl`…; на Android arm64 вариадический `*_ctl` через P/Invoke вызывается корректно),
-значит достаточно libopus (BSD), собранной под arm64 NDK из Unity как `libopus_egpv.so`. Нужно ещё проверить,
-какой микрофон выбирает `Recorder` игры (Unity Microphone работает, `AndroidAudioInAEC` требует AAR Photon).
+**Voice.** Photon Voice in the game calls only the standard libopus API from `opus_egpv` (`opus_encoder_create`,
+`opus_decode`, `opus_encoder_ctl`…; on Android arm64 the variadic `*_ctl` is called correctly through P/Invoke), so
+libopus (BSD) built for arm64 with Unity's NDK as `libopus_egpv.so` is enough. Still to check: which microphone the
+game's `Recorder` picks (Unity Microphone works; `AndroidAudioInAEC` needs Photon's AAR).
 
-**Производительность и свет (2026-09-26).** Уровень качества Android в проекте — «Medium» с `pixelLightCount: 1`
-(на ПК игра идёт на «Ultra», 12): фонарик и лампы делили один попиксельный слот, и поверхность темнела, пока до неё
-не доходило пятно. Второй патч RepoXR (`0002-pixel-lights-setting`) — ползунок Rendering → Pixel Lights (1–12, по
-умолчанию 3), применяется на лету. Замеры в туториале (`VrApi FPS=`): исходно 42,5 FPS при ~18 мс GPU; разгон через
-Quest Games Optimizer не помог; Motion Blur/Grain off и ниже тени/свет в настройках игры — GPU ~12 мс, 47–53 FPS
-(с Pixel Lights 3 так же). Дальше упор в CPU (~18 мс на кадр): single pass в RepoXR даёт белый левый глаз (эффекты
-не под multiview), следующий шаг — профилирование development-сборкой.
+**Performance and lighting (2026-09-26).** The project's Android quality level is "Medium" with `pixelLightCount: 1`
+(on PC the game runs at "Ultra", 12): the flashlight and the lamps shared one per-pixel slot, and a surface went dark
+until the light spot reached it. RepoXR's second patch (`0002-pixel-lights-setting`) is a Rendering → Pixel Lights
+slider (1–12, 3 by default), applied on the fly. Measurements in the tutorial (`VrApi FPS=`): initially 42.5 FPS at
+~18 ms GPU; overclocking through Quest Games Optimizer did not help; Motion Blur/Grain off and lower shadows/lights in
+the game's settings: GPU ~12 ms, 47–53 FPS (the same with Pixel Lights 3). Then the limit is the CPU (~18 ms per
+frame): single pass in RepoXR gives a white left eye (the effects are not multiview), and the next step is profiling
+with a development build.
 
-**Шейдеры по оригиналу.** В скомпилированных шейдерах игры рядом с байткодом лежит разобранная форма: для каждого
-прохода Blend, ColorMask, ZWrite, ZTest, Cull и теги. `scripts/shader_states.py` достаёт её (117 шейдеров), и
-`generate_shaders.py` берёт оттуда состояние и то, освещённый шейдер или нет, а не угадывает по имени. Например,
-`UI Overlay` (вывод UI поверх кадра) — это `Blend One OneMinusSrcAlpha`, `ColorMask RGB`, а не обычное альфа-смешивание.
-Свойства, которые шейдер берёт из сохранённых значений материалов, дописываются в его `Properties`.
+**Shaders from the original.** The game's compiled shaders carry a parsed form next to the bytecode: for each pass,
+Blend, ColorMask, ZWrite, ZTest, Cull and tags. `scripts/shader_states.py` extracts it (117 shaders), and
+`generate_shaders.py` takes the state from there, along with whether the shader is lit, instead of guessing by name.
+For example, `UI Overlay` (drawing the UI over the frame) is `Blend One OneMinusSrcAlpha`, `ColorMask RGB`, not
+ordinary alpha blending. Properties that the shader reads from the materials' saved values are added to its
+`Properties`.
 
-**Формулы по байткоду (2026-10-02).** Сам код шейдеров в игре тоже есть — байткод DX11 для каждого варианта.
-`scripts/shader_disasm.py "<имя шейдера>"` печатает его по проходам с именами свойств материала вместо регистров, и
-заменитель можно сверить с оригиналом, а не угадывать. Так нашлось:
-- собственные шейдеры Semiwork (`Hurtable/*`, `Semiwork/Standard`, `Semiwork/Alpha Clip`, `RotatingAlbedoShader`)
-  умножают свечение на альфу `_EmissionColor`. У Mentalist (`Enemy Floater`) цвет свечения `(1, 1, 1, 0)` без
-  текстуры: на ПК свечения нет, у нас он светился белым целиком. Игра красит игроков, сохраняя альфу материала
-  (`PlayerMaterial.ColorSet`), так что это и сила свечения окрашенных частей;
-- френель Hurtable считается по нормали меша (не по карте нормалей), без ограничения сверху, прибавляется к цвету
-  и, через `_FresnelEmission`, к свечению; вспышка при уроне (`_ColorOverlay`) накрывает и свечение. У двусторонних
-  вариантов кромка только на лицевых гранях, у `Hurtable Fade` задние грани с прозрачностью `_backfaces`;
-- `W/ExtrationArea` (красная рамка зоны сдачи на время отсчёта) рисует не грани куба 9.6 × 15.4 × 9.4 м: по
-  текстуре глубины камеры он находит поверхность сцены за пикселем и подсвечивает пересечение с коробкой
-  полуразмера `_Size = 0.2` (3.8 × 3.7 м вокруг платформы, низ на полу) — пунктир и затухающее свечение снаружи.
-  Текстура глубины на Quest — лишний проход глубины всей сцены на каждый глаз, поэтому замена рисует то же самое
-  на полу геометрией (нижняя грань куба становится квадратом на уровне пола). Линий на стенах и на игроках нет.
+**Formulas from the bytecode (2026-10-02).** The shaders' code itself is in the game too: DX11 bytecode for every
+variant. `scripts/shader_disasm.py "<shader name>"` prints it pass by pass with material property names instead of
+registers, so a replacement can be checked against the original instead of guessed. This found:
+- Semiwork's own shaders (`Hurtable/*`, `Semiwork/Standard`, `Semiwork/Alpha Clip`, `RotatingAlbedoShader`) multiply
+  emission by the alpha of `_EmissionColor`. The Mentalist (`Enemy Floater`) has an emission color of `(1, 1, 1, 0)`
+  with no texture: on PC it has no glow, but ours glowed white all over. The game colors players while keeping the
+  material's alpha (`PlayerMaterial.ColorSet`), so that alpha is also the glow strength of the colored parts;
+- Hurtable's fresnel uses the mesh normal (not the normal map), with no upper clamp, and is added to the color and,
+  through `_FresnelEmission`, to the emission; the damage flash (`_ColorOverlay`) covers the emission too. Two-sided
+  variants have the rim on front faces only; `Hurtable Fade` has back faces with `_backfaces` transparency;
+- `W/ExtrationArea` (the red frame of the extraction zone during the countdown) does not draw the faces of a
+  9.6 × 15.4 × 9.4 m cube: using the camera's depth texture, it finds the scene surface behind each pixel and
+  highlights its intersection with a box of half-size `_Size = 0.2` (3.8 × 3.7 m around the platform, the bottom on the
+  floor), a dashed line and a fading glow outside. A depth texture on the Quest means an extra depth pass of the whole
+  scene per eye, so the replacement draws the same thing on the floor with geometry (the cube's bottom face becomes a
+  square at floor level). There are no lines on walls or players.
 
-**Анимации: склеенные кривые констрейнтов.** Клипы, которые двигают веса нескольких источников одного
-констрейнта (голова и хвост Elsa следуют за маленьким или большим телом, точка взгляда Trudge), хранят их как
-атрибуты 15, 31… (индекс источника × 16 + 15). AssetRipper называет все `m_Sources.Array.data[0].weight` и пишет
-их ключи в одну кривую вперемешку. В игре вес маленького тела бегал от 0 до 1, а к концу клипа падал в 0, вес
-большого не анимировался вовсе. Когда клип замирал на последнем кадре (Elsa гладят), голова уезжала в позу покоя
-констрейнта — под пол. `scripts/fix_constraint_curves.py` разделяет кривые обратно по порядку привязок клипа
-(52 кривые в 27 клипах); результат сверен с декодированными оригинальными клипами игры.
+**Animations: merged constraint curves.** Clips that animate the weights of several sources of one constraint (Elsa's
+head and tail follow the small or the large body, Trudge's look target) store them as attributes 15, 31… (source
+index × 16 + 15). AssetRipper names them all `m_Sources.Array.data[0].weight` and writes their keys into one curve,
+interleaved. In the game, the small body's weight jumped between 0 and 1 and dropped to 0 at the end of the clip, and
+the large body's weight was not animated at all. When a clip froze on its last frame (Elsa being petted), the head
+moved to the constraint's rest pose, under the floor. `scripts/fix_constraint_curves.py` splits the curves back apart
+in the order of the clip's bindings (52 curves in 27 clips); the result was checked against the game's decoded
+original clips.
 
-**Диагностика на шлеме.** `adb screencap` на Quest пуст, поэтому в сборке есть `QuestDiagnostics`: по
-`scripts/quest-diag.sh` игра сохраняет кадр экрана, содержимое всех RenderTexture камер и отчёт о камерах, канвасах
-и видимых элементах UI, а скрипт забирает их в `work/diag/`.
+**Diagnostics on the headset.** `adb screencap` on the Quest is empty, so the build includes `QuestDiagnostics`: on
+`scripts/quest-diag.sh`, the game saves a screen frame, the contents of every camera's RenderTexture and a report on
+cameras, canvases and visible UI elements, and the script pulls them into `work/diag/`.
 
-## Риски
+## Risks
 
-- **Производительность на XR2 Gen 2.** REPO рисует много динамических источников света с тенями
-  и туманом, а в VR это рендер на два глаза. Понадобится свой профиль качества для Quest
-  (свет, тени, FFR, multiview), и пока неизвестно, хватит ли этого.
-- **Шейдеры.** Часть собственных шейдеров придётся переписать вручную, если декомпиляция не справится.
-- **SteamKit2 внутри IL2CPP.** Нужен порт под netstandard 2.1 и сериализатор protobuf, совместимый с AOT.
-  Вход в Steam сторонним клиентом официально не поддерживается (им пользуются DepotDownloader, ASF и др.).
-- **Обновления.** Каждое обновление REPO или RepoXR требует пересборки: экспорт, запекание, APK.
-  Проект RepoXR-Unity уже переехал на Unity 6.3. Если REPO тоже переедет, конвейер придётся перенастроить.
-- **Юридически.** Готовый APK содержит ассеты игры, распространять его нельзя. Сборка идёт локально
-  из твоей копии. RepoXR распространяется под GPL-3.0.
+- **Performance on the XR2 Gen 2.** REPO draws many dynamic lights with shadows and fog, and VR renders for two eyes.
+  A Quest quality profile will be needed (lights, shadows, FFR, multiview), and it is not yet known whether that will
+  be enough.
+- **Shaders.** Some of the game's own shaders will have to be rewritten by hand if decompilation fails.
+- **SteamKit2 inside IL2CPP.** It needs a netstandard 2.1 port and an AOT-compatible protobuf serializer. Logging in to
+  Steam with a third-party client is not officially supported (DepotDownloader, ASF and others use it).
+- **Updates.** Every REPO or RepoXR update requires a rebuild: export, bake, APK. The RepoXR-Unity project has already
+  moved to Unity 6.3. If REPO moves too, the pipeline will have to be reconfigured.
+- **Legal.** The finished APK contains the game's assets and must not be distributed. The build happens locally from
+  the player's own copy. RepoXR is distributed under GPL-3.0.
 
-## Как повторить
+## How to reproduce
 
 ```sh
 work/.venv/bin/python scripts/inventory.py work/game --json work/inventory.json
 scripts/bake.sh all && scripts/verify-bake.sh all
-scripts/make-crossover-test.sh universal   # затем запустить C:\REPO-baked\REPO.exe --disable-vr в бутылке Steam
-~/.dotnet/dotnet run --project tools/SteamPhotonProbe -- login                       # QR-вход, один раз
-~/.dotnet/dotnet run --project tools/SteamPhotonProbe -- photon                      # тикет → Photon master
-~/.dotnet/dotnet run --project tools/SteamPhotonProbe -- photon --friend <ник> --join-room
+scripts/make-crossover-test.sh universal   # then run C:\REPO-baked\REPO.exe --disable-vr in the Steam bottle
+~/.dotnet/dotnet run --project tools/SteamPhotonProbe -- login                       # QR login, once
+~/.dotnet/dotnet run --project tools/SteamPhotonProbe -- photon                      # ticket → Photon master
+~/.dotnet/dotnet run --project tools/SteamPhotonProbe -- photon --friend <name> --join-room
 ```
-`work/` содержит файлы игры и производные от них, поэтому он в `.gitignore`.
+`work/` holds the game's files and everything derived from them, so it is in `.gitignore`.
 
-С 03.10.2026 проект для Quest и APK собирает `scripts/build.sh`: тот же конвейер, что у сборщика для игроков
-(`docs/builder.md`). Скрипты `make-quest-project.sh`, `make-quest-vr.sh`, `apply-quest-runtime.sh` и `build-quest.sh`,
-упомянутые выше, перенесены в него без изменений результата и удалены; они остались в истории git.
+Since 2026-10-03, the Quest project and the APK are built by `scripts/build.sh`: the same pipeline as the players'
+builder (`docs/builder.md`). The scripts `make-quest-project.sh`, `make-quest-vr.sh`, `apply-quest-runtime.sh` and
+`build-quest.sh` mentioned above were moved into it without changing the output, and deleted; they remain in git
+history.
