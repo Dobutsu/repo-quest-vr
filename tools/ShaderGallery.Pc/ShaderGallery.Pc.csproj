@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- The shader gallery as a BepInEx plugin for the PC game: renders prefabs with the original shaders, the
+         reference for the port's (unity-tools/Runtime/ShaderGallery.cs, scripts/shader_gallery.py pc) -->
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <Nullable>disable</Nullable>
+        <LangVersion>latest</LangVersion>
+        <AssemblyName>RepoQuest.ShaderGallery</AssemblyName>
+        <RootNamespace>RepoQuest</RootNamespace>
+        <GameManaged Condition="'$(GameManaged)' == ''">$(MSBuildThisFileDirectory)../../work/game/REPO_Data/Managed</GameManaged>
+        <BepInExCore Condition="'$(BepInExCore)' == ''">$(MSBuildThisFileDirectory)../../work/downloads/BepInEx5/BepInEx/core</BepInExCore>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="../../unity-tools/Runtime/ShaderGallery.cs" Link="ShaderGallery.cs" />
+        <Reference Include="BepInEx">
+            <HintPath>$(BepInExCore)/BepInEx.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <!-- BepInEx is compiled against the UnityEngine facade -->
+        <Reference Include="UnityEngine">
+            <HintPath>$(GameManaged)/UnityEngine.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>$(GameManaged)/UnityEngine.CoreModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="UnityEngine.ImageConversionModule">
+            <HintPath>$(GameManaged)/UnityEngine.ImageConversionModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+</Project>

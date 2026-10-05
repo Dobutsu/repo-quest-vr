@@ -45,6 +45,7 @@ public sealed partial class ExportStep : BuildStep
         Report(context, null, "download");
         var assetRipper = await context.ThirdParty.AssetRipperAsync(ct);
 
+        ProcessRunner.KillLeftovers(assetRipper);
         // AssetRipper asks before deleting a non-empty export folder; ours is always replaced
         FileOps.DeleteDirectory(workspace.Export);
         var port = FreePort();

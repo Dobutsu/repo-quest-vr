@@ -18,7 +18,8 @@ namespace RepoQuest
     /// More requests, answered in the log: files/pp-toggle switches post-processing off or on, files/stereo-info
     /// reports the stereo rendering mode and the cameras, files/particles-toggle and files/particles-instancing hide
     /// particle systems or switch their GPU instancing, files/players-info lists every player's cosmetics with the
-    /// colours their materials actually got.
+    /// colours their materials actually got, files/shader-gallery (a list of Resources paths, one per line) renders each
+    /// of those prefabs into files/gallery/ for comparison with the PC game (ShaderGallery, scripts/shader_gallery.py).
     /// </summary>
     public class QuestDiagnostics : MonoBehaviour
     {
@@ -31,6 +32,8 @@ namespace RepoQuest
         private string particlesTogglePath;
         private string particlesInstancingPath;
         private string playersInfoPath;
+        private string galleryRequestPath;
+        private bool galleryRunning;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
@@ -50,6 +53,7 @@ namespace RepoQuest
             particlesTogglePath = Path.Combine(Application.persistentDataPath, "particles-toggle");
             particlesInstancingPath = Path.Combine(Application.persistentDataPath, "particles-instancing");
             playersInfoPath = Path.Combine(Application.persistentDataPath, "players-info");
+            galleryRequestPath = Path.Combine(Application.persistentDataPath, "shader-gallery");
         }
 
         private static bool Consume(string path)
@@ -195,6 +199,8 @@ namespace RepoQuest
                     ToggleParticles(instancing: true);
                 if (Consume(playersInfoPath))
                     LogPlayersInfo();
+                if (!galleryRunning && File.Exists(galleryRequestPath))
+                    StartCoroutine(RunGallery());
                 if (!File.Exists(requestPath))
                     continue;
 
@@ -208,6 +214,27 @@ namespace RepoQuest
                 {
                     Debug.LogError($"[QuestDiagnostics] snapshot failed: {e}");
                 }
+            }
+        }
+
+        /// <summary>files/shader-gallery: the listed prefabs rendered by ShaderGallery into files/gallery/</summary>
+        private IEnumerator RunGallery()
+        {
+            var paths = File.ReadAllLines(galleryRequestPath).Select(l => l.Trim())
+                .Where(l => l.Length > 0 && !l.StartsWith("#")).ToList();
+            File.Delete(galleryRequestPath);
+            var dir = Path.Combine(Application.persistentDataPath, "gallery");
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, true);
+            galleryRunning = true;
+            Debug.Log($"[ShaderGallery] rendering {paths.Count} prefabs");
+            try
+            {
+                yield return ShaderGallery.Run(paths, dir, message => Debug.Log(message));
+            }
+            finally
+            {
+                galleryRunning = false;
             }
         }
 

@@ -45,10 +45,10 @@ manifest["version"] = sys.argv[3]
 open(sys.argv[2], "w").write(json.dumps(manifest, indent=2) + "\n")
 EOF
 cp "$root/builder/python/requirements.lock" "$kit/python/"
-# Every pipeline script; not the Mac-only diagnostics and kit tooling
+# Every pipeline script; not the Mac-only diagnostics, kit and release tooling
 for script in "$root"/scripts/*.py; do
     case "$(basename "$script")" in
-        inventory.py|shader_disasm.py|patch_repoxr_shaders.py) ;;
+        inventory.py|shader_disasm.py|patch_repoxr_shaders.py|publish_check.py|package-thunderstore.py) ;;
         *) cp "$script" "$kit/scripts/" ;;
     esac
 done

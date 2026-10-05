@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace RepoQuest.Builder.Setup;
@@ -45,16 +46,17 @@ public static partial class UnitySetup
             await HubAsync(hub, ["install-path", "-s", target], null, ct);
         }
 
+        ProcessResult result;
         try
         {
             progress.Report(("editor", null, null));
             // "install" also adds the modules to an editor the Hub knows; for one installed elsewhere, install-modules
             string[] arguments = existing is null
-                ? ["install", "--version", version.Version, "--changeset", version.Changeset,
-                   "--module", "android", "android-sdk-ndk-tools", "android-open-jdk"]
-                : ["install-modules", "--version", version.Version,
-                   "--module", "android", "android-sdk-ndk-tools", "android-open-jdk"];
-            await HubAsync(hub, arguments, line => ReportHubLine(line, progress), ct);
+                ? ["install", "--version", version.Version, "--changeset", version.Changeset, "--module", .. AndroidModules]
+                : ["install-modules", "--version", version.Version, "--module", .. AndroidModules];
+            // The exit code is not the answer: with every module already there the Hub fails ("No modules found to
+            // install"), so what counts is what is installed afterwards
+            result = await ProcessRunner.RunAsync(HubSpec(hub, arguments), line => ReportHubLine(line, progress), ct);
         }
         finally
         {
@@ -65,7 +67,8 @@ public static partial class UnitySetup
         var installed = UnityInstall.Find(version.Version);
         if (installed is null || !installed.HasAndroid)
             throw new BuildException($"Unity Hub did not install Unity {version.Version} with Android support. " +
-                                     "Install it in Unity Hub (Installs → Install Editor → Archive) and try again.")
+                                     "Install it in Unity Hub (Installs → Install Editor → Archive) and try again.",
+                    $"Hub exit code {result.ExitCode}\n{result.TailText}")
                 { Code = "unity-install-failed" };
         return installed;
     }
@@ -133,20 +136,31 @@ public static partial class UnitySetup
         }
     }
 
-    private static Task<ProcessResult> HubAsync(string hub, string[] arguments, Action<string>? onLine, CancellationToken ct) =>
-        ProcessRunner.RunCheckedAsync(new ProcessSpec
-        {
-            FileName = hub,
-            Arguments = ["--", "--headless", .. arguments],
-            LogPrefix = "[hub] ",
-        }, "Unity Hub failed", onLine, ct);
+    /// <summary>
+    /// Android Build Support, its SDK and NDK, and OpenJDK. Newer Hubs name the JDK module with its version
+    /// ("Couldn't find module "android-open-jdk". Did you mean: android-open-jdk-11.0.14.1+1"); the Hub skips the
+    /// name it does not know and installs the rest, so both are asked for.
+    /// </summary>
+    private static readonly string[] AndroidModules =
+        ["android", "android-sdk-ndk-tools", "android-open-jdk", "android-open-jdk-11.0.14.1+1"];
 
-    /// <summary>The Hub's headless output: download/install lines with percentages where it prints them</summary>
+    private static Task<ProcessResult> HubAsync(string hub, string[] arguments, Action<string>? onLine, CancellationToken ct) =>
+        ProcessRunner.RunCheckedAsync(HubSpec(hub, arguments), "Unity Hub failed", onLine, ct);
+
+    private static ProcessSpec HubSpec(string hub, string[] arguments) => new()
+    {
+        FileName = hub,
+        Arguments = ["--", "--headless", .. arguments],
+        LogPrefix = "[hub] ",
+    };
+
+    /// <summary>The Hub's headless output: download/install lines with percentages where it prints them ("0.00%", with a
+    /// point whatever the system's language)</summary>
     private static void ReportHubLine(string line, IProgress<(string Stage, double? Fraction, string? Detail)> progress)
     {
         var percent = PercentRegex().Match(line);
         var stage = line.Contains("nstall", StringComparison.Ordinal) ? "editor-install" : "editor";
-        progress.Report((stage, percent.Success ? double.Parse(percent.Groups[1].Value) / 100 : null,
+        progress.Report((stage, percent.Success ? double.Parse(percent.Groups[1].Value, CultureInfo.InvariantCulture) / 100 : null,
             line.Length > 80 ? line[..80] : line));
     }
 

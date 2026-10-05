@@ -307,6 +307,10 @@ original clips.
 `scripts/quest-diag.sh`, the game saves a screen frame, the contents of every camera's RenderTexture and a report on
 cameras, canvases and visible UI elements, and the script pulls them into `work/diag/`.
 
+**Shader gallery (2026-10-05).** The generated shaders are now checked against the PC game mechanically: the same 1,211
+prefabs from `Resources` rendered under fixed lighting by the PC game (original shaders, in CrossOver) and by the port
+(editor or headset), compared picture by picture. See `docs/shader-gallery.md`.
+
 ## Risks
 
 - **Performance on the XR2 Gen 2.** REPO draws many dynamic lights with shadows and fog, and VR renders for two eyes.

@@ -20,6 +20,8 @@ internal static class Program
         if (ToolHost.TryRun(args, out var code))
             return code;
 
+        // A crash ends up in builder.log, not only in the Windows event log
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => Builder.Log.Error($"crash: {e.ExceptionObject}");
         App.Options = StartupOptions.Parse(args);
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }

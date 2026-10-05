@@ -105,6 +105,18 @@ accepts it, and semiwork appears in it as Valve's licensor.
    patches, such as the Head Bob and Pixel Lights sliders (`patches/repoxr/`), could go into RepoXR itself.
 4. **Check before publishing** that nothing from the game gets into the repository: decompiled code, the export,
    shader data, the Steam session. All of it lives in `work/` now and must be reliably excluded.
+   `scripts/publish_check.py` does this mechanically (the idea comes from universal-modder's `um publish check`): files
+   byte-identical to the game's, the game's assemblies and Unity player data, private keys, Steam refresh tokens,
+   personal paths such as `C:\Users\<name>\`, decompiler names. Run it on everything that leaves the Mac:
+
+   ```sh
+   python3 scripts/publish_check.py --history . --refs public/main   # every commit that goes public
+   python3 scripts/publish_check.py work/kit work/release/<version>/RepoQuestBuilder-<version>-win-x64.zip
+   ```
+
+   It found a personal path in the first public commit (`be2f149`, tag `v1.0.2`) and a `.pyc` committed by mistake.
+   Expected warnings: PDB paths (the Mac's home folder) in the DLLs built on the Mac, and RepoXR's own Unity bundles in
+   the kit.
 
 ## The builder (since 2026-10-03)
 
@@ -123,3 +135,5 @@ been contacted yet. The README thanks DaXcess and asks people not to take the po
 
 - Follow up with semiwork (no reply to the 2026-09-29 email), possibly through another channel.
 - Get in touch with DaXcess.
+- Squash the public history so that `be2f149` (a personal path in a code comment) is gone, and delete the `v1.0.2`
+  release and tag. The rewritten commits are prepared; the force push is for the author to run.

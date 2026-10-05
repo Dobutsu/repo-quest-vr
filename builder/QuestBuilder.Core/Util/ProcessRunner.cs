@@ -67,7 +67,15 @@ public static class ProcessRunner
             }
             if (spec.LogPrefix is not null)
                 Log.Debug(spec.LogPrefix + line);
-            onLine?.Invoke(line);
+            // An exception escaping an output handler would end the whole builder (.NET rethrows it on a new thread)
+            try
+            {
+                onLine?.Invoke(line);
+            }
+            catch (Exception e)
+            {
+                Log.Warn($"output handler of {Path.GetFileName(spec.FileName)}: {e}");
+            }
         }
 
         using var process = new Process { StartInfo = psi };
@@ -121,6 +129,34 @@ public static class ProcessRunner
     {
         foreach (var process in Running.Values)
             Kill(process);
+    }
+
+    /// <summary>
+    /// Stops copies of <paramref name="executable"/> left running by a builder that did not close normally (they hold
+    /// their log files, and the next run cannot start)
+    /// </summary>
+    public static void KillLeftovers(string executable)
+    {
+        var path = Path.GetFullPath(executable);
+        foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(path)))
+        {
+            using (process)
+            {
+                try
+                {
+                    if (Running.ContainsKey(process.Id) ||
+                        !string.Equals(process.MainModule?.FileName, path, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+                catch (Exception)
+                {
+                    continue;  // exited meanwhile, or not ours to look at
+                }
+                Log.Info($"stopping {Path.GetFileName(path)} left from an earlier run (process {process.Id})");
+                Kill(process);
+                process.WaitForExit(10_000);
+            }
+        }
     }
 
     private static void Kill(Process process)

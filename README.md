@@ -80,7 +80,7 @@ your R.E.P.O. (Steam)
 - `tools/HarmonyBaker`, `tools/AssemblyRenamer` and `tools/Il2CppFixes` make the Mono mod work under IL2CPP.
 - `patches/repoxr` holds the changes to RepoXR. `unity-tools/` holds the Unity editor and runtime helpers.
 - `docs/` contains the design notes: `feasibility.md` (how the port came together), `builder.md` (the builder and
-  releases) and `public-release.md` (the legal side).
+  releases), `public-release.md` (the legal side) and `shader-gallery.md` (checking our shaders against the PC game).
 
 Development happens on a Mac with the same pipeline (`scripts/build.sh`). The Windows builder is the supported way for
 players.
@@ -104,3 +104,7 @@ modifies. Third-party components and their licenses are listed in [`builder/SOUR
   [BepInEx](https://github.com/BepInEx/BepInEx) and [HarmonyX](https://github.com/BepInEx/HarmonyX),
   [Avalonia](https://github.com/AvaloniaUI/Avalonia) and [Opus](https://opus-codec.org/).
 - Port by **[Dobutsu](https://github.com/Dobutsu)**.
+
+**Made with AI.** Most of the code, scripts and documentation here were written by
+[Claude Code](https://claude.com/claude-code), Anthropic's AI coding agent, under Dobutsu's direction. Every build
+was tested by people on a real Quest 3, including multiplayer with friends on PC.
