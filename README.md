@@ -5,6 +5,8 @@ your friends' games on PC. Their game stays vanilla, with no mods.
 
 The game is built **from your own copy of R.E.P.O.** on Steam. This repository and its releases contain no game files.
 
+Support me if you want: [ko-fi.com/dobutsu](https://ko-fi.com/dobutsu)
+
 ## Built on RepoXR by DaXcess
 
 This port is built on **[RepoXR](https://github.com/DaXcess/RepoXR)** by **[DaXcess](https://github.com/DaXcess)**,
