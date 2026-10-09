@@ -143,6 +143,14 @@ namespace RepoXR.Standalone
         {
         }
 
+        /// <summary>
+        /// The cosmetics come from Steam Cloud first, as on PC, where the Steam client syncs them before the game starts
+        /// (<see cref="CosmeticsCloud"/>); then the game's own Start runs. Everything that shows cosmetics waits for
+        /// MetaManager.saveReady meanwhile.
+        /// </summary>
+        [Replaces("MetaManager", "Start", "android", Assembly = "Assembly-CSharp")]
+        public static void MetaManagerStart(MetaManager self) => self.StartCoroutine(CosmeticsCloud.StartAfterSync(self));
+
         /// <summary>Renames the desktop window through user32; there is no such window (or DLL) on Android</summary>
         [Replaces("WindowManager", "Awake", "android", Assembly = "Assembly-CSharp")]
         public static void WindowManagerAwake(object self)

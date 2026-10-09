@@ -50,10 +50,15 @@ namespace RepoXR.Standalone
             return popup;
         }
 
-        /// <summary>A question with two options; <paramref name="host"/> carries the events the popup copies</summary>
-        public static MenuPopup Ask(MenuButtonPopUp host, string header, Color color, string text, string option1, string option2)
+        /// <summary>
+        /// A question with two options; <paramref name="host"/> carries the events the popup copies.
+        /// <paramref name="dismissAnswer"/>: the answer when the popup goes away unanswered (option 2 unless that would
+        /// decide something the player did not choose)
+        /// </summary>
+        public static MenuPopup Ask(MenuButtonPopUp host, string header, Color color, string text, string option1, string option2,
+                                    int dismissAnswer = 2)
         {
-            var popup = new MenuPopup(2);
+            var popup = new MenuPopup(dismissAnswer);
             if (!MenuManager.instance || !MenuManager.instance.currentMenuPage)
                 return popup;
 

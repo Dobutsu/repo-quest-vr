@@ -66,7 +66,7 @@ the floor; above 12 is worth a look.
 |---|---|---|
 | `Slow Projectile` | 58 | The Void Staff's projectile is a plain white sphere: no red texture, no spikes |
 | `Semiwork/Alpha Clip` | 28 | Shop modules (Bunker 2) |
-| `ShinyMetal` | 23 | No metallic shine (Golden Swirl is flat yellow) |
+| `ShinyMetal` | 23 | No metallic shine (Golden Swirl is flat yellow). **Fixed 2026-10-08**: hand-written from the bytecode (`unity-tools/ShaderOverrides/ShinyMetal.shader`); its four valuables' mean pixel difference from the PC went from 3.5–7.4 to 0.7–2.2 |
 | `Custom/MagnifyingShader` | 21 | The magnifying glass's lens is opaque grey instead of see-through |
 | `Water` | 19 | Partly time, partly look |
 | `Ciconia Studio/…/Cutout` | 10–11 | Alpha clipping missing on some materials: a grey panel between the harp's strings |

@@ -10,6 +10,8 @@
 #                                 volume-less post stack is always off
 #   0005-other-flashlight-shadows  other players' flashlights cast no shadows unless switched on (7-10 ms GPU with six)
 #   0006-lamp-lighting  lamps lit per pixel in one pass by the Quest shaders (RepoQuestLamps.cginc), no Unity light passes
+#   0007-lamp-lighting-arms-and-previews  the VR arms use the game's Hurtable shader (the bundle's copy has no lamps);
+#                                         the menus' deferred player previews render forward, where the lamps are
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"

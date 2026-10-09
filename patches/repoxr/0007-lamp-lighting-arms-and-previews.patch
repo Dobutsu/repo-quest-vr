@@ -1,0 +1,36 @@
+diff -ruN a/Source/Player/VRRig.cs b/Source/Player/VRRig.cs
+--- a/Source/Player/VRRig.cs	2026-10-08 20:36:19
++++ b/Source/Player/VRRig.cs	2026-10-08 20:36:19
+@@ -105,6 +105,17 @@
+         playerAvatarVisuals = playerAvatar.playerAvatarVisuals;
+         playerAvatarRightArm = playerAvatarVisuals.GetComponentInChildren<PlayerAvatarRightArm>(true);
+ 
++        // The rig's meshes (arms, inventory) use the asset bundle's own copy of Hurtable/Hurtable, which knows nothing
++        // of the Quest build's per-pixel lamps (Rendering.LampLighting): Unity no longer lights with them, so the arms
++        // were black away from a flashlight. They get the game's shader, the one the player's body uses
++        var gameShader = playerAvatarVisuals.GetComponentsInChildren<Renderer>(true)
++            .SelectMany(renderer => renderer.sharedMaterials)
++            .FirstOrDefault(material => material && material.shader.name == "Hurtable/Hurtable")?.shader;
++        if (gameShader)
++            foreach (var material in GetComponentsInChildren<Renderer>(true).SelectMany(renderer => renderer.sharedMaterials))
++                if (material && material.shader != gameShader && material.shader.name == gameShader.name)
++                    material.shader = gameShader;
++
+         // Set up grabber claw
+         playerAvatarRightArm.grabberClawParent.gameObject.SetLayerRecursively(6);
+         playerAvatarRightArm.grabberClawParent.GetComponentsInChildren<MeshRenderer>()
+diff -ruN a/Source/Rendering/LampLighting.cs b/Source/Rendering/LampLighting.cs
+--- a/Source/Rendering/LampLighting.cs	2026-10-08 20:36:19
++++ b/Source/Rendering/LampLighting.cs	2026-10-08 20:36:19
+@@ -96,6 +96,11 @@
+         if (!active)
+             return;
+ 
++        // The game's player previews (main, Esc and Customize menus) ask for deferred shading; only the forward base
++        // pass adds the lamps, so they were lit by ambient light alone. They render forward like the rest of the game
++        if (camera.renderingPath == RenderingPath.DeferredShading)
++            camera.renderingPath = RenderingPath.Forward;
++
+         var eye = camera.transform.position;
+         var count = 0;
+         for (var i = 0; i < lit.Count; i++)

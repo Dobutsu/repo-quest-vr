@@ -34,6 +34,11 @@
             <HintPath>$(GameManaged)/Assembly-CSharp.dll</HintPath>
             <Private>false</Private>
         </Reference>
+        <!-- Easy Save 3, which the game's saves use (CosmeticsCloud reads MetaSave.es3 as MetaManager does) -->
+        <Reference Include="Assembly-CSharp-firstpass">
+            <HintPath>$(GameManaged)/Assembly-CSharp-firstpass.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
         <Reference Include="PhotonVoice">
             <HintPath>$(GameManaged)/PhotonVoice.dll</HintPath>
             <Private>false</Private>

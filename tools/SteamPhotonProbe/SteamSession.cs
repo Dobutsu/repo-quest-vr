@@ -17,7 +17,9 @@ internal sealed class SteamSession : IDisposable
     private readonly SteamClient client = new();
     private readonly CallbackManager manager;
     private readonly string sessionFile;
-    private readonly string qrFile;
+    private readonly string workDir;
+    private string qrFile = "";
+    private int qrCount;
     private readonly CancellationTokenSource pumpCts = new();
     private readonly TaskCompletionSource<bool> loggedOn = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -33,7 +35,7 @@ internal sealed class SteamSession : IDisposable
     public SteamSession(string workDir)
     {
         sessionFile = Path.Combine(workDir, "steam-session.json");
-        qrFile = Path.Combine(workDir, "steam-login-qr.png");
+        this.workDir = workDir;
 
         client.AddHandler(Friends);
         manager = new CallbackManager(client);
@@ -139,13 +141,17 @@ internal sealed class SteamSession : IDisposable
     private void ShowQr(string url)
     {
         using var data = QRCodeGenerator.GenerateQrCode(url, QRCodeGenerator.ECCLevel.L);
+        // Steam replaces the code about every 30 s, and Preview does not reload a file it has open: a new file each time
+        TryDelete(qrFile);
+        qrFile = Path.Combine(workDir, $"steam-login-qr-{++qrCount}.png");
         File.WriteAllBytes(qrFile, new PngByteQRCode(data).GetGraphic(12));
         Console.WriteLine(new AsciiQRCode(data).GetGraphic(1, drawQuietZones: true));
         Console.WriteLine($"[steam] QR also saved to {qrFile}");
 
         try
         {
-            Process.Start("open", qrFile);
+            // As one argument: the checkout's path has a space in it
+            Process.Start(new ProcessStartInfo("open") { ArgumentList = { qrFile } });
         }
         catch
         {

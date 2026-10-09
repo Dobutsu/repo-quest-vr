@@ -23,6 +23,12 @@ using ShimUser = Steamworks.SteamUser;
 //                                          and logs on with it the way the game does after a login
 //   logout                                 log on with that file, revoke its token (the game's LOG OUT), clear it,
 //                                          then check that Steam refuses the old token
+//
+// Steam Cloud (the files the Steam client syncs for R.E.P.O., as the headset's cosmetics sync reads and writes them):
+//   cloud-list                             the app's cloud files: name, size, SHA-1, time
+//   cloud-get --name <cloud name> [--out <file>]   download one (default: into work/cloud/)
+//   cloud-put --name <cloud name> --file <file> --yes   replace it in the cloud (the PC downloads it at its next
+//                                          game start); without --yes only prints what it would do
 
 const uint RepoAppId = 3241660;
 const string PunVersion = "2.52";
@@ -68,6 +74,41 @@ try
 
         case "join":
             return await JoinFriendAsync();
+
+        case "cloud-list":
+            foreach (var file in (await backend.Cloud.ListAsync(RepoAppId)).OrderBy(f => f.Name))
+                Console.WriteLine($"  {file.Name,-90} {file.Sha} {DateTimeOffset.FromUnixTimeSeconds((long)file.Time).LocalDateTime:yyyy-MM-dd HH:mm:ss}");
+            return 0;
+
+        case "cloud-get":
+        {
+            if (!opts.TryGetValue("name", out var name))
+                return Exit(64, "cloud-get needs --name <cloud name>");
+            var file = await backend.Cloud.DownloadAsync(RepoAppId, name);
+            if (file is null)
+                return Exit(4, $"no {name} in the cloud");
+            var output = opts.GetValueOrDefault("out", Path.Combine(workDir, "cloud", Path.GetFileName(name.Replace('\\', '/'))));
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
+            File.WriteAllBytes(output, file.Data);
+            Console.WriteLine($"[cloud] {name}: {file.Data.Length} bytes, SHA-1 {file.Sha}, " +
+                              $"{DateTimeOffset.FromUnixTimeSeconds((long)file.Time).LocalDateTime:yyyy-MM-dd HH:mm:ss} -> {output}");
+            return 0;
+        }
+
+        case "cloud-put":
+        {
+            if (!opts.TryGetValue("name", out var name) || !opts.TryGetValue("file", out var path))
+                return Exit(64, "cloud-put needs --name <cloud name> --file <file>");
+            var data = File.ReadAllBytes(path);
+            var time = (ulong)new DateTimeOffset(File.GetLastWriteTimeUtc(path)).ToUnixTimeSeconds();
+            Console.WriteLine($"[cloud] {path} ({data.Length} bytes, SHA-1 {CloudFiles.Hex(CloudFiles.Sha1(data))}) -> {name}");
+            if (!opts.ContainsKey("yes"))
+                return Exit(0, "dry run: add --yes to upload");
+            await backend.Cloud.UploadAsync(RepoAppId, name, data, time);
+            var check = await backend.Cloud.DownloadAsync(RepoAppId, name);
+            Console.WriteLine($"[cloud] uploaded; the cloud now has SHA-1 {check?.Sha ?? "nothing"}");
+            return check?.Sha == CloudFiles.Hex(CloudFiles.Sha1(data)) ? 0 : 1;
+        }
 
         case "listen":
         {

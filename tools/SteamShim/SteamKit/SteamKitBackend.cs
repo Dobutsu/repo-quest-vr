@@ -94,6 +94,7 @@ namespace RepoQuest.Steam
             friends = client.GetHandler<SteamFriends>();
             matchmaking = client.GetHandler<SteamMatchmaking>();
             apps = client.GetHandler<SteamApps>();
+            Cloud = new CloudFiles(client.GetHandler<SteamUnifiedMessages>(), WaitLoggedOnAsync, RequestTimeout);
 
             callbacks = new CallbackManager(client);
             callbacks.Subscribe<SteamClient.ConnectedCallback>(_ => OnConnected());
@@ -120,6 +121,9 @@ namespace RepoQuest.Steam
 
         /// <summary>A friend invited us to their game: (friend or 0, lobby or 0), on the game's thread</summary>
         public event Action<ulong, ulong> Invited;
+
+        /// <summary>The account's Steam Cloud files (calls wait for the logon, like the lobby calls)</summary>
+        public CloudFiles Cloud { get; }
 
         /// <summary>Extra message handler (diagnostics); add before <see cref="Initialize"/></summary>
         public void AddHandler(ClientMsgHandler handler) => client.AddHandler(handler);

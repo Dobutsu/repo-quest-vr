@@ -56,6 +56,7 @@ namespace RepoXR.Standalone
             UnityEngine.Object.DontDestroyOnLoad(host);
             host.hideFlags = HideFlags.HideAndDontSave;
             menu = host.AddComponent<SteamMenu>();
+            CosmeticsCloud.Install(host);
 
             // The main menu's "Join friend" opens the Steam overlay's friends list, which the Quest does not have
             Steamworks.SteamFriends.OnOverlayRequested += type =>
