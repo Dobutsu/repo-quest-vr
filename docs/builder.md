@@ -34,6 +34,11 @@ builder/
 | project | a copy of the export + Python scripts + plugins, `link.xml`, RepoXR's assets; Library is kept | the export, the bake output (DLL contents), the kit's contents |
 | unity | two editor runs: `QuestBuild.Prepare`, `QuestBuild.BuildApk` (`-versionName/-versionCode`) | the project, the version, build flags |
 
+Unity runs with `-timestamps`, so every line of `unity-prepare.log` and `unity-build.log` starts with its UTC time and
+thread (`2026-10-09T22:21:38.161Z|0x0203493f80|...`). The log parsing strips the prefix (`UnityBuildStep.WithoutTimestamp`);
+the times show where a slow build on a player's PC spends them. The project step turns on Parallel Import
+(`m_RefreshImportMode: 1` in `ProjectSettings/EditorSettings.asset`): textures and models import in worker processes.
+
 Each step writes a "stamp" of its inputs to the workspace's `state.json`. A step with an unchanged stamp is skipped,
 and an interrupted build resumes from the step that failed. So a builder update rebuilds from bake onward (the export
 stays), and a game update rebuilds from the export.
@@ -87,8 +92,13 @@ instructions again. While Unity downloads, the export and the bake run in parall
   characters: Unity, Gradle and the NDK break on Cyrillic in the user name.
 - Paths in Library reach ~240 characters from the project root. So the program offers to turn on `LongPathsEnabled`
   (a system setting, through UAC).
+- Windows Defender scans every file the build writes. Before the first build, the program asks once whether to exclude
+  the workspace from scanning (`Setup/WindowsDefender.cs`: an elevated `Add-MpPreference -ExclusionPath`). A "no" only
+  means a slower build. Non-administrators cannot read the exclusion list, so `state.json` remembers the answer and the
+  excluded folder.
 - The program keeps the computer awake during a build.
-- The builder is not signed with a paid certificate, so SmartScreen shows a warning (explained in the README).
+- The builder is not signed, so SmartScreen shows a warning (explained in the README). Signing through SignPath
+  Foundation is planned: [code-signing.md](code-signing.md).
 
 **Updates** (`Updates/`):
 - `latest.json` holds the version, RU/EN notes, and the zip's name and SHA-256 for each platform. `latest.json.sig` is
@@ -106,17 +116,47 @@ signature (Android debug keys differ on every computer), the program saves `/sdc
 (saves, RepoXR settings, the Steam login, cosmetics), reinstalls the game and restores the data. versionCode =
 major·10000 + minor·100 + patch; our dev builds use 1.
 
+**Uninstall** ("Uninstall…" in the window, `QuestBuilder.Cli uninstall --headset --files --defender`):
+- the game on the headset: its data goes to `Desktop\REPO Quest saves\quest-data-<date>` first, then `adb uninstall`;
+- the workspace: only what the builder puts there (`Workspace.OwnedEntries`). The `backups` folder with copies of
+  headset saves stays, and so does anything else the player keeps in that folder. The builder's settings go too;
+- the Defender exclusion, if the builder added one.
+
+Unity Hub and the Unity Editor stay. Unity's own installers put them on the computer and registered them with Windows,
+so the dialog points to Settings → Apps. The running exe cannot delete itself; the dialog says so, and the program closes
+after removing the workspace.
+
 **In the headset:**
 - the Steam login page warns about the risk to the account (an unofficial client);
 - above the Steam button in the main menu, the port's version and author are shown: `REPO Quest <version> by Dobutsu`
   (`Application.version`: the builder's version or `dev-<commit>`).
 
-**Measurements (M-series Mac, 2026-10-03).** The player's flow with an empty workspace (`player-build`, release 1.0.0):
-export 50 s, bake 4 s, project about a minute, Unity 50 minutes (import 8.5 minutes, APK build ~41 minutes). 52 minutes
-in total. Self-update 1.0.0 → 1.0.1 (`update --then-build`): signature checked, exe replaced, export reused, rebuild
-38 minutes. A Windows PC is likely slower. **What to speed up:** on every build Unity recompiles ~75 shaders (mostly our
-generated ones: `Semiwork/*`, `Hurtable/*`, `W/*`) even though Library is kept. The project is recreated from the export
-every time, and the shader cache is not reused. That is 15–20 minutes of every rebuild.
+**Measurements (M-series Mac).**
+- 2026-10-03, the player's flow with an empty workspace (`player-build`, release 1.0.0): export 50 s, bake 4 s, project
+  about a minute, Unity 50 minutes (import 8.5 minutes, APK build ~41 minutes). 52 minutes in total. Self-update
+  1.0.0 → 1.0.1 (`update --then-build`): signature checked, exe replaced, export reused, rebuild 38 minutes, much of it
+  recompiling ~75 shaders.
+- Since then the shader cache holds across rebuilds: the 2026-10-08 build spent 7.6 s compiling shaders, only the one
+  that had changed. Six rebuilds in a row took 16.5–19.9 minutes of Unity.
+- 2026-10-10, a rebuild after a kit change (`scripts/build.sh --force --only project,unity`, the first `-timestamps`
+  log): project 48 s, Unity 18.5 minutes. Prepare 0.6 minutes; BuildApk 17.9, of which Addressables 13 s and
+  BuildPlayer 17.5 minutes. BuildPlayer's own steps (the `[QuestBuild] step` lines at the end of `unity-build.log`):
+  building the Main scene 171 s, writing asset files 737 s, dirty tracking 38 s, postprocess 88 s (incremental player
+  build 11 s, Gradle 47 s); everything else a few seconds. Unity does not cache the writing of assets, so it is the bulk
+  of every rebuild.
+- 2026-10-10, importing the project into an empty Library (`-quit`, 19,600 imports): 361 s one at a time, 246 s with
+  Parallel Import.
+
+**Measurements (a friend's Windows 10 PC, 8 CPUs, 23 GB, builder 1.0.4, first build, 2026-10-09).** Export 3.4 minutes,
+project 7 minutes, Unity's import 35 minutes (25 + 8.5 in two refreshes; the Mac imports in 6). Then BuildApk:
+Addressables 56 minutes, nearly all of it one Bee step, `BuildPlayerDataGenerator TypeDb-All.json` (built once, then
+cached); the scenes and the first 5,800 shader variants about an hour; then the built-in `Particles/Standard Surface`
+FORWARD pass at about one variant a second (8 s of CPU per variant against 0.25 for the rest), 1,920 variants. After
+2.5 hours of BuildApk some 24,700 of the ~30,500 variants were still to come, the biggest our `RepoQuest/Standard`
+(9,588) and `Hidden/PostProcessing/Uber` (6,912). That PC is 4–5 times slower than the Mac at importing and much slower
+still at the TypeDb and scenes: Defender or the disk, which the report now names (CPU, the workspace disk's media and
+bus type, Defender's real-time protection, other antivirus). Nothing strips shader variants yet; doing it would shorten
+every first build (a task for later).
 
 ## Our build on the Mac
 

@@ -33,6 +33,17 @@ public static class Log
         }
     }
 
+    /// <summary>Stops writing to the file (it is about to be deleted); subscribers still get every line</summary>
+    public static void CloseFile()
+    {
+        lock (Gate)
+        {
+            file?.Dispose();
+            file = null;
+            FilePath = null;
+        }
+    }
+
     public static void Debug(string text) => Write(LogLevel.Debug, text);
     public static void Info(string text) => Write(LogLevel.Info, text);
     public static void Warn(string text) => Write(LogLevel.Warning, text);

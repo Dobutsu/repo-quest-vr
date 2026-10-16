@@ -17,5 +17,7 @@ contains no part of the game.
 
 Downloaded by the builder at build time from their publishers (pinned by SHA-256 in kit.json): AssetRipper, uv and
 Python with the packages in python/requirements.lock, the RepoXR 1.2.3 release (its RuntimeDeps), BepInEx 5, the NuGet
-packages BepInEx.BaseLib and CustomDiscoverStateLib, Unity's built-in shader source. Unity itself comes through Unity
+packages BepInEx.BaseLib and CustomDiscoverStateLib, Unity's built-in shader source; for a Pico build, Eclipse
+Temurin JRE 17 and ovrport's command-line jar (https://github.com/ovrport/app, GPL-3.0), which fetches its own OpenXR
+loader libraries. Unity itself comes through Unity
 Hub under Unity's terms.

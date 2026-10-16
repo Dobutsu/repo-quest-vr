@@ -100,6 +100,14 @@ public sealed class CoreTests : IDisposable
     public void BeeSteps_AreRecognized(string line, bool match) =>
         Assert.Equal(match, UnityBuildStep.BeeStepRegex().IsMatch(line));
 
+    [Theory]
+    [InlineData("2026-10-09T22:21:43.268Z|0x0203493f80|Start importing ProjectSettings/TagManager.asset", "Start importing ProjectSettings/TagManager.asset")]
+    [InlineData("2026-10-09T22:21:43.268Z|0x0203493f80|[ 323/16996  0s] CopyFiles x", "[ 323/16996  0s] CopyFiles x")]
+    [InlineData("[QuestBuild] result: Succeeded", "[QuestBuild] result: Succeeded")]
+    [InlineData("a|0x1|b", "a|0x1|b")]
+    public void UnityLogTimestamps_AreStripped(string line, string expected) =>
+        Assert.Equal(expected, UnityBuildStep.WithoutTimestamp(line));
+
     [Fact]
     public void Kit_ReadsTheManifestTemplate()
     {

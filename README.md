@@ -1,7 +1,7 @@
-# R.E.P.O. VR on Quest 3, standalone
+# R.E.P.O. VR on Quest 3 and Pico 4, standalone
 
-Play [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO/) in VR on a Meta Quest 3 without a PC, and join
-your friends' games on PC. Their game stays vanilla, with no mods.
+Play [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO/) in VR on a Meta Quest 3 or a Pico 4 without a PC,
+and join your friends' games on PC. Their game stays vanilla, with no mods.
 
 The game is built **from your own copy of R.E.P.O.** on Steam. This repository and its releases contain no game files.
 
@@ -43,16 +43,26 @@ if any of them are useful.
 Hosting a game from the headset has not been tested yet. The port is made and tested on a Quest 3. The Quest 3S
 should behave the same. Quest 2 and Quest Pro are untested.
 
+**Pico 4** works too, tested on a Pico 4, including multiplayer with friends on PC; the Pico 4 Ultra is untested. The
+builder makes the Quest version and converts it with [ovrport](https://github.com/ovrport/app), which swaps the
+OpenXR loader for one that runs on Pico and maps the controllers. Two things are different on Pico: on the first start
+the game brings its graphics in one by one for about a minute ("Preparing graphics"), because the Pico 4 GPU hangs when
+the main menu draws everything at once; and the game asks for the microphone in the main menu rather than at startup,
+where the permission prompt crashed it. See [`docs/pico.md`](docs/pico.md).
+
 ## How to get it
 
 Download **RepoQuestBuilder** for Windows from [Releases](../../releases/latest) and follow its `README.txt`. In short:
 
-1. You need Windows 10/11 (64-bit), 16 GB RAM, about 60 GB of free disk space, R.E.P.O. on Steam, a Quest 3 in
-   developer mode with a USB cable, and a free Unity account.
+1. You need Windows 10/11 (64-bit), 16 GB RAM, about 60 GB of free disk space, R.E.P.O. on Steam, a Quest 3 or a
+   Pico 4 in developer mode with a USB cable, and a free Unity account. Pick the headset in the builder; Quest is the
+   default.
 2. The builder finds your game and downloads everything else itself: Unity 2022.3, AssetRipper and Python packages,
    each from its original source with a pinned SHA-256. It then builds the APK on your PC.
-3. The first build takes 1–1.5 hours. Later updates take about 40 minutes.
+3. The first build takes 1–1.5 hours on a fast computer and 3–5 hours on a slower one: Unity compiles the game's
+   shaders and data once. Later updates take 20 minutes to an hour.
 4. It installs the APK on the headset. The game appears in the Library under *Unknown Sources*.
+5. To remove it all later, click **Uninstall…** in the builder.
 
 **Do not share the APK.** It contains the game's files. Everyone builds their own from their own copy.
 
@@ -72,6 +82,7 @@ your R.E.P.O. (Steam)
   └─ HarmonyBaker ─────────► RepoXR's Harmony patches baked into the game's assemblies (no runtime patching on IL2CPP)
   └─ scripts/ (Python) ────► fixes for the export: shaders rewritten for mobile and multiview, Addressables, halos
   └─ Unity 2022.3 (IL2CPP, OpenXR, Vulkan) ─► Android APK ─► Quest
+                                                         └─ ovrport ─► Pico
 ```
 
 - `builder/` is the Windows builder (Avalonia app plus a CLI) and runs the whole pipeline. See `docs/builder.md`.
@@ -102,7 +113,8 @@ modifies. Third-party components and their licenses are listed in [`builder/SOUR
 - **semiwork**: [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO/)
 - [SteamKit2](https://github.com/SteamRE/SteamKit), [AssetRipper](https://github.com/AssetRipper/AssetRipper),
   [BepInEx](https://github.com/BepInEx/BepInEx) and [HarmonyX](https://github.com/BepInEx/HarmonyX),
-  [Avalonia](https://github.com/AvaloniaUI/Avalonia) and [Opus](https://opus-codec.org/).
+  [Avalonia](https://github.com/AvaloniaUI/Avalonia), [Opus](https://opus-codec.org/) and
+  [ovrport](https://github.com/ovrport/app) (Pico).
 - Port by **[Dobutsu](https://github.com/Dobutsu)**.
 
 **Made with AI.** Most of the code, scripts and documentation here were written by

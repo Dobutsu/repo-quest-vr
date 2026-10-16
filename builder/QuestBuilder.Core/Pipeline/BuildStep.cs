@@ -25,7 +25,7 @@ public sealed class NullProgress : IBuildProgress
 
 public abstract class BuildStep
 {
-    /// <summary>Stable id (state.json stamps, UI texts): export, bake, project, unity</summary>
+    /// <summary>Stable id (state.json stamps, UI texts): export, bake, project, unity, pico</summary>
     public abstract string Id { get; }
 
     /// <summary>
@@ -33,6 +33,9 @@ public abstract class BuildStep
     /// skips a step whose stamp matches the one it last finished with.
     /// </summary>
     public abstract string Stamp(BuildContext context, IReadOnlyDictionary<string, string> earlierStamps);
+
+    /// <summary>Whether the step is part of this build at all (the pico step only is for Pico)</summary>
+    public virtual bool AppliesTo(BuildContext context) => true;
 
     /// <summary>Whether the step's result is still on disk (a stamp alone is not enough if the folder was deleted)</summary>
     public virtual bool ResultExists(BuildContext context) => true;

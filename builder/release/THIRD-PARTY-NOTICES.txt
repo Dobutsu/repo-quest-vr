@@ -24,6 +24,8 @@ Downloaded by the builder from their publishers (not included; their own license
 - RepoXR 1.2.3 release (GPL-3.0) - https://thunderstore.io/c/repo/p/DaXcess/RepoXR/
 - BepInEx 5.4.23.5 (LGPL-2.1) - https://github.com/BepInEx/BepInEx
 - BepInEx.BaseLib, CustomDiscoverStateLib (NuGet packages RepoXR builds against)
+- For Pico only: ovrport 1.2.3 (GPL-3.0) - https://github.com/ovrport/app - and the OpenXR loader libraries it fetches,
+  run on Eclipse Temurin 17 (GPL-2.0 with the Classpath Exception) - https://adoptium.net
 
 R.E.P.O. is a game by semiwork. This builder is a fan project, not affiliated with semiwork, Valve, Meta or Unity.
 It contains no part of the game: the game's files come from the player's own copy and stay on the player's computer.

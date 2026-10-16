@@ -70,6 +70,28 @@
       "version": "2022.3.62f3",
       "url": "https://download.unity3d.com/download_unity/96770f904ca7/builtin_shaders-2022.3.62f3.zip",
       "sha256": "e2f98242a6ca7edc2c581e761ab7cc0dc6feca6572d0c1ab765e4d6a9adb9a31"
+    },
+    "java": {
+      "version": "17.0.20.1+1",
+      "files": {
+        "win-x64": {
+          "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jre_x64_windows_hotspot_17.0.20.1_1.zip",
+          "sha256": "bc21a93923103cdaac93ee337b0ae4365e739fde36df823dd456bc67c8a9d352"
+        },
+        "osx-arm64": {
+          "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jre_aarch64_mac_hotspot_17.0.20.1_1.tar.gz",
+          "sha256": "190480874ccceb358cbc840393207f77ac3e63a4c5f8129d0e23e9518b96ad05"
+        },
+        "osx-x64": {
+          "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jre_x64_mac_hotspot_17.0.20.1_1.tar.gz",
+          "sha256": "333cb81123c36568586646c73c8fa2326dab8badc43f5ea388a90fff59c9df27"
+        }
+      }
+    },
+    "ovrport": {
+      "version": "1.2.3",
+      "url": "https://github.com/ovrport/app/releases/download/1.2.3/cli-jar.zip",
+      "sha256": "3239408ff1e97ad016916825c216dc3016c0ffa7db7c317221ed3f1244441594"
     }
   },
   "testedGames": [

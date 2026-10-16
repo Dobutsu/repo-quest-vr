@@ -73,7 +73,7 @@
 
         <!-- Actions -->
         <Border DockPanel.Dock="Bottom" Padding="18,10" BorderBrush="#25808080" BorderThickness="0,1,0,0">
-            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto">
                 <Button Classes="accent" Content="{l:Tr button.build}" Command="{Binding BuildCommand}"
                         IsVisible="{Binding !IsBuilding}" IsEnabled="{Binding GameFound}" Padding="18,8" FontWeight="SemiBold" />
                 <Button Content="{l:Tr button.cancelBuild}" Command="{Binding CancelBuildCommand}"
@@ -86,6 +86,8 @@
                         Command="{Binding CheckUpdatesCommand}" Padding="12,8" />
                 <Button Grid.Column="5" Margin="8,0,0,0" Content="{l:Tr button.report}" Command="{Binding ReportCommand}"
                         Padding="12,8" />
+                <Button Grid.Column="6" Margin="8,0,0,0" Content="{l:Tr button.uninstall}" Command="{Binding UninstallCommand}"
+                        IsEnabled="{Binding IsIdle}" Padding="12,8" />
             </Grid>
         </Border>
 
@@ -187,6 +189,18 @@
                         <Button Grid.Column="1" Content="{l:Tr ws.change}" Command="{Binding ChangeWorkspaceCommand}"
                                 IsEnabled="{Binding IsIdle}" VerticalAlignment="Top" />
                     </Grid>
+                </Border>
+
+                <!-- Headset -->
+                <Border Classes="card">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="{l:Tr headset.title}" Classes="heading" />
+                        <StackPanel Orientation="Horizontal" Spacing="18" IsEnabled="{Binding IsIdle}">
+                            <RadioButton GroupName="headset" Content="{l:Tr headset.quest}" IsChecked="{Binding IsQuest}" />
+                            <RadioButton GroupName="headset" Content="{l:Tr headset.pico}" IsChecked="{Binding IsPico}" />
+                        </StackPanel>
+                        <TextBlock Text="{l:Tr headset.picoAbout}" Classes="dim" IsVisible="{Binding IsPico}" />
+                    </StackPanel>
                 </Border>
 
                 <!-- Build -->

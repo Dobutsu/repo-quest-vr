@@ -44,7 +44,7 @@ public sealed partial class UnityBuildStep : BuildStep
         var prepareLog = Path.Combine(workspace.Logs, "unity-prepare.log");
         string[] prepare =
         [
-            "-batchmode", "-projectPath", workspace.Project, "-buildTarget", "Android",
+            "-batchmode", "-timestamps", "-projectPath", workspace.Project, "-buildTarget", "Android",
             "-executeMethod", "RepoQuest.Editor.QuestBuild.Prepare",
             "-addressablesEntries", workspace.AddressablesEntries,
             .. reimportList is null ? Array.Empty<string>() : ["-reimportList", reimportList],
@@ -59,7 +59,7 @@ public sealed partial class UnityBuildStep : BuildStep
         var buildLog = Path.Combine(workspace.Logs, "unity-build.log");
         string[] build =
         [
-            "-batchmode", "-projectPath", workspace.Project, "-buildTarget", "Android",
+            "-batchmode", "-timestamps", "-projectPath", workspace.Project, "-buildTarget", "Android",
             "-executeMethod", "RepoQuest.Editor.QuestBuild.BuildApk",
             "-apkPath", apk,
             "-versionName", options.VersionName,
@@ -72,7 +72,7 @@ public sealed partial class UnityBuildStep : BuildStep
         await RunUnityAsync(context, unity, build, buildLog,
             new BuildProgress(this, context, ExpectedBuildTime(context.State, freshLibrary)), ct);
         var log = File.ReadAllText(buildLog);
-        foreach (var line in log.Split('\n').Where(l => l.StartsWith("[QuestBuild]", StringComparison.Ordinal)))
+        foreach (var line in log.Split('\n').Select(WithoutTimestamp).Where(l => l.StartsWith("[QuestBuild]", StringComparison.Ordinal)))
             Log.Info(line.TrimEnd());
         if (!log.Contains("[QuestBuild] result: Succeeded") || !File.Exists(apk))
             throw Failure(buildLog, "The APK build failed");
@@ -86,6 +86,7 @@ public sealed partial class UnityBuildStep : BuildStep
                 state.UnityBuildDurations.RemoveAt(0);
         }
         state.LastApk = apk;
+        state.LastApkHeadset = "quest";
         state.LastApkVersion = options.VersionName;
         state.LastApkGame = context.Game.AssemblyHash();
         state.LastApkTime = DateTime.Now;
@@ -206,7 +207,7 @@ public sealed partial class UnityBuildStep : BuildStep
                 if (lastNewline < 0)
                     continue;
                 foreach (var line in text[..lastNewline].Split('\n'))
-                    watcher.OnLine(line.TrimEnd('\r'));
+                    watcher.OnLine(WithoutTimestamp(line.TrimEnd('\r')));
                 partial.Clear().Append(text[(lastNewline + 1)..]);
             }
             watcher.OnTick();
@@ -239,6 +240,13 @@ public sealed partial class UnityBuildStep : BuildStep
 
     [GeneratedRegex(@"^\[ *(\d+)/(\d+) ")]
     internal static partial Regex BeeStepRegex();
+
+    /// <summary>The editor runs with -timestamps, so every log line reads `2026-10-09T22:21:38.161Z|0x0203493f80|...`:
+    /// the times show where a slow build spends them; the line parsing looks past them</summary>
+    internal static string WithoutTimestamp(string line) => TimestampRegex().Replace(line, "", 1);
+
+    [GeneratedRegex(@"^\d{4}-\d\d-\d\dT[\d:.]+Z\|0x[0-9A-Fa-f]+\|")]
+    private static partial Regex TimestampRegex();
 
     private interface IUnityLogWatcher
     {

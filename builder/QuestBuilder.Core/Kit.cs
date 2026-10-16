@@ -23,7 +23,9 @@ public sealed record KitDownloads(
     PinnedRelease RepoXR,
     PinnedRelease BepInEx,
     PinnedPackage[] NuGet,
-    PinnedRelease BuiltinShaders);
+    PinnedRelease BuiltinShaders,
+    PinnedTool? Java = null,
+    PinnedRelease? Ovrport = null);
 
 public sealed record UnityVersion(string Version, string Changeset);
 

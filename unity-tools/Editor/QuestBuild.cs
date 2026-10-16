@@ -113,6 +113,10 @@ namespace RepoQuest.Editor
             foreach (var message in step.messages.Where(m => m.type is LogType.Error or LogType.Exception))
                 Debug.Log($"[QuestBuild] error in '{step.name}': {message.content}");
 
+            // Where the time went (the log's own timestamps cannot tell which part of BuildPlayer a silence belongs to)
+            foreach (var step in report.steps.Where(s => s.duration.TotalSeconds >= 1))
+                Debug.Log($"[QuestBuild] step {new string(' ', 2 * step.depth)}{step.name}: {step.duration.TotalSeconds:F0} s");
+
             EditorApplication.Exit(summary.result == BuildResult.Succeeded ? 0 : 1);
         }
 

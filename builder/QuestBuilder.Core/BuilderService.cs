@@ -7,10 +7,13 @@ using RepoQuest.Builder.Updates;
 namespace RepoQuest.Builder;
 
 /// <summary>Something the consent dialog lists (the UI names and explains it by <see cref="Id"/>)</summary>
-/// <param name="Id">unity-hub, unity-editor, assetripper, python, long-paths</param>
+/// <param name="Id">unity-hub, unity-editor, assetripper, python, long-paths, java, ovrport</param>
 public sealed record ConsentItem(string Id, string? Version, long DownloadBytes, string? LicenseUrl);
 
 public enum LicenseChoice { CheckAgain, Cancel }
+
+/// <summary>What removing from the computer did: the folder of headset backups it kept, what it could not delete</summary>
+public sealed record RemovalResult(string? KeptBackups, IReadOnlyList<string> Failed);
 
 /// <summary>Questions only the player can answer; the window shows them as dialogs</summary>
 public interface IBuilderPrompts
@@ -20,6 +23,9 @@ public interface IBuilderPrompts
 
     /// <summary>Once: playing online means logging in to Steam in the headset through an unofficial client</summary>
     Task ShowOnlineNoticeAsync();
+
+    /// <summary>Once, on Windows: exclude <paramref name="workspace"/> from Defender's scanning to build faster?</summary>
+    Task<bool> AskDefenderExclusionAsync(string workspace);
 
     /// <summary>Unity has no license: sign in to Unity Hub and add a free Personal license, then check again</summary>
     Task<LicenseChoice> AskForUnityLicenseAsync(bool afterFailure);
@@ -51,7 +57,9 @@ public sealed record BuilderStatus(
 public sealed class BuilderService
 {
     /// <summary>Steps as the window lists them: Unity installation, Python, then the pipeline's steps</summary>
-    public static readonly string[] Steps = ["unity-setup", "setup", "export", "bake", "project", "unity"];
+    public static IReadOnlyList<string> StepsFor(Headset headset) => headset == Headset.Pico
+        ? ["unity-setup", "setup", "export", "bake", "project", "unity", "pico"]
+        : ["unity-setup", "setup", "export", "bake", "project", "unity"];
 
     /// <summary>A first build: export ~2.5 GB, project with Unity's Library ~30 GB, APKs and tools</summary>
     private const long FirstBuildBytes = 40L << 30;
@@ -132,14 +140,25 @@ public sealed class BuilderService
         settings.Save();
     }
 
+    /// <summary>The headset the builder builds for (kept in the workspace's state; Quest unless the player chose Pico)</summary>
+    public Headset Headset => BuildOptions.ParseHeadset(State.Headset);
+
+    public void SetHeadset(Headset headset)
+    {
+        State.Headset = headset == Headset.Quest ? null : BuildOptions.HeadsetId(headset);
+        State.Save(Workspace.StatePath);
+    }
+
     public BuildOptions Options => new()
     {
         ApkName = $"REPO-Quest-{Kit.Version}",
         VersionName = Kit.Version,
         VersionCode = BuildOptions.VersionCodeOf(Kit.Version),
+        Headset = Headset,
     };
 
-    public string ApkPath => Options.ApkPath(Workspace);
+    /// <summary>The APK for the chosen headset</summary>
+    public string ApkPath => Options.HeadsetApkPath(Workspace);
 
     public BuilderStatus GetStatus()
     {
@@ -147,7 +166,9 @@ public sealed class BuilderService
         var pending = Game is null ? BuildPipeline.Steps.Select(s => s.Id).ToList() : PendingSteps(Game);
         var freshProject = !Directory.Exists(Workspace.Library);
         var needed = (freshProject ? FirstBuildBytes : RebuildBytes);
-        var apk = File.Exists(ApkPath) ? ApkPath : State.LastApk is { } last && File.Exists(last) ? last : null;
+        // An APK of an earlier version still installs, but only one for the chosen headset
+        var lastFits = (State.LastApkHeadset ?? "quest") == BuildOptions.HeadsetId(Headset);
+        var apk = File.Exists(ApkPath) ? ApkPath : lastFits && State.LastApk is { } last && File.Exists(last) ? last : null;
         return new BuilderStatus(
             Game?.Path,
             Game?.Version(),
@@ -227,6 +248,8 @@ public sealed class BuilderService
             State.OnlineNoticeShown = true;
             State.Save(Workspace.StatePath);
         }
+        if (Platform.IsWindows && !State.DefenderAsked)
+            await AskDefenderExclusionAsync(ct);
         if (!status.GameTested && !await prompts.ConfirmUntestedGameAsync(status.GameVersion))
             throw new OperationCanceledException();
 
@@ -268,7 +291,7 @@ public sealed class BuilderService
             await EnsureLicenseAsync(afterFailure: true);
             await BuildPipeline.RunAsync(context, ct);
         }
-        return Options.ApkPath(Workspace);
+        return Options.HeadsetApkPath(Workspace);
     }
 
     private async Task AskConsentAsync(bool unityNeeded, CancellationToken ct)
@@ -287,6 +310,12 @@ public sealed class BuilderService
                 "https://github.com/AssetRipper/AssetRipper/blob/master/License.md"));
             items.Add(new ConsentItem("python", Kit.Manifest.Python, 150L << 20, "https://docs.python.org/3/license.html"));
         }
+        var pico = Headset == Headset.Pico && !State.PicoDownloadsAccepted;
+        if (pico && Kit.Manifest.Downloads is { Java: { } java, Ovrport: { } ovrport })
+        {
+            items.Add(new ConsentItem("java", java.Version, 45L << 20, "https://openjdk.org/legal/gplv2+ce.html"));
+            items.Add(new ConsentItem("ovrport", ovrport.Version, 25L << 20, "https://github.com/ovrport/app/blob/main/LICENSE"));
+        }
         if (Platform.IsWindows && !WindowsLongPaths.IsEnabled())
             items.Add(new ConsentItem("long-paths", null, 0, null));
         if (items.Count == 0)
@@ -295,9 +324,20 @@ public sealed class BuilderService
         if (!await prompts.AcceptDownloadsAsync(items))
             throw new OperationCanceledException();
         State.DownloadsAccepted = true;
+        if (pico)
+            State.PicoDownloadsAccepted = true;
         State.Save(Workspace.StatePath);
         if (items.Any(i => i.Id == "long-paths"))
             await WindowsLongPaths.EnableAsync(ct);
+    }
+
+    /// <summary>Optional, unlike long paths: a "no" only means a slower build, and the question is not repeated</summary>
+    private async Task AskDefenderExclusionAsync(CancellationToken ct)
+    {
+        if (await prompts.AskDefenderExclusionAsync(Workspace.Root) && await WindowsDefender.AddExclusionAsync(Workspace.Root, ct))
+            State.DefenderExcluded = Workspace.Root;
+        State.DefenderAsked = true;
+        State.Save(Workspace.StatePath);
     }
 
     private async Task<UnityInstall> EnsureUnityAsync(CancellationToken ct)
@@ -369,7 +409,70 @@ public sealed class BuilderService
 
     public Task<InstallOutcome> InstallAsync(AdbDevice device, string apk, IProgress<string> status, CancellationToken ct) =>
         QuestInstaller.InstallAsync(Adb ?? throw new BuildException("adb is not installed yet (it comes with Unity)") { Code = "adb-missing" },
-            device, apk, Path.Combine(Workspace.Root, "backups"), status, ct);
+            device, apk, Workspace.Backups, status, ct);
+
+    /// <summary>The builder added the workspace to Defender's exclusions (removal offers to take it off)</summary>
+    public bool HasDefenderExclusion => State.DefenderExcluded is not null;
+
+    /// <summary>
+    /// Removes the game from the headset. Its data goes to the desktop first (the workspace may be removed next);
+    /// returns that folder, or null when there was none.
+    /// </summary>
+    public Task<string?> UninstallFromHeadsetAsync(AdbDevice device, IProgress<string> status, CancellationToken ct)
+    {
+        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        var backupRoot = Directory.Exists(desktop) ? Path.Combine(desktop, "REPO Quest saves") : Workspace.Backups;
+        return QuestInstaller.UninstallAsync(Adb ?? throw new BuildException("adb is not installed (it comes with Unity)") { Code = "adb-missing" },
+            device, backupRoot, status, ct);
+    }
+
+    /// <summary>
+    /// Takes the builder off this computer: the Defender exclusion and everything it put in the workspace except the
+    /// headset backups, then its own settings. Unity and Unity Hub stay: their own installers put them there, and
+    /// Windows removes them (Settings → Apps). The service is unusable afterwards; the caller exits.
+    /// </summary>
+    public async Task<RemovalResult> RemoveFromComputerAsync(bool workspace, bool defender, CancellationToken ct)
+    {
+        var failed = new List<string>();
+        if (defender && State.DefenderExcluded is { } excluded)
+        {
+            if (await WindowsDefender.RemoveExclusionAsync(excluded, ct))
+                State.DefenderExcluded = null;
+            else
+                failed.Add($"Defender: {excluded}");
+            if (!workspace)
+                State.Save(Workspace.StatePath);
+        }
+        if (!workspace)
+            return new RemovalResult(null, failed);
+
+        Log.Info($"removing the builder's files from {Workspace.Root}");
+        Log.CloseFile();
+        foreach (var entry in Workspace.OwnedEntries)
+        {
+            try
+            {
+                if (Directory.Exists(entry))
+                    FileOps.DeleteDirectory(entry);
+                else
+                    FileOps.DeleteFile(entry);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Log.Warn($"could not delete {entry}: {e.Message}");
+                failed.Add(entry);
+            }
+        }
+        var kept = Directory.Exists(Workspace.Backups) && Directory.EnumerateFileSystemEntries(Workspace.Backups).Any()
+            ? Workspace.Backups
+            : null;
+        if (kept is null)
+            FileOps.DeleteDirectory(Workspace.Backups);
+        if (Directory.Exists(Workspace.Root) && !Directory.EnumerateFileSystemEntries(Workspace.Root).Any())
+            Directory.Delete(Workspace.Root);
+        AppSettings.Delete();
+        return new RemovalResult(kept, failed);
+    }
 
     public async Task<ReleaseManifest?> CheckForUpdateAsync(string? updateSource, CancellationToken ct)
     {

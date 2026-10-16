@@ -102,12 +102,16 @@ public sealed class Dialog<TResult> : Window
     }
 
     /// <summary>A button that closes the dialog with <paramref name="result"/>; the accent one is the default action</summary>
-    public Dialog<TResult> Button(string text, TResult result, bool accent = false, Func<bool>? enabled = null)
+    public Dialog<TResult> Button(string text, TResult result, bool accent = false, Func<bool>? enabled = null) =>
+        Button(text, () => result, accent, enabled);
+
+    /// <summary>A button whose result is read when it is clicked (from checkboxes)</summary>
+    public Dialog<TResult> Button(string text, Func<TResult> result, bool accent = false, Func<bool>? enabled = null)
     {
         var button = new Button { Content = text, MinWidth = 96, HorizontalContentAlignment = HorizontalAlignment.Center };
         if (accent)
             button.Classes.Add("accent");
-        button.Click += (_, _) => Close(result);
+        button.Click += (_, _) => Close(result());
         if (enabled is not null)
         {
             button.IsEnabled = enabled();

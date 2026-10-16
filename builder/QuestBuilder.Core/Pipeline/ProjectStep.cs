@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace RepoQuest.Builder.Pipeline;
 
 /// <summary>
@@ -75,6 +77,7 @@ public sealed class ProjectStep : BuildStep
         FileOps.WriteText(Path.Combine(project, "ProjectSettings", "ProjectVersion.txt"),
             $"m_EditorVersion: {context.Kit.Manifest.Unity.Version}\n" +
             $"m_EditorVersionWithRevision: {context.Kit.Manifest.Unity.Version} ({context.Kit.Manifest.Unity.Changeset})\n");
+        EnableParallelImport(project);
 
         // Package DLLs -> real packages, dummy package shaders -> package shaders
         await Script(context, ct, "package_swap.py", project);
@@ -144,6 +147,20 @@ public sealed class ProjectStep : BuildStep
         // An interrupted earlier run may have left the Library waiting here as well
         if (Directory.Exists(workspace.LibraryKeep))
             Directory.Move(workspace.LibraryKeep, workspace.Library);
+    }
+
+    /// <summary>
+    /// Parallel Import (Project Settings → Editor → Asset Pipeline): textures and models import in worker processes
+    /// instead of one at a time; a first build imports some 15,000 assets. The export keeps Unity's default, off.
+    /// </summary>
+    private static void EnableParallelImport(string project)
+    {
+        var settings = Path.Combine(project, "ProjectSettings", "EditorSettings.asset");
+        var text = File.ReadAllText(settings);
+        var parallel = Regex.Replace(text, @"(?m)^(  m_RefreshImportMode:) \d+$", "$1 1");
+        if (parallel == text && !text.Contains("  m_RefreshImportMode: 1", StringComparison.Ordinal))
+            Log.Warn("EditorSettings.asset has no m_RefreshImportMode; assets import one at a time");
+        FileOps.WriteText(settings, parallel);
     }
 
     /// <summary>apply-quest-runtime.sh: the baked game assembly, Photon Voice, libopus, SteamShim with SteamKit2</summary>

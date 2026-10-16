@@ -3,7 +3,7 @@ namespace RepoQuest.Builder.Setup;
 /// <summary>
 /// Third-party releases the build needs, downloaded from their publishers and checked against the hashes in kit.json:
 /// AssetRipper and uv (tools), RepoXR's Thunderstore release (its RuntimeDeps), BepInEx 5 (0Harmony, MonoMod),
-/// NuGet packages RepoXR builds against, and Unity's built-in shader source.
+/// NuGet packages RepoXR builds against, Unity's built-in shader source; for Pico, a Java 17 runtime and ovrport.
 /// </summary>
 public sealed class ThirdParty
 {
@@ -59,6 +59,27 @@ public sealed class ThirdParty
         var dir = Path.Combine(workspace.Deps, "nuget", package.Id, package.Version);
         await EnsureExtractedAsync(package.Url, package.Sha256, $"{package.Id}.{package.Version}.nupkg", dir, ct);
         return Path.Combine(dir, package.Lib.Replace('/', Path.DirectorySeparatorChar));
+    }
+
+    /// <summary>The java executable of a Java 17 runtime (Eclipse Temurin JRE): ovrport needs 17, Unity brings 11</summary>
+    public async Task<string> JavaAsync(CancellationToken ct)
+    {
+        var pin = pins.Java ?? throw new BuildException("kit.json has no Java download");
+        var dir = await ToolAsync("java", pin.Version, pin.ForThisMachine(), ct);
+        // bin/java.exe (Windows) or <jdk>/Contents/Home/bin/java (macOS)
+        return Directory.EnumerateFiles(dir, Platform.Exe("java"), SearchOption.AllDirectories)
+                   .FirstOrDefault(f => Path.GetFileName(Path.GetDirectoryName(f)) == "bin")
+               ?? throw new BuildException($"java not found in {dir}");
+    }
+
+    /// <summary>ovrport's command-line jar (github.com/ovrport/app), which turns a Quest APK into a Pico one</summary>
+    public async Task<string> OvrportJarAsync(CancellationToken ct)
+    {
+        var pin = pins.Ovrport ?? throw new BuildException("kit.json has no ovrport download");
+        var dir = Path.Combine(workspace.Tools, $"ovrport-{pin.Version}");
+        await EnsureExtractedAsync(pin.Url, pin.Sha256, $"ovrport-cli-{pin.Version}.zip", dir, ct);
+        return Directory.EnumerateFiles(dir, "*.jar").FirstOrDefault()
+               ?? throw new BuildException($"ovrport's jar not found in {dir}");
     }
 
     /// <summary>Unity's built-in shader source, where scripts/make_lamp_shaders.py looks for it</summary>

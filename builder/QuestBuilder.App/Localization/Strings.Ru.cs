@@ -6,7 +6,7 @@ internal static partial class Strings
 {
     public static readonly IReadOnlyDictionary<string, string> Ru = new Dictionary<string, string>
     {
-        ["app.subtitle"] = "Собирает R.E.P.O. для Meta Quest 3 из вашей копии игры",
+        ["app.subtitle"] = "Собирает R.E.P.O. для Meta Quest 3 и Pico 4 из вашей копии игры",
         ["app.version"] = "версия {0}",
         ["lang.tooltip"] = "Язык интерфейса",
         ["unit.gb"] = "{0} ГБ",
@@ -63,10 +63,19 @@ internal static partial class Strings
         ["problem.workspace-program-files"] =
             "Папку Program Files защищает Windows. Выберите другое место, например D:\\RepoQuest.",
 
+
+        ["headset.title"] = "Шлем",
+        ["headset.quest"] = "Meta Quest 3 / 3S",
+        ["headset.pico"] = "Pico 4 / 4 Ultra",
+        ["headset.picoAbout"] =
+            "Версия для Quest, переделанная для Pico программой ovrport (бесплатная, лицензия GPL). Проверено на Pico 4. " +
+            "При первом запуске игра около минуты показывает «Preparing graphics», а предметы появляются по одному: " +
+            "иначе Pico 4 зависает.",
         ["build.title"] = "Сборка",
         ["build.about"] =
-            "Первая сборка займёт около 1–1,5 часа плюс время на загрузки, после обновлений — около 40 минут. " +
-            "Компьютером в это время можно пользоваться.",
+            "Первая сборка займёт 1–1,5 часа на быстром компьютере и 3–5 часов на медленном, плюс время на " +
+            "загрузки: Unity один раз компилирует шейдеры и данные игры. Следующие сборки используют готовое и идут " +
+            "от 20 минут до часа. Компьютером в это время можно пользоваться.",
         ["build.lastApk"] = "Последний APK: {0}",
         ["build.running"] = "Идёт сборка… {0}",
         ["build.stopping"] = "Останавливаем…",
@@ -85,6 +94,8 @@ internal static partial class Strings
         ["step.unity.title"] = "APK",
         ["step.unity.about"] = "Unity импортирует всё и собирает игру для Quest. Самый долгий шаг.",
 
+        ["step.pico.title"] = "Версия для Pico",
+        ["step.pico.about"] = "ovrport переделывает APK для Pico: его VR-среда и контроллеры. Несколько минут.",
         ["stage.export.download"] = "Скачиваем AssetRipper",
         ["stage.export.load"] = "Читаем файлы игры",
         ["stage.export.export"] = "Переносим ресурсы",
@@ -99,6 +110,8 @@ internal static partial class Strings
         ["stage.unity.shaders"] = "Компилируем шейдеры",
         ["stage.unity.il2cpp"] = "Компилируем код игры",
         ["stage.unity.gradle"] = "Упаковываем APK",
+        ["stage.pico.download"] = "Скачивание Java и ovrport",
+        ["stage.pico.patch"] = "Переделка APK для Pico",
         ["stage.unity-setup.hub-download"] = "Скачиваем Unity Hub",
         ["stage.unity-setup.hub-install"] = "Устанавливаем Unity Hub",
         ["stage.unity-setup.editor"] = "Скачиваем Unity",
@@ -113,10 +126,11 @@ internal static partial class Strings
 
         ["button.build"] = "Собрать APK",
         ["button.cancelBuild"] = "Отмена",
-        ["button.install"] = "Установить на Quest",
+        ["button.install"] = "Установить на шлем",
         ["button.openApkFolder"] = "Открыть папку с APK",
         ["button.report"] = "Собрать отчёт",
         ["button.checkUpdates"] = "Проверить обновления",
+        ["button.uninstall"] = "Удалить…",
 
         ["success.title"] = "APK готов!",
         ["success.noShare"] = "Не делитесь этим APK: в нём файлы игры. Каждый игрок собирает свой.",
@@ -143,6 +157,10 @@ internal static partial class Strings
         ["consent.assetripper.about"] = "Превращает файлы игры в проект Unity. Лицензия GPL.",
         ["consent.python.title"] = "Python {0} с пакетами",
         ["consent.python.about"] = "Запускает скрипты сборки. Ставится только внутрь рабочей папки.",
+        ["consent.java.title"] = "Java {0} (Eclipse Temurin)",
+        ["consent.java.about"] = "Запускает ovrport. Только внутри рабочей папки. Лицензия GPL с исключением Classpath.",
+        ["consent.ovrport.title"] = "ovrport {0}",
+        ["consent.ovrport.about"] = "Переделывает APK для Quest в APK для Pico. Лицензия GPL.",
         ["consent.long-paths.title"] = "Длинные пути к файлам в Windows",
         ["consent.long-paths.about"] =
             "Системная настройка, без которой сборка не работает. Windows попросит права администратора.",
@@ -151,6 +169,46 @@ internal static partial class Strings
             "когда до этого дойдёт.",
         ["consent.agree"] = "Я принимаю условия этих лицензий",
         ["consent.accept"] = "Принять",
+
+        ["remove.title"] = "Удаление",
+        ["remove.intro"] = "Выберите, что удалить. Прежде чем что-то удалять, сборщик скопирует ваши сохранения на компьютер.",
+        ["remove.headset.title"] = "Игра на шлеме",
+        ["remove.headset.about"] =
+            "Шлем должен быть подключён кабелем. Сохранения, настройки и вход в Steam сначала копируются на рабочий " +
+            "стол (папка «REPO Quest saves»).",
+        ["remove.workspace.title"] = "Файлы сборщика в {0}",
+        ["remove.workspace.about"] =
+            "Проект игры, APK, скачанные инструменты (AssetRipper, Python) и логи. Копии сохранений со шлема в папке " +
+            "backups останутся.",
+        ["remove.defender.title"] = "Исключение в Защитнике Windows",
+        ["remove.defender.about"] = "Папка {0} снова будет проверяться. Windows попросит права администратора.",
+        ["remove.unity"] =
+            "Unity Hub и Unity {0} поставили установщики самой Unity. Если Unity вам больше ни для чего не нужна, " +
+            "удалите их в «Параметры Windows» → «Приложения» → «Установленные приложения».",
+        ["remove.unity.open"] = "Открыть «Установленные приложения»",
+        ["remove.exe"] = "Сам себя сборщик удалить не может: после этого удалите RepoQuestBuilder.exe и его папку.",
+        ["remove.button"] = "Удалить",
+        ["remove.uninstall"] = "Удаляем игру со шлема…",
+        ["remove.removing"] = "Удаляем файлы сборщика…",
+        ["remove.done.title"] = "Удалено",
+        ["remove.done.headset"] = "Игра удалена со шлема. Сохранений на нём не было.",
+        ["remove.done.headsetSaves"] = "Игра удалена со шлема. Сохранения лежат в {0}.",
+        ["remove.done.workspace"] = "Файлы сборщика удалены.",
+        ["remove.done.defender"] = "Исключение в Защитнике убрано.",
+        ["remove.done.kept"] = "Оставлено: {0} (копии сохранений со шлема). Если они не нужны, удалите папку сами.",
+        ["remove.done.failed"] = "Не удалось удалить:\n{0}",
+        ["remove.done.exe"] = "Сейчас сборщик закроется. Чтобы закончить, удалите RepoQuestBuilder.exe и его папку.",
+
+        ["defender.title"] = "Ускорить сборку",
+        ["defender.text"] =
+            "Защитник Windows проверяет каждый файл, который пишет сборка, а их десятки тысяч. Если исключить рабочую " +
+            "папку {0} из проверки, сборка обычно идёт быстрее. В папке только проект игры и инструменты, которые " +
+            "сборщик скачал и проверил. Windows попросит права администратора.",
+        ["defender.undo"] =
+            "Отменить можно в «Безопасность Windows» → «Защита от вирусов и угроз» → «Управление настройками» → " +
+            "«Исключения». Сборщик спросит только один раз.",
+        ["defender.yes"] = "Исключить папку",
+        ["defender.no"] = "Не надо",
 
         ["notice.title"] = "Игра с друзьями",
         ["notice.offline"] =
@@ -269,6 +327,9 @@ internal static partial class Strings
         ["err.adb-missing"] =
             "Программа для установки на шлем (adb) ставится вместе с Unity, а её пока нет. Сначала соберите APK — " +
             "или установите его через SideQuest или Meta Quest Developer Hub.",
+        ["err.pico-convert"] =
+            "Не получилось переделать APK для Pico. Причина — в подробностях и в logs\\ovrport.log рабочей папки; " +
+            "«Собрать отчёт» соберёт их.",
         ["err.update-signature"] = "Обновление не подписано авторами сборщика, поэтому мы его не установили.",
         ["err.update-offline"] = "Не удалось проверить обновления. Проверьте подключение к интернету.",
         ["err.game-missing"] = "Игра не найдена. Укажите папку игры — ту, где лежит REPO.exe.",
@@ -290,10 +351,14 @@ internal static partial class Strings
         ["install.none.step1"] =
             "Включите режим разработчика для шлема в приложении Meta Horizon на телефоне (настройки шлема → " +
             "Developer Mode).",
+        ["install.none.step1Pico"] =
+            "Включите режим разработчика на Pico: Настройки → Общие → О устройстве, 7 раз нажмите «Версия ПО»; " +
+            "затем Настройки → Разработчик → Отладка по USB.",
         ["install.none.step2"] = "Подключите шлем USB-C-кабелем, который передаёт данные (некоторые кабели только заряжают).",
         ["install.none.step3"] = "Наденьте шлем и разрешите отладку по USB (Allow USB debugging).",
         ["install.none.drivers"] = "В Windows также установите драйвер Meta «Oculus ADB Drivers»:",
         ["install.none.alternative"] = "Или установите APK сами — через SideQuest или Meta Quest Developer Hub.",
+        ["install.none.alternativePico"] = "APK можно поставить и самому — через adb или SideQuest.",
         ["install.unauthorized.title"] = "Разрешите отладку по USB",
         ["install.unauthorized.text"] =
             "Шлем подключён, но ещё не доверяет этому компьютеру. Наденьте его и подтвердите запрос «Allow USB " +

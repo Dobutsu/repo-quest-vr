@@ -10,6 +10,9 @@ using RepoQuest.Builder.Updates;
 
 namespace RepoQuest.Builder.App.ViewModels;
 
+/// <summary>What the player chose to remove (see <see cref="BuilderService.RemoveFromComputerAsync"/>)</summary>
+public sealed record UninstallChoice(bool Headset, bool Workspace, bool Defender);
+
 /// <summary>What the window needs from its view: folder pickers and dialogs</summary>
 public interface IWindowServices
 {
@@ -19,7 +22,8 @@ public interface IWindowServices
     Task<bool> ConfirmAsync(string title, string text, string yes, string no);
     Task<AdbDevice?> PickDeviceAsync(IReadOnlyList<AdbDevice> devices);
     /// <summary>No headset (or one that has not allowed USB debugging): help; true = try again</summary>
-    Task<bool> ShowInstallHelpAsync(bool unauthorized);
+    Task<bool> ShowInstallHelpAsync(bool unauthorized, bool pico);
+    Task<UninstallChoice?> AskUninstallAsync(string workspace, bool defenderExclusion, string unityVersion);
     IBuilderPrompts Prompts { get; }
     void Shutdown();
 }
@@ -48,7 +52,7 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             settings.WorkspacePath = options.Workspace;
         Loc.Instance.SetLanguage(options.Language ?? settings.Language ?? "en"); // English unless the player chose Russian
         Loc.Instance.LanguageChanged += OnLanguageChanged;
-        Steps = new ObservableCollection<StepViewModel>(BuilderService.Steps.Select(id => new StepViewModel(id)));
+        Steps = new ObservableCollection<StepViewModel>(BuilderService.StepsFor(Headset.Quest).Select(id => new StepViewModel(id)));
         clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         clock.Tick += (_, _) => OnTick();
         clock.Start();
@@ -66,6 +70,27 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
         {
             if (value)
                 SetLanguage("ru");
+        }
+    }
+
+    /// <summary>The headset choice (Quest unless the player picks Pico); see <see cref="SetHeadsetAsync"/></summary>
+    public bool IsQuest
+    {
+        get => service?.Headset != Headset.Pico;
+        set
+        {
+            if (value)
+                _ = SetHeadsetAsync(Headset.Quest);
+        }
+    }
+
+    public bool IsPico
+    {
+        get => service?.Headset == Headset.Pico;
+        set
+        {
+            if (value)
+                _ = SetHeadsetAsync(Headset.Pico);
         }
     }
 
@@ -114,6 +139,7 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             service = new BuilderService(settings, view.Prompts, this);
             var kit = options.KitDir;
             await Task.Run(() => service.Initialize(kit));
+            ShowHeadset();
             IsReady = true;
         }
         catch (Exception e)
@@ -179,6 +205,29 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             };
             step.Reset(done ? StepStatus.UpToDate : StepStatus.Pending);
         }
+    }
+
+    private async Task SetHeadsetAsync(Headset headset)
+    {
+        if (service is null || IsBusy || service.Headset == headset)
+            return;
+        service.SetHeadset(headset);
+        ShowHeadset();
+        ShowSuccess = false;
+        await RefreshAsync();
+    }
+
+    /// <summary>The choice and the steps that go with it (Pico has one more)</summary>
+    private void ShowHeadset()
+    {
+        OnPropertyChanged(nameof(IsQuest));
+        OnPropertyChanged(nameof(IsPico));
+        var ids = BuilderService.StepsFor(service?.Headset ?? Headset.Quest);
+        if (Steps.Select(s => s.Id).SequenceEqual(ids))
+            return;
+        Steps.Clear();
+        foreach (var id in ids)
+            Steps.Add(new StepViewModel(id));
     }
 
     [RelayCommand]
@@ -277,36 +326,93 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
         IsBusy = true;
         try
         {
-            while (true)
-            {
-                BusyText = Loc.T("install.searching");
-                var devices = await Task.Run(() => service.FindDevicesAsync(CancellationToken.None));
-                var ready = devices.Where(d => d.Ready).ToList();
-                if (ready.Count == 0)
-                {
-                    BusyText = null;
-                    if (await view.ShowInstallHelpAsync(unauthorized: devices.Any(d => d.Unauthorized)))
-                        continue;
-                    return;
-                }
-                var device = ready.Count == 1 ? ready[0] : await view.PickDeviceAsync(ready);
-                if (device is null)
-                    return;
-
-                var progress = new Progress<string>(code => BusyText = Loc.TryT($"install.{code}") ?? code);
-                var outcome = await Task.Run(() => service.InstallAsync(device, apk, progress, CancellationToken.None));
-                BusyText = null;
-                var text = new List<string> { Loc.T("install.done.text") };
-                if (outcome == InstallOutcome.ReinstalledWithData)
-                    text.Add(Loc.T("install.done.reinstalled"));
-                await view.ShowMessageAsync(Loc.T("install.done.title"), [.. text]);
+            var device = await FindHeadsetAsync();
+            if (device is null)
                 return;
-            }
+
+            var progress = new Progress<string>(code => BusyText = Loc.TryT($"install.{code}") ?? code);
+            var outcome = await Task.Run(() => service.InstallAsync(device, apk, progress, CancellationToken.None));
+            BusyText = null;
+            var text = new List<string> { Loc.T("install.done.text") };
+            if (outcome == InstallOutcome.ReinstalledWithData)
+                text.Add(Loc.T("install.done.reinstalled"));
+            await view.ShowMessageAsync(Loc.T("install.done.title"), [.. text]);
         }
         catch (Exception e)
         {
             Builder.Log.Error(e is BuildException b ? $"{b.Message}\n{b.Details}" : e.ToString());
             await view.ShowErrorAsync(e, service.CreateReport, null);
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyText = null;
+        }
+    }
+
+    /// <summary>A headset that allows USB debugging; with none, help until the player gives up (null)</summary>
+    private async Task<AdbDevice?> FindHeadsetAsync()
+    {
+        while (true)
+        {
+            BusyText = Loc.T("install.searching");
+            var devices = await Task.Run(() => service!.FindDevicesAsync(CancellationToken.None));
+            var ready = devices.Where(d => d.Ready).ToList();
+            BusyText = null;
+            if (ready.Count > 0)
+                return ready.Count == 1 ? ready[0] : await view.PickDeviceAsync(ready);
+            if (!await view.ShowInstallHelpAsync(unauthorized: devices.Any(d => d.Unauthorized), pico: IsPico))
+                return null;
+        }
+    }
+
+    /// <summary>Removes what the builder installed; after the working folder goes, the builder closes</summary>
+    [RelayCommand]
+    private async Task UninstallAsync()
+    {
+        if (service is null || IsBusy)
+            return;
+        var choice = await view.AskUninstallAsync(service.Workspace.Root, service.HasDefenderExclusion,
+            service.Kit.Manifest.Unity.Version);
+        if (choice is null)
+            return;
+        IsBusy = true;
+        var report = new List<string>();
+        try
+        {
+            if (choice.Headset)
+            {
+                var device = await FindHeadsetAsync();
+                if (device is null)
+                    return;
+                var progress = new Progress<string>(code => BusyText = Loc.TryT($"remove.{code}") ?? Loc.TryT($"install.{code}") ?? code);
+                var saves = await Task.Run(() => service.UninstallFromHeadsetAsync(device, progress, CancellationToken.None));
+                report.Add(saves is null ? Loc.T("remove.done.headset") : Loc.F("remove.done.headsetSaves", saves));
+            }
+            if (choice.Workspace || choice.Defender)
+            {
+                BusyText = Loc.T("remove.removing");
+                var result = await Task.Run(() => service.RemoveFromComputerAsync(choice.Workspace, choice.Defender, CancellationToken.None));
+                if (choice.Workspace)
+                    report.Add(Loc.T("remove.done.workspace"));
+                if (choice.Defender && !result.Failed.Any(f => f.StartsWith("Defender", StringComparison.Ordinal)))
+                    report.Add(Loc.T("remove.done.defender"));
+                if (result.KeptBackups is { } kept)
+                    report.Add(Loc.F("remove.done.kept", kept));
+                if (result.Failed.Count > 0)
+                    report.Add(Loc.F("remove.done.failed", string.Join("\n", result.Failed)));
+            }
+            BusyText = null;
+            if (choice.Workspace)
+                report.Add(Loc.T("remove.done.exe"));
+            await view.ShowMessageAsync(Loc.T("remove.done.title"), [.. report]);
+            if (choice.Workspace)
+                view.Shutdown();
+        }
+        catch (Exception e)
+        {
+            Builder.Log.Error(e is BuildException b ? $"{b.Message}\n{b.Details}" : e.ToString());
+            await view.ShowErrorAsync(e, choice.Workspace ? null : service.CreateReport, null);
         }
         finally
         {

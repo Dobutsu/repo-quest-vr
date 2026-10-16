@@ -32,6 +32,14 @@ public sealed partial class AppSettings
         return new AppSettings();
     }
 
+    /// <summary>Forgets everything (the builder is being removed)</summary>
+    public static void Delete()
+    {
+        FileOps.DeleteFile(FilePath);
+        if (Directory.Exists(SettingsDir) && !Directory.EnumerateFileSystemEntries(SettingsDir).Any())
+            Directory.Delete(SettingsDir);
+    }
+
     public void Save()
     {
         Directory.CreateDirectory(SettingsDir);

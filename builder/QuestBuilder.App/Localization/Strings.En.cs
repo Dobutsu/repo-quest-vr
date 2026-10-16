@@ -5,7 +5,7 @@ internal static partial class Strings
 {
     public static readonly IReadOnlyDictionary<string, string> En = new Dictionary<string, string>
     {
-        ["app.subtitle"] = "Builds R.E.P.O. for Meta Quest 3 from your own copy of the game",
+        ["app.subtitle"] = "Builds R.E.P.O. for Meta Quest 3 and Pico 4 from your own copy of the game",
         ["app.version"] = "version {0}",
         ["lang.tooltip"] = "Interface language",
         ["unit.gb"] = "{0} GB",
@@ -60,10 +60,19 @@ internal static partial class Strings
             "The working folder cannot be inside the game's folder. Pick another place, like D:\\RepoQuest.",
         ["problem.workspace-program-files"] = "Windows protects Program Files. Pick another place, like D:\\RepoQuest.",
 
+
+        ["headset.title"] = "Headset",
+        ["headset.quest"] = "Meta Quest 3 / 3S",
+        ["headset.pico"] = "Pico 4 / 4 Ultra",
+        ["headset.picoAbout"] =
+            "The Quest build, converted for Pico by ovrport (a free tool, GPL license). Tested on Pico 4. On the first " +
+            "start the game shows \"Preparing graphics\" for about a minute while things appear one by one: Pico 4 " +
+            "hangs otherwise.",
         ["build.title"] = "Build",
         ["build.about"] =
-            "The first build takes about 1–1.5 hours plus downloads; after updates, about 40 minutes. You can use the " +
-            "computer meanwhile.",
+            "The first build takes 1–1.5 hours on a fast computer and 3–5 hours on a slower one, plus downloads: " +
+            "Unity compiles the game's shaders and data once. Later builds reuse that and take 20 minutes to an hour. " +
+            "You can use the computer meanwhile.",
         ["build.lastApk"] = "Last APK: {0}",
         ["build.running"] = "Building… {0}",
         ["build.stopping"] = "Stopping…",
@@ -82,6 +91,8 @@ internal static partial class Strings
         ["step.unity.title"] = "APK",
         ["step.unity.about"] = "Unity imports everything and builds the game for Quest. The longest step.",
 
+        ["step.pico.title"] = "Pico version",
+        ["step.pico.about"] = "ovrport converts the APK for Pico: its VR runtime and controllers. A few minutes.",
         ["stage.export.download"] = "Downloading AssetRipper",
         ["stage.export.load"] = "Reading the game's files",
         ["stage.export.export"] = "Exporting assets",
@@ -96,6 +107,8 @@ internal static partial class Strings
         ["stage.unity.shaders"] = "Compiling shaders",
         ["stage.unity.il2cpp"] = "Compiling the game's code",
         ["stage.unity.gradle"] = "Packing the APK",
+        ["stage.pico.download"] = "Downloading Java and ovrport",
+        ["stage.pico.patch"] = "Converting the APK for Pico",
         ["stage.unity-setup.hub-download"] = "Downloading Unity Hub",
         ["stage.unity-setup.hub-install"] = "Installing Unity Hub",
         ["stage.unity-setup.editor"] = "Downloading Unity",
@@ -110,10 +123,11 @@ internal static partial class Strings
 
         ["button.build"] = "Build APK",
         ["button.cancelBuild"] = "Cancel",
-        ["button.install"] = "Install on Quest",
+        ["button.install"] = "Install on the headset",
         ["button.openApkFolder"] = "Open APK folder",
         ["button.report"] = "Create report",
         ["button.checkUpdates"] = "Check for updates",
+        ["button.uninstall"] = "Uninstall…",
 
         ["success.title"] = "The APK is ready!",
         ["success.noShare"] = "Do not share this APK: it contains the game's files. Every player builds their own.",
@@ -141,6 +155,10 @@ internal static partial class Strings
         ["consent.assetripper.about"] = "Turns the game's files into a Unity project. GPL license.",
         ["consent.python.title"] = "Python {0} with packages",
         ["consent.python.about"] = "Runs the build scripts. Installed only inside the working folder.",
+        ["consent.java.title"] = "Java {0} (Eclipse Temurin)",
+        ["consent.java.about"] = "Runs ovrport. Only inside the working folder. GPL license with the Classpath Exception.",
+        ["consent.ovrport.title"] = "ovrport {0}",
+        ["consent.ovrport.about"] = "Converts the Quest APK for Pico. GPL license.",
         ["consent.long-paths.title"] = "Long file paths in Windows",
         ["consent.long-paths.about"] =
             "A system setting the build needs. Windows will ask for administrator rights.",
@@ -149,6 +167,46 @@ internal static partial class Strings
             "it gets there.",
         ["consent.agree"] = "I accept these licenses",
         ["consent.accept"] = "Accept",
+
+        ["remove.title"] = "Uninstall",
+        ["remove.intro"] = "Choose what to remove. Your saves are copied to the computer before anything is deleted.",
+        ["remove.headset.title"] = "The game on the headset",
+        ["remove.headset.about"] =
+            "Needs the headset connected by cable. Your saves, settings and Steam login are copied to the desktop " +
+            "first (the folder \"REPO Quest saves\").",
+        ["remove.workspace.title"] = "The builder's files in {0}",
+        ["remove.workspace.about"] =
+            "The game project, the APK, the downloaded tools (AssetRipper, Python) and the logs. Copies of headset " +
+            "saves in its backups folder stay.",
+        ["remove.defender.title"] = "The Windows Defender exclusion",
+        ["remove.defender.about"] = "{0} is scanned again. Windows will ask for administrator rights.",
+        ["remove.unity"] =
+            "Unity Hub and Unity {0} were installed by Unity's own installers. If you do not use Unity for anything " +
+            "else, remove them in Windows Settings → Apps → Installed apps.",
+        ["remove.unity.open"] = "Open Installed apps",
+        ["remove.exe"] = "The builder cannot delete itself: delete RepoQuestBuilder.exe and its folder afterwards.",
+        ["remove.button"] = "Remove",
+        ["remove.uninstall"] = "Removing the game from the headset…",
+        ["remove.removing"] = "Removing the builder's files…",
+        ["remove.done.title"] = "Removed",
+        ["remove.done.headset"] = "The game is removed from the headset. It had no saves.",
+        ["remove.done.headsetSaves"] = "The game is removed from the headset. Your saves are in {0}.",
+        ["remove.done.workspace"] = "The builder's files are deleted.",
+        ["remove.done.defender"] = "The Defender exclusion is removed.",
+        ["remove.done.kept"] = "Kept: {0} (copies of headset saves). Delete it yourself if you do not need them.",
+        ["remove.done.failed"] = "Could not remove:\n{0}",
+        ["remove.done.exe"] = "The builder closes now. Delete RepoQuestBuilder.exe and its folder to finish.",
+
+        ["defender.title"] = "Build faster",
+        ["defender.text"] =
+            "Windows Defender checks every file the build writes, and a build writes tens of thousands. Excluding the " +
+            "working folder {0} from scanning usually makes builds faster. The folder holds only the game project and " +
+            "the tools the builder downloaded and checked. Windows will ask for administrator rights.",
+        ["defender.undo"] =
+            "You can undo it in Windows Security → Virus & threat protection → Manage settings → Exclusions. The " +
+            "builder asks only once.",
+        ["defender.yes"] = "Exclude the folder",
+        ["defender.no"] = "No, thanks",
 
         ["notice.title"] = "Playing with friends",
         ["notice.offline"] =
@@ -265,6 +323,9 @@ internal static partial class Strings
         ["err.adb-missing"] =
             "The program that installs games on the headset (adb) comes with Unity, which is not installed yet. Build " +
             "the APK first, or install it with SideQuest or Meta Quest Developer Hub.",
+        ["err.pico-convert"] =
+            "Converting the APK for Pico failed. The details and logs\\ovrport.log in the working folder say why; " +
+            "\"Create report\" collects them.",
         ["err.update-signature"] = "The update is not signed by the builder's authors, so it was not installed.",
         ["err.update-offline"] = "Could not check for updates. Check your internet connection.",
         ["err.game-missing"] = "The game was not found. Choose the game's folder (the one with REPO.exe).",
@@ -286,11 +347,15 @@ internal static partial class Strings
         ["install.none.step1"] =
             "Turn on Developer Mode for the headset in the Meta Horizon app on your phone (headset settings → " +
             "Developer Mode).",
+        ["install.none.step1Pico"] =
+            "Turn on developer mode on the Pico: Settings → General → About, tap \"Software version\" 7 times; " +
+            "then Settings → Developer → USB debugging.",
         ["install.none.step2"] = "Connect it with a USB-C cable that carries data (some cables only charge).",
         ["install.none.step3"] = "Put the headset on and allow USB debugging.",
         ["install.none.drivers"] = "On Windows, also install Meta's \"Oculus ADB Drivers\":",
         ["install.none.alternative"] =
             "You can also install the APK yourself with SideQuest or Meta Quest Developer Hub.",
+        ["install.none.alternativePico"] = "You can also install the APK yourself with adb or SideQuest.",
         ["install.unauthorized.title"] = "Allow USB debugging",
         ["install.unauthorized.text"] =
             "The headset is connected but does not trust this computer yet. Put it on and accept \"Allow USB " +

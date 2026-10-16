@@ -53,7 +53,40 @@ public static class QuestInstaller
         throw new BuildException("Installing on the headset failed", output) { Code = "quest-install" };
     }
 
-    private static async Task ReinstallKeepingDataAsync(Adb adb, AdbDevice device, string apk, string backupRoot,
+    /// <summary>
+    /// Removes the game from the headset; its data (saves, RepoXR settings, Steam login, cosmetics), which Android
+    /// deletes with the app, is copied to a new folder in <paramref name="backupRoot"/> first. Returns that folder, or
+    /// null when the headset had no data. A headset without the game is fine.
+    /// </summary>
+    public static async Task<string?> UninstallAsync(Adb adb, AdbDevice device, string backupRoot, IProgress<string>? status,
+        CancellationToken ct)
+    {
+        if (!device.Ready)
+            throw new BuildException(device.Unauthorized
+                ? "The headset has not allowed USB debugging yet: put it on and accept the prompt"
+                : $"The headset is {device.State}") { Code = device.Unauthorized ? "quest-unauthorized" : "quest-offline" };
+        await adb.ShellAsync(device.Serial, "input keyevent KEYCODE_WAKEUP", ct);
+        if (await adb.IsRunningAsync(device.Serial, Package, ct))
+        {
+            status?.Report("stop");
+            await adb.ShellAsync(device.Serial, $"am force-stop {Package}", ct);
+        }
+
+        var (backup, hasData) = await BackupDataAsync(adb, device, backupRoot, status, ct);
+        status?.Report("uninstall");
+        var result = await adb.RunAsync(device.Serial, ["uninstall", Package], ct);
+        var output = result.TailText;
+        if (!output.Contains("Success", StringComparison.Ordinal) && !output.Contains("Unknown package", StringComparison.Ordinal) &&
+            !output.Contains("DELETE_FAILED_INTERNAL_ERROR", StringComparison.Ordinal))
+            throw new BuildException("Removing the game from the headset failed", output) { Code = "quest-uninstall" };
+        if (hasData)
+            return backup;
+        FileOps.DeleteDirectory(backup);
+        return null;
+    }
+
+    /// <summary>Copies the game's data from the headset into a new dated folder in <paramref name="backupRoot"/></summary>
+    private static async Task<(string Backup, bool HasData)> BackupDataAsync(Adb adb, AdbDevice device, string backupRoot,
         IProgress<string>? status, CancellationToken ct)
     {
         status?.Report("backup");
@@ -66,8 +99,15 @@ public static class QuestInstaller
             if (pull.ExitCode != 0)
                 throw new BuildException("Could not copy the game's data from the headset; nothing was changed",
                     pull.TailText) { Code = "quest-backup" };
+            Log.Info($"headset data saved in {backup}");
         }
-        Log.Info($"headset data saved in {backup}");
+        return (backup, hasData);
+    }
+
+    private static async Task ReinstallKeepingDataAsync(Adb adb, AdbDevice device, string apk, string backupRoot,
+        IProgress<string>? status, CancellationToken ct)
+    {
+        var (backup, hasData) = await BackupDataAsync(adb, device, backupRoot, status, ct);
 
         status?.Report("uninstall");
         await adb.RunAsync(device.Serial, ["uninstall", Package], ct);

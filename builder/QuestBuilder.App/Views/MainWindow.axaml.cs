@@ -85,7 +85,10 @@ public partial class MainWindow : Window, IWindowServices
         return choice >= 0 ? devices[choice] : null;
     }
 
-    public Task<bool> ShowInstallHelpAsync(bool unauthorized) => Dialogs.InstallHelp(unauthorized).ShowAsync(this);
+    public Task<bool> ShowInstallHelpAsync(bool unauthorized, bool pico) => Dialogs.InstallHelp(unauthorized, pico).ShowAsync(this);
+
+    public Task<UninstallChoice?> AskUninstallAsync(string workspace, bool defenderExclusion, string unityVersion) =>
+        Dialogs.Uninstall(workspace, defenderExclusion, unityVersion).ShowAsync(this);
 
     public void Shutdown()
     {
@@ -149,6 +152,8 @@ public partial class MainWindow : Window, IWindowServices
                     new ConsentItem("long-paths", null, 0, null),
                 ])),
                 ("notice", Dialogs.OnlineNotice()),
+                ("defender", Dialogs.Defender(@"D:\RepoQuest")),
+                ("uninstall", Dialogs.Uninstall(@"D:\RepoQuest", defenderExclusion: true, "2022.3.62f3")),
                 ("license", Dialogs.License(afterFailure: true, OpenHub)),
                 ("untested", Dialogs.Untested("v0.4.5.0")),
                 ("error-hub", Dialogs.Error(new BuildException("Unity Hub did not install Unity 2022.3.62f3",
@@ -156,6 +161,7 @@ public partial class MainWindow : Window, IWindowServices
                 ("error-unexpected", Dialogs.Error(new InvalidOperationException("Something odd"), () => { }, null)),
                 ("install-none", Dialogs.InstallHelp(unauthorized: false)),
                 ("install-unauthorized", Dialogs.InstallHelp(unauthorized: true)),
+                ("install-none-pico", Dialogs.InstallHelp(unauthorized: false, pico: true)),
                 ("installed", Dialogs.Message(Loc.T("install.done.title"), Loc.T("install.done.text"), Loc.T("install.done.reinstalled"))),
                 ("cancel", Dialogs.Confirm(Loc.T("cancel.title"), Loc.T("cancel.text"), Loc.T("cancel.stop"), Loc.T("cancel.continue"))),
             };
@@ -184,6 +190,9 @@ public partial class MainWindow : Window, IWindowServices
             OnUiThread(() => Dialogs.Consent(items).ShowAsync(window));
 
         public Task ShowOnlineNoticeAsync() => OnUiThread(() => Dialogs.OnlineNotice().ShowAsync(window));
+
+        public Task<bool> AskDefenderExclusionAsync(string workspace) =>
+            OnUiThread(() => Dialogs.Defender(workspace).ShowAsync(window));
 
         public Task<LicenseChoice> AskForUnityLicenseAsync(bool afterFailure) =>
             OnUiThread(() => Dialogs.License(afterFailure, OpenHub).ShowAsync(window));

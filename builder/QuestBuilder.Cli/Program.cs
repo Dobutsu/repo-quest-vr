@@ -26,6 +26,7 @@ try
         "player-build" => await PlayerCommands.BuildAsync(Options.Parse(args[1..])),
         "update" => await PlayerCommands.UpdateAsync(Options.Parse(args[1..]), args[1..]),
         "install" => await PlayerCommands.InstallAsync(Options.Parse(args[1..])),
+        "uninstall" => await PlayerCommands.UninstallAsync(Options.Parse(args[1..])),
         "keygen" => ReleaseCommands.KeyGen(Options.Parse(args[1..])),
         "manifest" => ReleaseCommands.Manifest(Options.Parse(args[1..]), args[1..]),
         "sign" => ReleaseCommands.Sign(Options.Parse(args[1..])),

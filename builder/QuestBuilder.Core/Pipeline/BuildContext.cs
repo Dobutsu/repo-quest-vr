@@ -3,6 +3,9 @@ using RepoQuest.Builder.Setup;
 
 namespace RepoQuest.Builder.Pipeline;
 
+/// <summary>The headset the APK is for: Unity builds for Quest; for Pico the pico step converts that APK</summary>
+public enum Headset { Quest, Pico }
+
 public sealed class BuildOptions
 {
     /// <summary>APK file name in the workspace's build folder, without .apk</summary>
@@ -17,8 +20,28 @@ public sealed class BuildOptions
     public bool Force { get; init; }
     /// <summary>Run only these steps (ids); null: all that are not up to date</summary>
     public IReadOnlySet<string>? Only { get; init; }
+    public Headset Headset { get; init; } = Headset.Quest;
 
+    /// <summary>The APK Unity builds (for Quest)</summary>
     public string ApkPath(Workspace workspace) => Path.Combine(workspace.Build, ApkName + ".apk");
+
+    /// <summary>The APK for <see cref="Headset"/>: Unity's, or the pico step's next to it (REPO-Quest-1.0.5 -> REPO-Pico-1.0.5)</summary>
+    public string HeadsetApkPath(Workspace workspace) => Headset == Headset.Pico
+        ? Path.Combine(workspace.Build, PicoApkName(ApkName) + ".apk")
+        : ApkPath(workspace);
+
+    public static string PicoApkName(string apkName) =>
+        apkName.Contains("Quest", StringComparison.Ordinal) ? apkName.Replace("Quest", "Pico", StringComparison.Ordinal) : apkName + "-pico";
+
+    /// <summary>"quest" or "pico", as state.json and the command line spell it</summary>
+    public static string HeadsetId(Headset headset) => headset == Headset.Pico ? "pico" : "quest";
+
+    public static Headset ParseHeadset(string? id) => id switch
+    {
+        null or "quest" => Headset.Quest,
+        "pico" => Headset.Pico,
+        _ => throw new BuildException($"unknown headset {id}: quest or pico"),
+    };
 
     /// <summary>Android versionCode of a version: 1.2.3 -> 10203 (always growing with releases; 0.0.0 -> 1)</summary>
     public static int VersionCodeOf(string version)

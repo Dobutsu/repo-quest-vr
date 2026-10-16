@@ -10,6 +10,10 @@ public sealed record AdbDevice(string Serial, string State, string? Model)
     /// <summary>The headset asks to allow USB debugging (put it on and accept)</summary>
     public bool Unauthorized => State == "unauthorized";
     public bool IsQuest => Model?.Contains("Quest", StringComparison.OrdinalIgnoreCase) ?? false;
+    /// <summary>Pico 4 reports its model as A8110, Pico 4 Ultra as A9210</summary>
+    public bool IsPico => Model is { } model && (model.Contains("Pico", StringComparison.OrdinalIgnoreCase) ||
+                                                 model.StartsWith("A8110", StringComparison.Ordinal) ||
+                                                 model.StartsWith("A9210", StringComparison.Ordinal));
 }
 
 /// <summary>adb from the Android SDK that comes with Unity's Android module</summary>

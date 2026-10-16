@@ -32,6 +32,7 @@ internal static class Commands
     {
         Console.WriteLine("usage: QuestBuilder.Cli build [--dev] [--workspace <dir>] [--game <dir>] [--kit <dir>] [--unity <dir>]");
         Console.WriteLine("                              [--apk-name <name>] [--development] [--profiling] [--force] [--only <steps>]");
+        Console.WriteLine("                              [--headset quest|pico]");
         Console.WriteLine("       QuestBuilder.Cli locate");
         return 64;
     }
@@ -62,6 +63,7 @@ internal static class Commands
             Development = options.Has("development"),
             Profiling = options.Has("profiling"),
             Force = options.Has("force"),
+            Headset = BuildOptions.ParseHeadset(options.Get("headset")),
             Only = options.Get("only")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(),
             VersionName = options.Get("version-name") ?? (kit.Version == "dev" ? "0.0.0" : kit.Version),
             VersionCode = int.TryParse(options.Get("version-code"), out var code)
@@ -86,8 +88,8 @@ internal static class Commands
         using var awake = SleepBlocker.Start();
         var context = await BuildSession.PrepareAsync(workspace, kit, game, unity, buildOptions, state, progress, cancel.Token);
         await BuildPipeline.RunAsync(context, cancel.Token);
-        if (File.Exists(buildOptions.ApkPath(workspace)))
-            Console.WriteLine($"APK: {buildOptions.ApkPath(workspace)}");
+        if (File.Exists(buildOptions.HeadsetApkPath(workspace)))
+            Console.WriteLine($"APK: {buildOptions.HeadsetApkPath(workspace)}");
         return 0;
     }
 

@@ -6,9 +6,10 @@ namespace RepoQuest.Builder.Cli;
 /// <summary>
 /// The players' flow without the window, through the same BuilderService the window drives: for testing the whole
 /// path (embedded kit, consent, Unity, license, pipeline, install, self-update) on the Mac.
-///   player-build [--workspace &lt;dir&gt;] [--kit &lt;dir&gt;] [--game &lt;dir&gt;] [--yes]
+///   player-build [--workspace &lt;dir&gt;] [--kit &lt;dir&gt;] [--game &lt;dir&gt;] [--headset quest|pico] [--yes]
 ///   update [--update-source &lt;url|dir&gt;] [--workspace &lt;dir&gt;] [--then-build] [--yes]
 ///   install [--workspace &lt;dir&gt;] [--kit &lt;dir&gt;]
+///   uninstall [--workspace &lt;dir&gt;] [--headset] [--files] [--defender]
 /// </summary>
 internal static class PlayerCommands
 {
@@ -17,6 +18,8 @@ internal static class PlayerCommands
         var service = Start(options);
         if (options.Get("game") is { } game && service.SetGamePath(game) is { } problem)
             throw new BuildException($"{game}: {problem}");
+        if (options.Has("headset"))
+            service.SetHeadset(BuildOptions.ParseHeadset(options.Get("headset")));
         using var cancel = CancelOnCtrlC();
         var apk = await service.BuildAsync(cancel.Token);
         Console.WriteLine($"APK: {apk}");
@@ -58,11 +61,33 @@ internal static class PlayerCommands
         var service = Start(options);
         var apk = service.GetStatus().ApkPath ?? throw new BuildException("no APK built yet");
         var devices = await service.FindDevicesAsync(CancellationToken.None);
-        var device = devices.FirstOrDefault(d => d.Ready && d.IsQuest) ?? devices.FirstOrDefault()
+        var device = devices.FirstOrDefault(d => d.Ready && (d.IsQuest || d.IsPico)) ?? devices.FirstOrDefault()
                      ?? throw new BuildException("no headset connected (adb devices is empty)");
         var outcome = await service.InstallAsync(device, apk, new Progress<string>(s => Console.WriteLine($"[install] {s}")),
             CancellationToken.None);
         Console.WriteLine($"installed {Path.GetFileName(apk)} on {device.Model ?? device.Serial}: {outcome}");
+        return 0;
+    }
+
+    /// <summary>The window's "Uninstall…": the game from the headset (saves to the desktop first), the builder's files
+    /// in the workspace, the Defender exclusion; only what is asked for</summary>
+    public static async Task<int> UninstallAsync(Options options)
+    {
+        var service = Start(options);
+        if (options.Has("headset"))
+        {
+            var devices = await service.FindDevicesAsync(CancellationToken.None);
+            var device = devices.FirstOrDefault(d => d.Ready && (d.IsQuest || d.IsPico)) ?? devices.FirstOrDefault()
+                         ?? throw new BuildException("no headset connected (adb devices is empty)");
+            var saves = await service.UninstallFromHeadsetAsync(device, new Progress<string>(s => Console.WriteLine($"[uninstall] {s}")),
+                CancellationToken.None);
+            Console.WriteLine($"removed from {device.Model ?? device.Serial}; saves: {saves ?? "none"}");
+        }
+        if (options.Has("files") || options.Has("defender"))
+        {
+            var result = await service.RemoveFromComputerAsync(options.Has("files"), options.Has("defender"), CancellationToken.None);
+            Console.WriteLine($"removed; kept: {result.KeptBackups ?? "nothing"}; failed: {(result.Failed.Count == 0 ? "nothing" : string.Join(", ", result.Failed))}");
+        }
         return 0;
     }
 
@@ -109,6 +134,9 @@ internal static class PlayerCommands
             Console.WriteLine("Online play: log in to Steam in the headset; it is an unofficial Steam client (risk for the account).");
             return Task.CompletedTask;
         }
+
+        public Task<bool> AskDefenderExclusionAsync(string workspace) =>
+            Task.FromResult(Ask($"Exclude {workspace} from Windows Defender scanning to build faster (administrator rights)?"));
 
         public Task<LicenseChoice> AskForUnityLicenseAsync(bool afterFailure)
         {
