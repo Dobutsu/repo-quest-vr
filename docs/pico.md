@@ -32,11 +32,23 @@ seconds without XR being lost is listed in `files/shader-warmup/warm.txt` and dr
 first start and new places are slow. `files/shader-warmup/log.txt` on the headset tells what came in when; if XR is
 lost anyway, it lists what came in during the last ten seconds, and the game quits with a message to start it again.
 
-It is on for Pico only (`android.os.Build.BRAND`); a file `files/shader-warmup` containing `on` or `off` overrides that.
+It is on for the Pico 4 only (`android.os.Build.BRAND` is Pico and the GPU an Adreno 650): the Pico 4 Ultra's Adreno 740
+did not hang, and the per-frame scan cost it frames. A file `files/shader-warmup-mode` containing `on` or `off` overrides
+that.
 UI, post-processing and deferred lighting are not held.
 
-What exactly hangs the Adreno 650 is not known. `unity-tools/Runtime/GpuHangProbe.cs` (not in the repository) was the
+What exactly hangs the Adreno 650 is not known. `unity-tools/Runtime/GpuHangProbe.cs` (idle unless asked for) was the
 diagnostic that brought features and shaders back one by one; its findings were noisy, and slow reveal alone fixed it.
+
+## Pico 4 Ultra: the focus sphere (patches/repoxr/0008)
+
+On a Pico 4 Ultra (Adreno 740, Vulkan driver 512.772) the levels ran at 13-15 FPS while the menu held 90. The render
+thread spent most of each frame in the kernel: the driver allocates and frees GPU memory for every `vkCmdCopyImage`, and
+the frame had one, of the whole eye texture. It came from RepoXR's focus sphere (the VR stand-in for the ceiling eye's
+forced look), whose shader has a `GrabPass` and whose renderer was on all the time, even fully faded out. Quest's driver
+does that copy in about 0.02 ms, the Ultra's in about 55 ms. Patch 0008 turns the renderer on only while the sphere
+shows: 75-84 FPS on the Ultra. `unity-tools/Native/RepoQuestVk.cpp` (Vulkan copy counters for PerfLog, idle in normal
+builds) is what found it.
 
 ## The microphone prompt (unity-tools/Runtime/MicPermission.cs)
 

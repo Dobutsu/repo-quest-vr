@@ -1,0 +1,21 @@
+--- a/Source/UI/FocusSphere.cs	2026-10-18 19:01:47
++++ b/Source/UI/FocusSphere.cs	2026-10-18 19:01:47
+@@ -24,6 +24,9 @@
+     {
+         renderer.material.SetFloat(FadeStart, 0f);
+         renderer.material.SetFloat(FadeEnd, 0f);
++        // Its shader grabs the screen (GrabPass): a full-frame copy every frame while the renderer is on, even fully
++        // faded out. On Pico 4 Ultra that copy alone took the levels from ~85 to ~14 FPS, so it only draws while seen
++        renderer.enabled = false;
+ 
+         camera = Camera.main!.transform;
+     }
+@@ -49,6 +52,8 @@
+             renderer.material.SetFloat(FadeEnd, animOut.Evaluate(strengthLerp) * lookAtStrength);
+         }
+ 
++        renderer.enabled = strengthLerp > 0;
++
+         if (hasTarget && strengthLerp > 0)
+             transform.LookAt(lookAtTarget);
+     }

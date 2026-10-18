@@ -52,9 +52,9 @@ If the headset does not show up over USB, install the Oculus ADB Drivers:
 https://developers.meta.com/horizon/downloads/package/oculus-adb-drivers/
 
 Pico 4 / 4 Ultra: the builder makes the Quest version and converts it with ovrport (https://github.com/ovrport/app,
-GPL-3.0), downloading ovrport and Java 17 for that. Tested on a Pico 4. On the first start the game shows "Preparing
-graphics" for about a minute while things appear one by one (Pico 4 hangs otherwise), and it asks for the microphone
-in the main menu. Developer mode on the Pico: Settings → General → About, tap "Software version" 7 times, then
+GPL-3.0), downloading ovrport and Java 17 for that. Tested on a Pico 4 and a Pico 4 Ultra. On the first start on a
+Pico 4 the game shows "Preparing graphics" for about a minute while things appear one by one (Pico 4 hangs otherwise),
+and it asks for the microphone in the main menu. Developer mode on the Pico: Settings → General → About, tap "Software version" 7 times, then
 Settings → Developer → USB debugging.
 
 
@@ -106,7 +106,8 @@ Settings → Developer → USB debugging.
 https://developers.meta.com/horizon/downloads/package/oculus-adb-drivers/
 
 Pico 4 / 4 Ultra: программа собирает версию для Quest и переделывает её программой ovrport
-(https://github.com/ovrport/app, GPL-3.0), для этого скачивает ovrport и Java 17. Проверено на Pico 4. При первом
-запуске игра около минуты показывает «Preparing graphics», а предметы появляются по одному (иначе Pico 4 зависает);
+(https://github.com/ovrport/app, GPL-3.0), для этого скачивает ovrport и Java 17. Проверено на Pico 4 и Pico 4 Ultra.
+При первом запуске на Pico 4 игра около минуты показывает «Preparing graphics», а предметы появляются по одному
+(иначе Pico 4 зависает);
 доступ к микрофону она спросит в главном меню. Режим разработчика на Pico: Настройки → Общие → О устройстве,
 7 раз нажмите «Версия ПО», затем Настройки → Разработчик → Отладка по USB.

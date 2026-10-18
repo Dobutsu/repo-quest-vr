@@ -12,6 +12,8 @@
 #   0006-lamp-lighting  lamps lit per pixel in one pass by the Quest shaders (RepoQuestLamps.cginc), no Unity light passes
 #   0007-lamp-lighting-arms-and-previews  the VR arms use the game's Hurtable shader (the bundle's copy has no lamps);
 #                                         the menus' deferred player previews render forward, where the lamps are
+#   0008-focus-sphere-hidden-when-faded  the focus sphere's renderer is off while it is fully faded: its GrabPass copied
+#                                        the whole frame every frame (Pico 4 Ultra: 85 -> 14 FPS in the levels)
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"

@@ -132,4 +132,42 @@ internal static class PluginMetas
           assetBundleName:
           assetBundleVariant:
         """;
+
+    /// <summary>Our own arm64 libraries (unity-tools/Plugins): loaded at startup, so Unity calls their UnityPluginLoad
+    /// with its plugin interfaces before any script runs</summary>
+    public const string PreloadedNativePlugin = """
+        fileFormatVersion: 2
+        guid: {GUID}
+        PluginImporter:
+          externalObjects: {}
+          serializedVersion: 2
+          iconMap: {}
+          executionOrder: {}
+          defineConstraints: []
+          isPreloaded: 1
+          isOverridable: 0
+          isExplicitlyReferenced: 0
+          validateReferences: 1
+          platformData:
+          - first:
+              : Any
+            second:
+              enabled: 0
+              settings: {}
+          - first:
+              Android: Android
+            second:
+              enabled: 1
+              settings:
+                CPU: ARM64
+          - first:
+              Editor: Editor
+            second:
+              enabled: 0
+              settings:
+                DefaultValueInitialized: true
+          userData:
+          assetBundleName:
+          assetBundleVariant:
+        """;
 }

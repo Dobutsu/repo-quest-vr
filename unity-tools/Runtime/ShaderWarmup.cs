@@ -17,7 +17,9 @@ namespace RepoQuest
     /// (forceRenderingOff), and the variants come in one per RevealSeconds, in the real cameras. A variant that went
     /// SettleSeconds without XR being lost is listed in files/shader-warmup/warm.txt and is not held next launch, so
     /// only the first launch and new places are slow. files/shader-warmup/log.txt tells what came in when.
-    /// On for Pico only; files/shader-warmup containing "on" or "off" overrides that. Off while GpuHangProbe runs.
+    /// On for the Pico 4 only (Pico brand with an Adreno 650: the Pico 4 Ultra's Adreno 740 never hung, and the per-frame
+    /// scan costs it a frame per second at 13 FPS); files/shader-warmup-mode containing "on" or "off" overrides that
+    /// (files/shader-warmup is the folder of its files). Off while GpuHangProbe runs.
     /// UI, post-processing and deferred lighting are not held. Log lines start with [ShaderWarmup].
     /// </summary>
     public class ShaderWarmup : MonoBehaviour
@@ -25,6 +27,14 @@ namespace RepoQuest
         private const float RevealSeconds = 0.5f;
         private const float SettleSeconds = 10f;
         private const float SaveSeconds = 2f;
+
+        /// <summary>Set while a warmup runs this launch; PerfLog reports it</summary>
+        public static ShaderWarmup Instance { get; private set; }
+        /// <summary>PerfLog's A/B test: no per-frame scan while set (what is held back stays held)</summary>
+        public static bool ScanPaused;
+        /// <summary>Time spent in Scan since PerfLog last took it</summary>
+        public static double ScanMilliseconds;
+        public int Pending => pending.Count;
 
         private string dir;
         private string header;
@@ -66,12 +76,12 @@ namespace RepoQuest
                 return false;
             try
             {
-                var choice = Path.Combine(data, "shader-warmup");
+                var choice = Path.Combine(data, "shader-warmup-mode");
                 if (File.Exists(choice))
                     return File.ReadAllText(choice).Trim().ToLowerInvariant() == "on";
             }
             catch (IOException) { }
-            return Brand().Contains("pico");
+            return Brand().Contains("pico") && SystemInfo.graphicsDeviceName.Contains("650");
         }
 
         private static string Brand()
@@ -91,6 +101,7 @@ namespace RepoQuest
 
         private void Awake()
         {
+            Instance = this;
             dir = Path.Combine(Application.persistentDataPath, "shader-warmup");
             Directory.CreateDirectory(dir);
             header = $"{Application.version} | {SystemInfo.graphicsDeviceName} | {SystemInfo.graphicsDeviceVersion}";
@@ -120,10 +131,12 @@ namespace RepoQuest
 
         private void PreCull(Camera camera)
         {
-            if (Time.frameCount == scannedFrame)
+            if (Time.frameCount == scannedFrame || ScanPaused)
                 return;
             scannedFrame = Time.frameCount;
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
             Scan();
+            ScanMilliseconds += (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         }
 
         /// <summary>Once per frame, before the first camera culls: hold back what would draw a variant not let in yet</summary>

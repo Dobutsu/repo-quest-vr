@@ -48,7 +48,7 @@ cp "$root/builder/python/requirements.lock" "$kit/python/"
 # Every pipeline script; not the Mac-only diagnostics, kit and release tooling
 for script in "$root"/scripts/*.py; do
     case "$(basename "$script")" in
-        inventory.py|shader_disasm.py|patch_repoxr_shaders.py|publish_check.py|package-thunderstore.py) ;;
+        inventory.py|shader_disasm.py|patch_repoxr_shaders.py|publish_check.py|package-thunderstore.py|github_stats.py) ;;
         *) cp "$script" "$kit/scripts/" ;;
     esac
 done

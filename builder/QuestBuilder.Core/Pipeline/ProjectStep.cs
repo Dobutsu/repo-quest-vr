@@ -184,6 +184,15 @@ public sealed class ProjectStep : BuildStep
         var native = Path.Combine(plugins, "Android", "arm64-v8a");
         FileOps.CopyFile(context.Kit.Opus, Path.Combine(native, "libopus_egpv.so"));
         WriteMeta(Path.Combine(native, "libopus_egpv.so.meta"), PluginMetas.OpusPlugin, "repoquest-native:libopus_egpv");
+        // Ours (scripts/build-native.sh): RepoQuestVk, Vulkan copy counters for PerfLog, idle unless PerfLog enables it
+        var ours = Path.Combine(context.Kit.UnityTools, "Plugins", "Android", "arm64-v8a");
+        if (Directory.Exists(ours))
+            foreach (var so in Directory.EnumerateFiles(ours, "*.so").Order(StringComparer.Ordinal))
+            {
+                FileOps.CopyFile(so, Path.Combine(native, Path.GetFileName(so)));
+                WriteMeta(Path.Combine(native, Path.GetFileName(so) + ".meta"), PluginMetas.PreloadedNativePlugin,
+                    $"repoquest-native:{Path.GetFileNameWithoutExtension(so)}");
+            }
 
         // SteamShim in place of Facepunch.Steamworks, whose steam_api64 does not exist on Android
         FileOps.CopyFile(Path.Combine(context.Kit.SteamDir, "Facepunch.Steamworks.Win64.dll"),

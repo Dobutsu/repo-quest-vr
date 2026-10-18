@@ -43,12 +43,12 @@ if any of them are useful.
 Hosting a game from the headset has not been tested yet. The port is made and tested on a Quest 3. The Quest 3S
 should behave the same. Quest 2 and Quest Pro are untested.
 
-**Pico 4** works too, tested on a Pico 4, including multiplayer with friends on PC; the Pico 4 Ultra is untested. The
-builder makes the Quest version and converts it with [ovrport](https://github.com/ovrport/app), which swaps the
+**Pico 4** and **Pico 4 Ultra** work too: tested on both, and on the Pico 4 also in multiplayer with friends on PC.
+The builder makes the Quest version and converts it with [ovrport](https://github.com/ovrport/app), which swaps the
 OpenXR loader for one that runs on Pico and maps the controllers. Two things are different on Pico: on the first start
-the game brings its graphics in one by one for about a minute ("Preparing graphics"), because the Pico 4 GPU hangs when
-the main menu draws everything at once; and the game asks for the microphone in the main menu rather than at startup,
-where the permission prompt crashed it. See [`docs/pico.md`](docs/pico.md).
+on a Pico 4 the game brings its graphics in one by one for about a minute ("Preparing graphics"), because the Pico 4 GPU
+hangs when the main menu draws everything at once (the Ultra does not need it); and the game asks for the microphone in
+the main menu rather than at startup, where the permission prompt crashed it. See [`docs/pico.md`](docs/pico.md).
 
 ## How to get it
 

@@ -155,6 +155,8 @@ namespace RepoQuest.Editor
             PlayerSettings.graphicsJobMode = GraphicsJobMode.Legacy;
             // Spreads garbage collection over frames instead of stalling one (the game allocates every frame)
             PlayerSettings.gcIncremental = true;
+            // CPU and GPU frame times for PerfLog (Pico logs no VrApi lines); costs next to nothing
+            PlayerSettings.enableFrameTimingStats = true;
         }
 
         private static string ArgumentValue(string name)
