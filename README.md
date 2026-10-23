@@ -1,6 +1,6 @@
-# R.E.P.O. VR on Quest 3 and Pico 4, standalone
+# R.E.P.O. VR on Quest 2, Quest 3 and Pico 4, standalone
 
-Play [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO/) in VR on a Meta Quest 3 or a Pico 4 without a PC,
+Play [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO/) in VR on a Meta Quest 2, Quest 3 or Pico 4 without a PC,
 and join your friends' games on PC. Their game stays vanilla, with no mods.
 
 The game is built **from your own copy of R.E.P.O.** on Steam. This repository and its releases contain no game files.
@@ -41,7 +41,8 @@ if any of them are useful.
   both ways. Tested with up to 7 players on vanilla PC copies of the game.
 
 Hosting a game from the headset has not been tested yet. The port is made and tested on a Quest 3. The Quest 3S
-should behave the same. Quest 2 and Quest Pro are untested.
+should behave the same. The **Quest 2** runs the same build: tested in singleplayer, where it holds 72 FPS in
+most places and drops to 30–60 in the shop (its GPU is the Pico 4's, and slower). Quest Pro is untested.
 
 **Pico 4** and **Pico 4 Ultra** work too: tested on both, and on the Pico 4 also in multiplayer with friends on PC.
 The builder makes the Quest version and converts it with [ovrport](https://github.com/ovrport/app), which swaps the
@@ -54,7 +55,7 @@ the main menu rather than at startup, where the permission prompt crashed it. Se
 
 Download **RepoQuestBuilder** for Windows from [Releases](../../releases/latest) and follow its `README.txt`. In short:
 
-1. You need Windows 10/11 (64-bit), 16 GB RAM, about 60 GB of free disk space, R.E.P.O. on Steam, a Quest 3 or a
+1. You need Windows 10/11 (64-bit), 16 GB RAM, about 60 GB of free disk space, R.E.P.O. on Steam, a Quest 2, Quest 3 or
    Pico 4 in developer mode with a USB cable, and a free Unity account. Pick the headset in the builder; Quest is the
    default.
 2. The builder finds your game and downloads everything else itself: Unity 2022.3, AssetRipper and Python packages,

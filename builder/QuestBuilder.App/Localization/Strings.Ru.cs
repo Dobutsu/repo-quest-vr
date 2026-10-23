@@ -6,7 +6,7 @@ internal static partial class Strings
 {
     public static readonly IReadOnlyDictionary<string, string> Ru = new Dictionary<string, string>
     {
-        ["app.subtitle"] = "Собирает R.E.P.O. для Meta Quest 3 и Pico 4 из вашей копии игры",
+        ["app.subtitle"] = "Собирает R.E.P.O. для Meta Quest 2 / 3 и Pico 4 из вашей копии игры",
         ["app.version"] = "версия {0}",
         ["lang.tooltip"] = "Язык интерфейса",
         ["unit.gb"] = "{0} ГБ",
@@ -65,7 +65,7 @@ internal static partial class Strings
 
 
         ["headset.title"] = "Шлем",
-        ["headset.quest"] = "Meta Quest 3 / 3S",
+        ["headset.quest"] = "Meta Quest 2 / 3 / 3S",
         ["headset.pico"] = "Pico 4 / 4 Ultra",
         ["headset.picoAbout"] =
             "Версия для Quest, переделанная для Pico программой ovrport (бесплатная, лицензия GPL). Проверено на Pico 4. " +

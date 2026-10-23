@@ -3,8 +3,8 @@
 # work/repoxr-src.
 #   scripts/prepare-repoxr.sh   -> work/repoxr-src/bin/Release/netstandard2.1/RepoXR.dll
 # Patches (in order):
-#   0001-head-bob-setting  "Head Bob" slider in RepoXR's Gameplay settings (0-100%, default 25% = upstream behaviour)
-#   0002-pixel-lights-setting  "Pixel Lights" slider in Rendering (per-object pixel light limit)
+#   0001-head-bob-setting  "Head Bob" slider in RepoXR's Gameplay settings (0-100%, default 0% = off; upstream is 25%)
+#   0002-pixel-lights-setting  "Pixel Lights" slider in Rendering (per-object pixel light limit, default 1)
 #   0003-multiview-by-default  single-pass instanced stereo on (Post Processing is fixed for it, patch_packages.py)
 #   0004-post-processing-setting  "Post Processing" switch (off by default: brighter, ~5 ms GPU); the main camera's
 #                                 volume-less post stack is always off

@@ -1,28 +1,28 @@
 REPO Quest Builder
 ==================
 
-[EN] Builds a standalone VR version of R.E.P.O. for Meta Quest 3 or Pico 4 from your own copy of the game.
-[RU] Сборщик автономной VR-версии R.E.P.O. для Meta Quest 3 или Pico 4 из вашей копии игры. (Русский текст ниже.)
+[EN] Builds a standalone VR version of R.E.P.O. for Meta Quest 2, Quest 3 or Pico 4 from your own copy of the game.
+[RU] Сборщик автономной VR-версии R.E.P.O. для Meta Quest 2, Quest 3 или Pico 4 из вашей копии игры. (Русский текст ниже.)
 
 
 ENGLISH
 -------
 
 The builder puts together R.E.P.O. with the RepoXR VR mod (by DaXcess, https://github.com/DaXcess/RepoXR) for Meta
-Quest 3 or Pico 4 from your copy of the game on Steam. It all happens on your computer; the game's files are not sent anywhere.
+Quest 2, Quest 3 or Pico 4 from your copy of the game on Steam. It all happens on your computer; the game's files are not sent anywhere.
 Source code, new versions and issues: https://github.com/Dobutsu/repo-quest-vr
 
 You need
 - Windows 10 or 11 (64-bit), 16 GB of RAM (12 at least), about 60 GB of free disk space.
 - R.E.P.O. from Steam, updated to the latest version (the one your friends play).
-- A Meta Quest 3 or a Pico 4 in developer mode and a USB cable to install the game.
+- A Meta Quest 2, Quest 3 or Pico 4 in developer mode and a USB cable to install the game.
 - A free Unity account (once).
 
 How to build
 1. Unzip anywhere and run RepoQuestBuilder.exe.
    If Windows says "Windows protected your PC", click "More info" → "Run anyway".
-2. Check that the builder found the game, or choose the game's folder yourself. Pick your headset: Meta Quest 3
-   (the default) or Pico 4.
+2. Check that the builder found the game, or choose the game's folder yourself. Pick your headset: Meta Quest
+   (the default, for Quest 2, 3 and 3S) or Pico 4.
 3. Click "Build APK" and accept the licenses. The builder downloads Unity and everything else. It also offers to
    exclude its working folder from Windows Defender scanning, which makes builds faster; you can say no.
 4. When asked, sign in to Unity Hub with a free Unity account, then come back to the builder.
@@ -61,21 +61,21 @@ Settings → Developer → USB debugging.
 РУССКИЙ
 -------
 
-Программа собирает R.E.P.O. с VR-модом RepoXR (автор DaXcess, https://github.com/DaXcess/RepoXR) для Meta Quest 3
-или Pico 4 из вашей копии игры в Steam. Сборка идёт на вашем компьютере, файлы игры никуда не отправляются.
+Программа собирает R.E.P.O. с VR-модом RepoXR (автор DaXcess, https://github.com/DaXcess/RepoXR) для Meta Quest 2,
+Quest 3 или Pico 4 из вашей копии игры в Steam. Сборка идёт на вашем компьютере, файлы игры никуда не отправляются.
 Исходный код, новые версии и вопросы: https://github.com/Dobutsu/repo-quest-vr
 
 Что нужно
 - Windows 10 или 11 (64-бит), 16 ГБ памяти (минимум 12), около 60 ГБ свободного места на диске.
 - R.E.P.O. из Steam, обновлённая до последней версии (как у друзей).
-- Meta Quest 3 или Pico 4 в режиме разработчика и USB-кабель для установки.
+- Meta Quest 2, Quest 3 или Pico 4 в режиме разработчика и USB-кабель для установки.
 - Бесплатный аккаунт Unity (понадобится один раз).
 
 Как собрать
 1. Распакуйте архив в любую папку и запустите RepoQuestBuilder.exe.
    Если Windows покажет «Система Windows защитила ваш компьютер», нажмите «Подробнее» → «Выполнить в любом случае».
-2. Проверьте, что программа нашла игру, или укажите папку игры вручную. Выберите шлем: Meta Quest 3 (по умолчанию)
-   или Pico 4.
+2. Проверьте, что программа нашла игру, или укажите папку игры вручную. Выберите шлем: Meta Quest (по умолчанию,
+   для Quest 2, 3 и 3S) или Pico 4.
 3. Нажмите «Собрать APK» и примите лицензии. Программа сама скачает Unity и всё остальное. Ещё она предложит
    исключить свою рабочую папку из проверки Защитником Windows, чтобы сборка шла быстрее; можно отказаться.
 4. Когда программа попросит, войдите в Unity Hub с бесплатным аккаунтом Unity и вернитесь в программу.

@@ -7,7 +7,7 @@ index 9d7efd2..f6ac830 100644
              new AcceptableValueRange<int>(5, 200)));
  
 +    [ConfigDescriptor(customName: "Pixel Lights", stepSize: 1f)]
-+    public ConfigEntry<int> PixelLightCount { get; } = file.Create("Rendering", nameof(PixelLightCount), 3,
++    public ConfigEntry<int> PixelLightCount { get; } = file.Create("Rendering", nameof(PixelLightCount), 1,
 +        new ConfigDescription(
 +            "How many lights can light an object at full quality. Too few and lights compete (a surface darkens when the flashlight comes near); more costs performance. The PC game uses 12.",
 +            new AcceptableValueRange<int>(1, 12)));

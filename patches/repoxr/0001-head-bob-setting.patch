@@ -7,7 +7,7 @@ index 3b36792..9d7efd2 100644
          "When enabled, lowers the severity of force-look events (like the ceiling eye), which can be helpful for people with motion sickness");
  
 +    [ConfigDescriptor(customName: "Head Bob", stepSize: 5f, suffix: "%")]
-+    public ConfigEntry<int> HeadBob { get; } = file.Create("Gameplay", nameof(HeadBob), 25,
++    public ConfigEntry<int> HeadBob { get; } = file.Create("Gameplay", nameof(HeadBob), 0,
 +        new ConfigDescription(
 +            "How much the camera bobs and sways while walking, relative to the game's own camera bob. Lower it if walking makes you feel sick, 0% turns it off.",
 +            new AcceptableValueRange<int>(0, 100)));
@@ -31,7 +31,7 @@ index 5a70acb..68f9528 100644
  
      /// <summary>
 -    /// Reduce camera bobbing by 75%
-+    /// Scale camera bobbing by the Head Bob setting (25% by default). Only the camera offset is scaled: CameraBob also
++    /// Scale camera bobbing by the Head Bob setting (0% by default). Only the camera offset is scaled: CameraBob also
 +    /// drives the footstep sounds, which keep playing
      /// </summary>
      [HarmonyPatch(typeof(CameraBob), nameof(CameraBob.Update))]
