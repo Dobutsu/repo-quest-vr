@@ -17,6 +17,9 @@ namespace RepoQuest.Steam
     /// without .NET 8-only APIs. A ticket is a game connect token (sent by Steam at logon) plus a session header,
     /// registered with Steam through ClientAuthList, followed by the app ownership ticket. Photon validates it with
     /// Steam (REPO's Photon app uses Steam custom authentication).
+    /// With the 3.5.0 fix (SteamKit issue #1567): since 2025-08 Steam does not echo the JobID on repeated auth lists, so
+    /// the ack is matched by the ticket CRCs it lists, and a ticket without an ack is still returned (Photon validates it
+    /// with Steam anyway). Before that the second and later tickets of a logon timed out.
     /// </summary>
     internal sealed class AuthTicketHandler : ClientMsgHandler
     {
@@ -24,8 +27,7 @@ namespace RepoQuest.Steam
 
         private readonly Queue<byte[]> connectTokens = new Queue<byte[]>();
         private readonly Dictionary<uint, List<CMsgAuthTicket>> ticketsByGame = new Dictionary<uint, List<CMsgAuthTicket>>();
-        private readonly Dictionary<ulong, TaskCompletionSource<CMsgClientAuthListAck>> pendingAcks =
-            new Dictionary<ulong, TaskCompletionSource<CMsgClientAuthListAck>>();
+        private readonly Dictionary<uint, TaskCompletionSource<bool>> ackWaiters = new Dictionary<uint, TaskCompletionSource<bool>>();
         private readonly object sync = new object();
         private static int sequence;
 
@@ -38,8 +40,11 @@ namespace RepoQuest.Steam
             }
         }
 
-        /// <summary>Builds and registers a ticket; returns it with the CRC Steam knows it by (for cancelling)</summary>
-        public async Task<(byte[] Ticket, uint Crc)> CreateAsync(uint appId, byte[] ownershipTicket, TimeSpan ackTimeout)
+        /// <summary>
+        /// Builds and registers a ticket; returns it with the CRC Steam knows it by (for cancelling) and whether Steam
+        /// acknowledged it within <paramref name="ackTimeout"/> (an unacknowledged ticket is returned all the same)
+        /// </summary>
+        public async Task<(byte[] Ticket, uint Crc, bool Acknowledged)> CreateAsync(uint appId, byte[] ownershipTicket, TimeSpan ackTimeout)
         {
             byte[] token;
             lock (sync)
@@ -52,21 +57,36 @@ namespace RepoQuest.Steam
             var authTicket = BuildAuthTicket(token);
             var crc = Crc32.Compute(authTicket);
 
+            // The waiter goes in before the auth list is sent, so the ack cannot arrive first
+            var ack = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             lock (sync)
             {
                 if (!ticketsByGame.TryGetValue(appId, out var tickets))
                     ticketsByGame[appId] = tickets = new List<CMsgAuthTicket>();
                 tickets.Add(new CMsgAuthTicket { gameid = appId, ticket = authTicket, ticket_crc = crc });
+                ackWaiters[crc] = ack;
             }
 
-            var ack = SendTickets();
-            var finished = await Task.WhenAny(ack, Task.Delay(ackTimeout)).ConfigureAwait(false);
-            if (finished != ack)
-                throw new TimeoutException("Steam did not acknowledge the auth ticket");
-            if (!ack.Result.ticket_crc.Contains(crc))
-                throw new InvalidOperationException("Steam did not accept the auth ticket");
+            bool acknowledged;
+            try
+            {
+                SendTickets();
+                var finished = await Task.WhenAny(ack.Task, Task.Delay(ackTimeout)).ConfigureAwait(false);
+                acknowledged = finished == ack.Task && ack.Task.Status == TaskStatus.RanToCompletion;
+            }
+            finally
+            {
+                lock (sync)
+                {
+                    if (ackWaiters.TryGetValue(crc, out var waiter) && waiter == ack)
+                        ackWaiters.Remove(crc);
+                }
+            }
 
-            return (Combine(authTicket, ownershipTicket), crc);
+            if (ack.Task.IsCanceled)
+                throw new OperationCanceledException("logged off while waiting for the auth ticket's ack");
+
+            return (Combine(authTicket, ownershipTicket), crc, acknowledged);
         }
 
         public void Cancel(uint appId, uint crc)
@@ -98,14 +118,17 @@ namespace RepoQuest.Steam
                 }
                 case EMsg.ClientAuthListAck:
                 {
-                    var ack = new ClientMsgProtobuf<CMsgClientAuthListAck>(packetMsg);
-                    TaskCompletionSource<CMsgClientAuthListAck> pending;
+                    // Matched by the CRCs Steam lists as active, not by JobID (see the class summary)
+                    var ack = new ClientMsgProtobuf<CMsgClientAuthListAck>(packetMsg).Body;
+                    var acknowledged = new List<TaskCompletionSource<bool>>();
                     lock (sync)
                     {
-                        if (pendingAcks.TryGetValue(ack.TargetJobID, out pending))
-                            pendingAcks.Remove(ack.TargetJobID);
+                        foreach (var crc in ack.ticket_crc)
+                            if (ackWaiters.TryGetValue(crc, out var waiter))
+                                acknowledged.Add(waiter);
                     }
-                    pending?.TrySetResult(ack.Body);
+                    foreach (var waiter in acknowledged)
+                        waiter.TrySetResult(true);
                     break;
                 }
                 case EMsg.ClientLogOff:
@@ -122,16 +145,15 @@ namespace RepoQuest.Steam
             {
                 connectTokens.Clear();
                 ticketsByGame.Clear();
-                foreach (var pending in pendingAcks.Values)
-                    pending.TrySetCanceled();
-                pendingAcks.Clear();
+                foreach (var waiter in ackWaiters.Values)
+                    waiter.TrySetCanceled();
+                ackWaiters.Clear();
             }
         }
 
-        private Task<CMsgClientAuthListAck> SendTickets()
+        private void SendTickets()
         {
             var auth = new ClientMsgProtobuf<CMsgClientAuthList>(EMsg.ClientAuthList);
-            var done = new TaskCompletionSource<CMsgClientAuthListAck>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             lock (sync)
             {
@@ -139,11 +161,9 @@ namespace RepoQuest.Steam
                 auth.Body.app_ids.AddRange(ticketsByGame.Keys);
                 auth.Body.tickets.AddRange(ticketsByGame.Values.SelectMany(t => t));
                 auth.SourceJobID = Client.GetNextJobID();
-                pendingAcks[auth.SourceJobID] = done;
             }
 
             Client.Send(auth);
-            return done.Task;
         }
 
         private static byte[] BuildAuthTicket(byte[] gameConnectToken)

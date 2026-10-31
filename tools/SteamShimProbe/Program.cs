@@ -12,7 +12,8 @@ using ShimUser = Steamworks.SteamUser;
 // Needs a saved QR login (tools/SteamPhotonProbe login) in work/steam-session.json.
 //
 //   status                                 log on, print identity and friends playing R.E.P.O.
-//   ticket                                 auth session ticket -> Photon master server (Steam custom auth)
+//   ticket [--count 1]                     auth session ticket -> Photon master server (Steam custom auth); with
+//                                          --count, that many in a row on one logon (repeated tickets, SteamKit #1567)
 //   join   --friend <name> [--room]        "Join game" on a friend: Steam lobby -> lobby data -> Photon
 //                                          (--room also joins the friend's Photon room, then leaves)
 //   listen [--minutes 5]                   stay online and print incoming messages (to see what an invite looks like)
@@ -68,8 +69,19 @@ try
 
         case "ticket":
         {
-            var outcome = ConnectPhoton(opts.GetValueOrDefault("region", "eu"), GameVersion(), null);
-            return outcome == PhotonProbe.Outcome.ConnectedToMaster ? 0 : 1;
+            var count = int.Parse(opts.GetValueOrDefault("count", "1"));
+            var failed = 0;
+            for (var i = 1; i <= count; i++)
+            {
+                if (count > 1)
+                    Console.WriteLine($"--- ticket {i}/{count}");
+                var started = DateTime.UtcNow;
+                var outcome = ConnectPhoton(opts.GetValueOrDefault("region", "eu"), GameVersion(), null);
+                Console.WriteLine($"    took {(DateTime.UtcNow - started).TotalSeconds:0.0}s");
+                if (outcome != PhotonProbe.Outcome.ConnectedToMaster)
+                    failed++;
+            }
+            return failed == 0 ? 0 : 1;
         }
 
         case "join":

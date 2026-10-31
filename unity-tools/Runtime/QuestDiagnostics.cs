@@ -95,6 +95,26 @@ namespace RepoQuest
         }
 
         /// <summary>
+        /// A request file's lines without comments, the file deleted. A file the game cannot read (adb pushes it owned
+        /// by shell: chmod 666 it) is logged and dropped: the exception would end the poll loop, and every request with it
+        /// </summary>
+        private static System.Collections.Generic.List<string> ReadRequest(string path, string name)
+        {
+            try
+            {
+                var lines = File.ReadAllLines(path).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith("#")).ToList();
+                File.Delete(path);
+                return lines;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[QuestDiagnostics] {name} not read (pushed by adb? chmod 666 it): {e.GetType().Name}: {e.Message}");
+                try { File.Delete(path); } catch (Exception) { /* left for the next poll to report again */ }
+                return new System.Collections.Generic.List<string>();
+            }
+        }
+
+        /// <summary>
         /// files/pp-toggle: switches Post Processing (PostProcessLayer) on every camera off or back on, to see what it
         /// costs and whether a stereo problem comes from it
         /// </summary>
@@ -350,8 +370,7 @@ namespace RepoQuest
         /// </summary>
         private IEnumerator InvokeRequested()
         {
-            var calls = File.ReadAllLines(invokePath).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
-            File.Delete(invokePath);
+            var calls = ReadRequest(invokePath, "invoke");
             foreach (var line in calls)
             {
                 var at = line.IndexOf('@');
@@ -390,9 +409,7 @@ namespace RepoQuest
         /// <summary>files/shader-gallery: the listed prefabs rendered by ShaderGallery into files/gallery/</summary>
         private IEnumerator RunGallery()
         {
-            var paths = File.ReadAllLines(galleryRequestPath).Select(l => l.Trim())
-                .Where(l => l.Length > 0 && !l.StartsWith("#")).ToList();
-            File.Delete(galleryRequestPath);
+            var paths = ReadRequest(galleryRequestPath, "shader-gallery");
             var dir = Path.Combine(Application.persistentDataPath, "gallery");
             if (Directory.Exists(dir))
                 Directory.Delete(dir, true);
@@ -501,8 +518,7 @@ namespace RepoQuest
         private IEnumerator RunCommands()
         {
             commandRunning = true;
-            var lines = File.ReadAllLines(commandPath).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith("#")).ToList();
-            File.Delete(commandPath);
+            var lines = ReadRequest(commandPath, "command");
             foreach (var line in lines)
             {
                 var words = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -621,8 +637,7 @@ namespace RepoQuest
 
         private static void LogInspect(string path)
         {
-            var lines = File.ReadAllLines(path).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
-            File.Delete(path);
+            var lines = ReadRequest(path, "inspect");
             var log = new StringBuilder("[QuestDiagnostics] inspect");
             foreach (var line in lines)
             {

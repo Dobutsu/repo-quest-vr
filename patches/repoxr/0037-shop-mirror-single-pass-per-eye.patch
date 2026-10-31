@@ -1,0 +1,280 @@
+diff --git a/Source/Config.cs b/Source/Config.cs
+index 67b9101..b318092 100644
+--- a/Source/Config.cs
++++ b/Source/Config.cs
+@@ -176,7 +176,15 @@ public class Config(string assemblyPath, ConfigFile file)
+     // Quest port: Patches/Rendering/MirrorPatches.cs
+     [ConfigDescriptor(customName: "Shop Mirror")]
+     public ConfigEntry<bool> ShopMirror { get; } = file.Create("Rendering", nameof(ShopMirror), true,
+-        "Shows the mirror next to the cosmetic machine in the shop. It renders the scene once more for each eye; turn it off for frame rate. With single-pass rendering it stays hidden: one reflection cannot be right for both eyes.");
++        "Shows the mirror next to the cosmetic machine in the shop. It renders the scene once more for each eye; turn it off for frame rate. With single-pass rendering, Shop Mirror Single Pass decides how.");
++
++    // Quest port: Patches/Rendering/MirrorPatches.cs
++    [ConfigDescriptor(customName: "Shop Mirror Single Pass")]
++    public ConfigEntry<ShopMirrorSinglePassOption> ShopMirrorSinglePass { get; } =
++        file.Create("Rendering", nameof(ShopMirrorSinglePass), ShopMirrorSinglePassOption.AlternateEyes,
++            new ConfigDescription(
++                "How the shop mirror reflects with single-pass rendering, where both eyes are drawn at once. AlternateEyes renders one eye's reflection per frame, taking turns (each eye updates at half the frame rate, about the cost of one reflection). BothEyes renders both every frame at half resolution. Hidden turns the mirror off.",
++                new AcceptableValueEnum<ShopMirrorSinglePassOption>()));
+ 
+     [ConfigDescriptor]
+     public ConfigEntry<bool> Vignette { get; } = file.Create("Rendering", nameof(Vignette), true,
+@@ -282,6 +290,13 @@ public class Config(string assemblyPath, ConfigFile file)
+         All
+     }
+ 
++    public enum ShopMirrorSinglePassOption
++    {
++        Hidden,
++        AlternateEyes,
++        BothEyes
++    }
++
+     public enum TurnProviderOption
+     {
+         Snap,
+diff --git a/Source/Patches/Rendering/MirrorPatches.cs b/Source/Patches/Rendering/MirrorPatches.cs
+index 6f3e413..054e191 100644
+--- a/Source/Patches/Rendering/MirrorPatches.cs
++++ b/Source/Patches/Rendering/MirrorPatches.cs
+@@ -14,9 +14,10 @@ namespace RepoXR.Patches.Rendering;
+ /// the camera's position with a symmetric frustum, and its shader samples it at the (flipped) screen position. In a
+ /// headset each eye has its own position and frustum: the reflection was a mess. In multi-pass rendering the mirror is
+ /// now rendered for each eye just before that eye renders, from the eye's reflected position with the eye's own
+-/// (mirrored) projection. In single-pass rendering both eyes share one reflection texture, which cannot be right for
+-/// either of them: the mirror is hidden there, which also saves rendering the scene again (the Quest's default).
+-/// VR Settings → Rendering → Shop Mirror (on by default) hides it too
++/// (mirrored) projection. In single-pass rendering both eyes are drawn at once: each eye's reflection is rendered into
++/// its own texture before the frame (the game's for the left eye, a second one for the right), and the mirror's shader
++/// picks its eye's. VR Settings → Rendering → Shop Mirror Single Pass: one eye per frame, taking turns (the Quest's
++/// default, about the cost of one reflection), both at half resolution, or hidden. Shop Mirror (on by default) hides it
+ /// </summary>
+ [RepoXRPatch]
+ internal static class MirrorPatches
+@@ -38,7 +39,19 @@ internal static class MirrorPatches
+ 
+     // The render mode the game started with (changing it takes a restart)
+     private static readonly bool SinglePass = Plugin.Config.SinglePassRendering.Value;
+-    private static bool Shown => Plugin.Config.ShopMirror.Value && !SinglePass;
++    private static Config.ShopMirrorSinglePassOption SinglePassMode => Plugin.Config.ShopMirrorSinglePass.Value;
++
++    private static bool Shown => Plugin.Config.ShopMirror.Value &&
++                                 (!SinglePass || SinglePassMode != Config.ShopMirrorSinglePassOption.Hidden);
++
++    // Single-pass: the right eye's reflection texture of each mirror (the left eye's is the game's), the textures bound
++    // to the shader's _ReflectionTexRight, the mirrors' own resolution scale, the frame the reflections were rendered in
++    private static readonly int ReflectionTexRight = Shader.PropertyToID("_ReflectionTexRight");
++    private static readonly Dictionary<MirrorReflection, RenderTexture> rightEyeTextures = [];
++    private static readonly Dictionary<MirrorReflection, Texture> rightEyeBound = [];
++    private static readonly Dictionary<MirrorReflection, float> resolutionScales = [];
++    private static readonly MaterialPropertyBlock propertyBlock = new();
++    private static int singlePassFrame = -1;
+ 
+     [HarmonyPatch(typeof(MirrorReflection), nameof(MirrorReflection.OnEnable))]
+     [HarmonyPostfix]
+@@ -50,12 +63,15 @@ internal static class MirrorPatches
+             Camera.onPreRender += OnCameraPreRender;
+             Camera.onPreCull += OnCameraPreCull;
+             Plugin.Config.ShopMirror.SettingChanged += (_, _) => ShowOrHideAll();
++            Plugin.Config.ShopMirrorSinglePass.SettingChanged += (_, _) => ShowOrHideAll();
+             subscribed = true;
+         }
+ 
+         ShowOrHide(__instance);
+         if (!Shown)
+-            Logger.LogInfo($"[Mirror] {__instance.name}: hidden ({(SinglePass ? "single-pass rendering shares one reflection between both eyes" : "VR Settings → Rendering → Shop Mirror is off")})");
++            Logger.LogInfo($"[Mirror] {__instance.name}: hidden (VR Settings → Rendering → {(Plugin.Config.ShopMirror.Value ? "Shop Mirror Single Pass" : "Shop Mirror")})");
++        else if (SinglePass)
++            Logger.LogInfo($"[Mirror] {__instance.name}: single-pass, {SinglePassMode}");
+     }
+ 
+     private static void ShowOrHideAll()
+@@ -77,7 +93,14 @@ internal static class MirrorPatches
+ 
+     [HarmonyPatch(typeof(MirrorReflection), nameof(MirrorReflection.OnDisable))]
+     [HarmonyPostfix]
+-    private static void OnMirrorDisable(MirrorReflection __instance) => mirrors.Remove(__instance);
++    private static void OnMirrorDisable(MirrorReflection __instance)
++    {
++        mirrors.Remove(__instance);
++        rightEyeBound.Remove(__instance);
++        resolutionScales.Remove(__instance);
++        if (rightEyeTextures.Remove(__instance, out var texture) && texture)
++            UnityEngine.Object.Destroy(texture);
++    }
+ 
+     /// <summary>
+     /// The game's own render (once, in the camera's pre-cull) is skipped for a headset camera
+@@ -102,13 +125,15 @@ internal static class MirrorPatches
+ 
+     private static void OnCameraPreCull(Camera camera)
+     {
+-        if (InPreCull)
++        if (SinglePass)
++            RenderSinglePass(camera);
++        else if (InPreCull)
+             RenderForCamera(camera);
+     }
+ 
+     private static void OnCameraPreRender(Camera camera)
+     {
+-        if (!InPreCull)
++        if (!SinglePass && !InPreCull)
+             RenderForCamera(camera);
+     }
+ 
+@@ -136,6 +161,8 @@ internal static class MirrorPatches
+                 try
+                 {
+                     mirror.RenderReflection(camera);
++                    // Each eye reads the texture just rendered for it: the same one for both
++                    BindRightEye(mirror, mirror.reflectionTexture);
+                 }
+                 catch (Exception e)
+                 {
+@@ -157,6 +184,112 @@ internal static class MirrorPatches
+         }
+     }
+ 
++    /// <summary>
++    /// Single-pass: before the headset camera culls, the reflection of one eye (taking turns) or of both. Every stereo
++    /// camera pre-culls (RepoXR's UI camera too): the first one that sees a mirror renders them for the frame
++    /// </summary>
++    private static void RenderSinglePass(Camera camera)
++    {
++        if (!PerEye || !camera || !camera.stereoEnabled || mirrors.Count == 0 || !Shown ||
++            singlePassFrame == Time.frameCount)
++            return;
++
++        var both = SinglePassMode == Config.ShopMirrorSinglePassOption.BothEyes;
++        foreach (var mirror in mirrors)
++        {
++            if (!mirror || !mirror.ShouldRender(camera))
++                continue;
++
++            singlePassFrame = Time.frameCount;
++            ResolutionSet(mirror, both ? 0.5f : 1);
++            if (both || (Time.frameCount & 1) == 0)
++                RenderSinglePassEye(mirror, camera, Camera.StereoscopicEye.Left);
++            if (both || (Time.frameCount & 1) == 1)
++                RenderSinglePassEye(mirror, camera, Camera.StereoscopicEye.Right);
++        }
++    }
++
++    /// <summary>
++    /// The game renders into its reflection texture: for the right eye that is the second texture for the time being.
++    /// Its textures are (re)made first, so that the game never replaces the second one
++    /// </summary>
++    private static void RenderSinglePassEye(MirrorReflection mirror, Camera camera, Camera.StereoscopicEye eye)
++    {
++        if (loggedEyes.Add(eye == Camera.StereoscopicEye.Left ? Camera.MonoOrStereoscopicEye.Left : Camera.MonoOrStereoscopicEye.Right))
++            Logger.LogInfo($"[Mirror] rendering the {eye} eye's reflection, single-pass ({camera.name}, frame {Time.frameCount})");
++
++        currentEye = eye;
++        MirrorReflection.insideRendering = true;
++        RenderTexture? left = null;
++        try
++        {
++            if (eye == Camera.StereoscopicEye.Right)
++            {
++                mirror.EnsureResources();
++                left = mirror.reflectionTexture;
++                mirror.reflectionTexture = RightEyeTexture(mirror, left);
++            }
++
++            mirror.RenderReflection(camera);
++
++            // Until the right eye has its own reflection it shows the left's
++            if (eye == Camera.StereoscopicEye.Left && !rightEyeTextures.ContainsKey(mirror))
++                BindRightEye(mirror, mirror.reflectionTexture);
++        }
++        catch (Exception e)
++        {
++            if (!loggedError)
++            {
++                loggedError = true;
++                Logger.LogWarning($"[Mirror] single-pass reflection failed: {e}");
++            }
++        }
++        finally
++        {
++            if (left)
++                mirror.reflectionTexture = left;
++            MirrorReflection.insideRendering = false;
++            currentEye = null;
++        }
++    }
++
++    private static RenderTexture RightEyeTexture(MirrorReflection mirror, RenderTexture left)
++    {
++        if (!rightEyeTextures.TryGetValue(mirror, out var right) || !right || right.width != left.width ||
++            right.height != left.height || right.depth != left.depth)
++        {
++            if (right)
++                UnityEngine.Object.Destroy(right);
++
++            right = new RenderTexture(left.descriptor) { name = left.name + " right eye", hideFlags = HideFlags.DontSave };
++            rightEyeTextures[mirror] = right;
++        }
++
++        BindRightEye(mirror, right);
++        return right;
++    }
++
++    /// <summary>The mirror's shader reads the right eye's reflection from _ReflectionTexRight</summary>
++    private static void BindRightEye(MirrorReflection mirror, Texture? texture)
++    {
++        var renderer = mirror.mirrorRenderer;
++        if (!renderer || !texture || (rightEyeBound.TryGetValue(mirror, out var bound) && bound == texture))
++            return;
++
++        renderer.GetPropertyBlock(propertyBlock);
++        propertyBlock.SetTexture(ReflectionTexRight, texture);
++        renderer.SetPropertyBlock(propertyBlock);
++        rightEyeBound[mirror] = texture!;
++    }
++
++    /// <summary>Both eyes every frame render at half the mirror's resolution</summary>
++    private static void ResolutionSet(MirrorReflection mirror, float factor)
++    {
++        if (!resolutionScales.TryGetValue(mirror, out var scale))
++            resolutionScales[mirror] = scale = mirror.resolutionScale;
++        mirror.resolutionScale = scale * factor;
++    }
++
+     /// <summary>
+     /// Just before the reflection camera renders, its pose and projection are made the current eye's
+     /// </summary>
+@@ -175,7 +308,7 @@ internal static class MirrorPatches
+ 
+     /// <summary>
+     /// The view and projection the XR display renders this eye with (in multi-pass, render pass 0 is the left eye and
+-    /// pass 1 the right): the camera's stereo matrices can differ from them
++    /// pass 1 the right; in single-pass, one pass with a parameter per eye): the camera's stereo matrices can differ
+     /// </summary>
+     internal static bool EyeFromDisplay(Camera camera, Camera.StereoscopicEye eye, out Matrix4x4 view, out Matrix4x4 projection)
+     {
+@@ -185,14 +318,19 @@ internal static class MirrorPatches
+ 
+         foreach (var display in displays)
+         {
+-            if (display is not { running: true } || display.GetRenderPassCount() < 2)
++            if (display is not { running: true })
++                continue;
++
++            var passes = display.GetRenderPassCount();
++            if (passes < 1)
+                 continue;
+ 
+-            display.GetRenderPass((int)eye, out var pass);
+-            if (pass.GetRenderParameterCount() < 1)
++            display.GetRenderPass(passes >= 2 ? (int)eye : 0, out var pass);
++            var index = passes >= 2 ? 0 : (int)eye;
++            if (pass.GetRenderParameterCount() <= index)
+                 continue;
+ 
+-            pass.GetRenderParameter(camera, 0, out var parameter);
++            pass.GetRenderParameter(camera, index, out var parameter);
+             view = parameter.view;
+             projection = parameter.projection;
+             return true;

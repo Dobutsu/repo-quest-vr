@@ -4,7 +4,8 @@ Shader "Semiwork/Mirror" {
 	// (unity-tools/ShaderOverrides). The shop mirror next to the cosmetic machine (MirrorReflection): the game renders
 	// the reflection into _ReflectionTex (a property block) from a camera at the reflected eye, turned rather than
 	// mirrored, with the eye's frustum (in VR RepoXR's MirrorPatches does it for each eye just before that eye
-	// renders), so the mirror shows the texture at its own screen position, flipped left to right. The generic stand-in
+	// renders; in single-pass, before the frame, the right eye's into _ReflectionTexRight), so the mirror shows its
+	// eye's texture at its own screen position, flipped left to right. The generic stand-in
 	// ignored the texture: a white mirror. Surface normal distortion, a fresnel sheen and grime on top, as the
 	// properties describe; _MirrorDistanceFade (1 when the game stops rendering a far reflection) fades it out
 	SubShader {
@@ -23,6 +24,7 @@ Shader "Semiwork/Mirror" {
 
 			fixed4 _Color;
 			sampler2D _ReflectionTex;
+			sampler2D _ReflectionTexRight;
 			sampler2D _BumpMap;
 			float4 _BumpMap_ST;
 			float _DistortStrength;
@@ -72,13 +74,15 @@ Shader "Semiwork/Mirror" {
 
 			fixed4 frag(v2f i) : SV_Target
 			{
+				UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
 				float grime = tex2D(_GrimeTex, TRANSFORM_TEX(i.uv, _GrimeTex)).r * _GrimeStrength;
 				float2 bump = UnpackNormal(tex2D(_BumpMap, TRANSFORM_TEX(i.uv, _BumpMap))).xy;
 
 				float2 uv = i.screen.xy / i.screen.w;
 				uv.x = 1 - uv.x;
 				uv += bump * (_DistortStrength + grime * _GrimeDistort * 0.05);
-				fixed3 colour = tex2D(_ReflectionTex, uv).rgb * _Color.rgb;
+				// The right eye's reflection: its own texture in single-pass, the same one in multi-pass
+			fixed3 colour = (unity_StereoEyeIndex == 0 ? tex2D(_ReflectionTex, uv) : tex2D(_ReflectionTexRight, uv)).rgb * _Color.rgb;
 				colour = lerp(colour, colour * 0.15, saturate(_MirrorDistanceFade));
 
 				float facing = saturate(dot(normalize(i.normal), normalize(i.view)));

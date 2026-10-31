@@ -43,6 +43,11 @@ namespace RepoQuest.Steam
 
         private static readonly TimeSpan LogOnWait = TimeSpan.FromSeconds(8);
         private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(15);
+        /// <summary>
+        /// How long GetAuthSessionTicket (synchronous, on the game's thread) waits for Steam's ack before returning the
+        /// ticket anyway. An ack normally comes in well under a second; Steam may skip it for a repeated auth list
+        /// </summary>
+        private static readonly TimeSpan TicketAckTimeout = TimeSpan.FromSeconds(5);
         private const string MachineName = "RepoXR Quest";
 
         private readonly SessionStore session;
@@ -280,7 +285,7 @@ namespace RepoQuest.Steam
                 tickets.Cancel(appId, handle);
         }
 
-        private async Task<(byte[] Ticket, uint Crc)> CreateTicketAsync()
+        private async Task<(byte[] Ticket, uint Crc, bool Acknowledged)> CreateTicketAsync()
         {
             if (!await WaitLoggedOnAsync().ConfigureAwait(false))
                 throw new InvalidOperationException("not logged on to Steam");
@@ -293,7 +298,10 @@ namespace RepoQuest.Steam
                 ownershipTicket = owned.Ticket;
             }
 
-            return await tickets.CreateAsync(appId, ownershipTicket, RequestTimeout).ConfigureAwait(false);
+            var ticket = await tickets.CreateAsync(appId, ownershipTicket, TicketAckTimeout).ConfigureAwait(false);
+            if (!ticket.Acknowledged)
+                Log($"[Steam] auth ticket {ticket.Crc:x8} not acknowledged by Steam in {TicketAckTimeout.TotalSeconds:0}s, using it anyway");
+            return ticket;
         }
 
         // --- Lobbies ----------------------------------------------------------------------------------------------------
