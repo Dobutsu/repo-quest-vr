@@ -81,7 +81,7 @@ Cli.
    Technologies" Authenticode signature.
 2. Hub is installed silently (`/S`); Windows asks for UAC.
 3. The editor is installed with
-   `Unity Hub -- --headless install --version 2022.3.62f3 --changeset 96770f904ca7 --module android android-sdk-ndk-tools android-open-jdk`.
+   `Unity Hub -- --headless install --version 6000.3.17f1 --changeset cf0352b38e81 --module android android-sdk-ndk-tools android-open-jdk`.
 
 A Personal license cannot be obtained from the command line: the player signs in to Unity Hub once. The program checks
 the `UnityEntitlementLicense.xml` file, and if Unity refuses to work anyway, it recognizes that in the log and shows the

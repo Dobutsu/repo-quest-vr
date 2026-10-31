@@ -1,8 +1,8 @@
 {
   "version": "dev",
   "unity": {
-    "version": "2022.3.62f3",
-    "changeset": "96770f904ca7"
+    "version": "6000.3.17f1",
+    "changeset": "cf0352b38e81"
   },
   "python": "3.13",
   "downloads": {
@@ -67,9 +67,9 @@
       }
     ],
     "builtinShaders": {
-      "version": "2022.3.62f3",
-      "url": "https://download.unity3d.com/download_unity/96770f904ca7/builtin_shaders-2022.3.62f3.zip",
-      "sha256": "e2f98242a6ca7edc2c581e761ab7cc0dc6feca6572d0c1ab765e4d6a9adb9a31"
+      "version": "6000.3.17f1",
+      "url": "https://download.unity3d.com/download_unity/cf0352b38e81/builtin_shaders-6000.3.17f1.zip",
+      "sha256": "76820c92624489c1cfb2e8eb01cf5d63702b44834b6e7ad03b2339f56f59f868"
     },
     "java": {
       "version": "17.0.20.1+1",
@@ -96,8 +96,8 @@
   },
   "testedGames": [
     {
-      "name": "v0.4.4.3",
-      "assemblyCSharp": "ce995a182ddc884ea965e87786f1986248d9616300fa825bcc04bca671ee6526"
+      "name": "v0.5.0",
+      "assemblyCSharp": "aa6b1ce0deef8d2b7104a3722864c4ba94c107257726471f8e44b45c99e36888"
     }
   ]
 }

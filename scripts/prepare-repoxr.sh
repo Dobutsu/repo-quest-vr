@@ -14,6 +14,11 @@
 #                                         the menus' deferred player previews render forward, where the lamps are
 #   0008-focus-sphere-hidden-when-faded  the focus sphere's renderer is off while it is fully faded: its GrabPass copied
 #                                        the whole frame every frame (Pico 4 Ultra: 85 -> 14 FPS in the levels)
+#   0009-repo-v0.5.0  R.E.P.O. v0.5.0 (the Sunstone update): new overloads, renamed input keys, the text input pop-up,
+#                     menus clicked through InputKey.UIClick, InputGlyphs tags, the grab toggle, vehicles and the bike,
+#                     the binary Addressables catalog (catalog_0.1.bin), the hover area in world space menus, the
+#                     popups scaled with a Vector2 (z 0: their text drew as solid blocks in VR)
+# Built against the game in work/game (RepoXR's tester mode): the REPO package on DaXcess' feed stops at 0.4.4
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -24,9 +29,11 @@ dotnet="${DOTNET:-$HOME/.dotnet/dotnet}"
 mkdir -p "$src"
 rsync -a --delete --exclude .git --exclude bin --exclude obj "$root/external/RepoXR/" "$src/"
 for patch in "$root"/patches/repoxr/*.patch; do
-    patch -p1 --forward --silent -d "$src" < "$patch" || { echo "patch failed: $(basename "$patch")" >&2; exit 1; }
+    # -E: a patch that deletes a file leaves it empty otherwise
+    patch -p1 -E --forward --silent -d "$src" < "$patch" || { echo "patch failed: $(basename "$patch")" >&2; exit 1; }
     echo "applied $(basename "$patch")"
 done
 
-"$dotnet" build -c Release "$src/RepoXR.csproj" -v quiet -nologo >/dev/null
+"$dotnet" build -c Release "$src/RepoXR.csproj" -v quiet -nologo -p:USE_TESTER=true \
+    "-p:TesterGamePath=$root/work/game" >/dev/null
 echo "RepoXR built: $src/bin/Release/netstandard2.1/RepoXR.dll"

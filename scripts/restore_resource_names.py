@@ -6,7 +6,7 @@ Resources.Load(path). AssetRipper sanitizes some characters in file names (a com
 missing for the joining player. The game's ResourceManager lists every Resources path; each GameObject entry with no
 matching file in the project is matched to the one file in the same folder whose name differs only in punctuation,
 and that file (with its .meta, so the GUID stays) is renamed back. Other entries (MonoScripts the original project
-kept in Resources folders) are not loadable assets and are skipped.
+kept in Resources folders) are not loadable assets and are skipped, as are entries whose object is not in the build.
 
 Usage: python scripts/restore_resource_names.py <REPO_Data> <project>
 """
@@ -49,7 +49,8 @@ def main():
 
     renamed = unresolved = 0
     for path, pptr in entries:
-        if path in known:
+        # v0.5.0 lists one path whose object is not in the build ("semitentacle shading"): nothing to load
+        if path in known or pptr.m_PathID == 0:
             continue
         target_obj = pptr.deref()
         if target_obj.type.name != "GameObject":

@@ -68,6 +68,7 @@ public sealed partial class UnityBuildStep : BuildStep
             .. options.Profiling ? new[] { "-profiling" } : [],
             "-logFile", buildLog,
         ];
+        QuoteSdkManagerPaths(unity);
         var started = DateTime.UtcNow;
         await RunUnityAsync(context, unity, build, buildLog,
             new BuildProgress(this, context, ExpectedBuildTime(context.State, freshLibrary)), ct);
@@ -91,6 +92,31 @@ public sealed partial class UnityBuildStep : BuildStep
         state.LastApkGame = context.Game.AssemblyHash();
         state.LastApkTime = DateTime.Now;
         context.SaveState();
+    }
+
+    /// <summary>
+    /// The Android build lists SDK components with sdkmanager, whose shell script (cmdline-tools 16.0) leaves its own
+    /// folder unquoted: from an editor in a folder with a space ("/Volumes/Time Machine/...") java takes the rest of
+    /// the path for its main class and the build stops at "Failed to update Android SDK package list". The Windows .bat
+    /// quotes it already
+    /// </summary>
+    private static void QuoteSdkManagerPaths(UnityInstall unity)
+    {
+        var tools = Path.Combine(unity.AndroidPlayer, "SDK", "cmdline-tools");
+        if (Platform.IsWindows || !Directory.Exists(tools))
+            return;
+        foreach (var script in Directory.EnumerateFiles(tools, "sdkmanager", SearchOption.AllDirectories))
+        {
+            var text = File.ReadAllText(script);
+            var quoted = text
+                .Replace("DEFAULT_JVM_OPTS='-Dcom.android.sdklib.toolsdir=$APP_HOME'",
+                    "DEFAULT_JVM_OPTS='\"-Dcom.android.sdklib.toolsdir=$APP_HOME\"'")
+                .Replace("$($JAVACMD -version", "$(\"$JAVACMD\" -version");
+            if (quoted == text)
+                continue;
+            File.WriteAllText(script, quoted);
+            Log.Info($"quoted the paths in {script}");
+        }
     }
 
     /// <summary>Assets that use game scripts (prefabs, assets, controllers referencing REPO.Game*.dll)</summary>
@@ -223,7 +249,7 @@ public sealed partial class UnityBuildStep : BuildStep
                         l.Contains("Exception", StringComparison.Ordinal))
             .TakeLast(40));
         var details = $"{logFile}\n{errors}";
-        if (Regex.IsMatch(log, @"No valid Unity Editor license|License is not active|Licensing::Module.*(?:error|failed)|Unity Editor license.*not found", RegexOptions.IgnoreCase))
+        if (Regex.IsMatch(log, @"No valid Unity Editor license|License is not active|Licensing::Module(?!.*Access token is unavailable).*(?:error|failed)|Unity Editor license.*not found", RegexOptions.IgnoreCase))
             return new BuildException("Unity has no license: sign in to Unity Hub and add a free Personal license", details) { Code = "unity-license" };
         if (Regex.IsMatch(log, @"No space left on device|There is not enough space on the disk|ERROR_DISK_FULL", RegexOptions.IgnoreCase))
             return new BuildException("The disk is full", details) { Code = "disk-full" };

@@ -36,8 +36,9 @@ public sealed partial class ExportStep : BuildStep
         Hashing.Combine(Id, context.Game.DataFingerprint(), context.Kit.Manifest.Downloads.AssetRipper.Version,
             string.Join(';', Settings.Select(s => $"{s.Key}={s.Value}")));
 
+    // Not ProjectSettings.asset: AssetRipper 2.0.0 cannot read 6000.3.17's PlayerSettings and leaves it out (ProjectStep)
     public override bool ResultExists(BuildContext context) =>
-        File.Exists(Path.Combine(context.Workspace.ExportedProject, "ProjectSettings", "ProjectSettings.asset"));
+        File.Exists(Path.Combine(context.Workspace.ExportedProject, "ProjectSettings", "ProjectVersion.txt"));
 
     public override async Task RunAsync(BuildContext context, CancellationToken ct)
     {

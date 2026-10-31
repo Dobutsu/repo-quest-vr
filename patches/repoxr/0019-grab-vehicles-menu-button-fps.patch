@@ -1,0 +1,491 @@
+diff --git a/Source/Config.cs b/Source/Config.cs
+index 3dc9197..3240055 100644
+--- a/Source/Config.cs
++++ b/Source/Config.cs
+@@ -156,6 +156,11 @@ public class Config(string assemblyPath, ConfigFile file)
+     public ConfigEntry<bool> PostProcessing { get; } = file.Create("Rendering", nameof(PostProcessing), false,
+         "The game's post-processing: color grading, vignette, grain and the other screen effects. Off gives a brighter image and saves about 5 ms of GPU time per frame on Quest.");
+ 
++    // Quest port: Rendering/FpsCounter.cs
++    [ConfigDescriptor(customName: "FPS Counter")]
++    public ConfigEntry<bool> ShowFPS { get; } = file.Create("Rendering", nameof(ShowFPS), false,
++        "Shows the frame rate low in the left of your view: frames per second, the average frame time and the slowest frame of the last half second (and the CPU and GPU times when the headset reports them). Quest 3 runs the game at 72 FPS: green at 68 and above, yellow from 50, red below.");
++
+     [ConfigDescriptor]
+     public ConfigEntry<bool> Vignette { get; } = file.Create("Rendering", nameof(Vignette), true,
+         "Enables the vignette shader used in certain scenarios and levels in the game.");
+@@ -211,6 +216,7 @@ public class Config(string assemblyPath, ConfigFile file)
+         PostProcessing.SettingChanged += (_, _) => Rendering.PostProcessingSetting.Update();
+         OtherFlashlightShadows.SettingChanged += (_, _) => Rendering.FlashlightShadows.Update();
+         Rendering.LampLighting.Create();
++        Rendering.FpsCounter.Create();
+ 
+         CameraResolution.SettingChanged += (_, _) =>
+         {
+diff --git a/Source/Input/VRInputSystem.cs b/Source/Input/VRInputSystem.cs
+index 5c21627..98a8bf7 100644
+--- a/Source/Input/VRInputSystem.cs
++++ b/Source/Input/VRInputSystem.cs
+@@ -26,6 +26,8 @@ public class VRInputSystem : MonoBehaviour
+     {
+         _instance = this;
+ 
++        ApplyPortDefaults(AssetCollection.VRInputs);
++
+         playerInput = gameObject.AddComponent<PlayerInput>();
+         playerInput.actions = AssetCollection.VRInputs;
+         playerInput.defaultActionMap = "VR Actions";
+@@ -36,6 +38,7 @@ public class VRInputSystem : MonoBehaviour
+         if (VRSession.IsLeftHanded)
+         {
+             playerInput.actions.LoadBindingOverridesFromJson(AssetCollection.RemappableControls.defaultLeftHandedBindings);
++            ApplyPortLeftHandedDefaults(playerInput.actions);
+             playerInput.actions.LoadBindingOverridesFromJson(Plugin.Config.ControllerBindingsOverrideLeft.Value, false);
+         }
+         else
+@@ -47,6 +50,51 @@ public class VRInputSystem : MonoBehaviour
+             JsonConvert.DeserializeObject<Dictionary<string, bool>>(Plugin.Config.InputToggleBindings.Value) ?? [];
+     }
+ 
++    private const string MenuButton = "<XRController>{LeftHand}/{MenuButton}";
++
++    /// <summary>
++    /// Quest port defaults: the pause menu moves to the menu button of the left controller (≡), which nothing used,
++    /// and the X button it frees mutes the microphone (ToggleMute, unbound in RepoXR). These change the default
++    /// bindings, so bindings changed in Settings → Controls still win, and resetting a control comes back to these
++    /// </summary>
++    private static void ApplyPortDefaults(InputActionAsset actions)
++    {
++        try
++        {
++            ChangeFirstBinding(actions.FindAction("Menu"), MenuButton);
++            ChangeFirstBinding(actions.FindAction("ToggleMute"), "<XRController>{LeftHand}/primaryButton");
++        }
++        catch (Exception e)
++        {
++            Logger.LogWarning($"Could not apply the Quest port's default bindings: {e}");
++        }
++    }
++
++    /// <summary>
++    /// RepoXR's left-handed defaults mirror the controllers and put the menu on the right A button: the menu button
++    /// only exists on the left controller, so it stays there, and A mutes
++    /// </summary>
++    private static void ApplyPortLeftHandedDefaults(InputActionAsset actions)
++    {
++        try
++        {
++            actions.FindAction("Menu")?.ApplyBindingOverride(0, MenuButton);
++            actions.FindAction("ToggleMute")?.ApplyBindingOverride(0, "<XRController>{RightHand}/primaryButton");
++        }
++        catch (Exception e)
++        {
++            Logger.LogWarning($"Could not apply the Quest port's left-handed bindings: {e}");
++        }
++    }
++
++    private static void ChangeFirstBinding(InputAction? action, string path)
++    {
++        if (action == null || action.bindings.Count == 0 || action.bindings[0].path == path)
++            return;
++
++        action.ChangeBinding(0).WithPath(path);
++    }
++
+     private void OnEnable()
+     {
+         playerInput.actions["Chat"].performed += ChatPerformed;
+@@ -182,6 +230,11 @@ public class VRInputSystem : MonoBehaviour
+                 return control.defaultToggle;
+             }
+ 
++        // R.E.P.O. 0.5.0: holding on to a vehicle has its own toggle, on in the game by default (one press gets on, the
++        // next one gets off); the VR actions have no key for it, it rides on Grab
++        if (action == "VehicleGrab")
++            return true;
++
+         // If all else fails: default to hold
+         return false;
+     }
+@@ -199,6 +252,7 @@ public class VRInputSystem : MonoBehaviour
+         if (VRSession.IsLeftHanded)
+         {
+             playerInput.actions.LoadBindingOverridesFromJson(AssetCollection.RemappableControls.defaultLeftHandedBindings);
++            ApplyPortLeftHandedDefaults(playerInput.actions);
+             playerInput.actions.LoadBindingOverridesFromJson(Plugin.Config.ControllerBindingsOverrideLeft.Value, false);
+         }
+         else
+diff --git a/Source/Patches/InputPatches.cs b/Source/Patches/InputPatches.cs
+index f01105b..7d89818 100644
+--- a/Source/Patches/InputPatches.cs
++++ b/Source/Patches/InputPatches.cs
+@@ -63,17 +63,138 @@ internal static class InputPatches
+         {
+             __result = (int)key >= bindings
+                 ? AssetCollection.RemappableControls.additionalBindings[(int)key - bindings]
+-                : Actions.Instance[key.ToString()];
++                : VRActionFor(key);
+ 
+-            return false;
++            // If no key was found, fall back to vanilla keybind (likely won't work with VR controllers though)
++            return __result == null;
+         }
+         catch
+         {
+-            // If no key was found, fall back to vanilla keybind (likely won't work with VR controllers though)
+             return true;
+         }
+     }
+ 
++    private static InputActionAsset cachedActions;
++    private static readonly Dictionary<InputKey, InputAction> VRActions = new();
++
++    /// <summary>
++    /// The VR action for a game key, or null. R.E.P.O. 0.5.0 added keys the VR actions do not have (vehicles, the
++    /// expression wheel, UI navigation...): these used to throw on every call (the asset's indexer), which is slow
++    /// under IL2CPP and happened every frame while driving; now they are looked up once
++    /// </summary>
++    private static InputAction VRActionFor(InputKey key)
++    {
++        var actions = VRInputSystem.Instance.Actions;
++        if (actions != cachedActions)
++        {
++            cachedActions = actions;
++            VRActions.Clear();
++        }
++
++        if (VRActions.TryGetValue(key, out var action))
++            return action;
++
++        var name = key switch
++        {
++            // Holding on to a vehicle (scooter, snow bike) is the grab beam
++            InputKey.VehicleGrab => "Grab",
++            _ => key.ToString(),
++        };
++
++        return VRActions[key] = actions.FindAction(name);
++    }
++
++    /// <summary>
++    /// R.E.P.O. 0.5.0 vehicle keys (keyboard W/S/A/D by default) on the movement stick
++    /// </summary>
++    private static class VehicleStick
++    {
++        private static int frame = -1;
++        private static int held, previous;
++
++        private static int Bit(InputKey key) => key switch
++        {
++            InputKey.VehicleAccelerate => 1,
++            InputKey.VehicleBrake => 2,
++            InputKey.VehicleDriftLeft => 4,
++            InputKey.VehicleDriftRight => 8,
++            _ => 0,
++        };
++
++        public static bool Handles(InputKey key) => Bit(key) != 0;
++
++        private static void Update()
++        {
++            if (frame == Time.frameCount)
++                return;
++
++            frame = Time.frameCount;
++            previous = held;
++
++            var stick = Actions.Instance["Movement"].ReadValue<Vector2>();
++            held = (stick.y > 0.5f ? 1 : 0) | (stick.y < -0.5f ? 2 : 0) | (stick.x < -0.5f ? 4 : 0) |
++                   (stick.x > 0.5f ? 8 : 0);
++        }
++
++        public static bool Held(InputKey key)
++        {
++            Update();
++            return (held & Bit(key)) != 0;
++        }
++
++        public static bool Down(InputKey key)
++        {
++            Update();
++            return (held & Bit(key)) != 0 && (previous & Bit(key)) == 0;
++        }
++
++        public static bool Up(InputKey key)
++        {
++            Update();
++            return (held & Bit(key)) == 0 && (previous & Bit(key)) != 0;
++        }
++    }
++
++    /// <summary>
++    /// R.E.P.O. 0.5.0: the snow bike's throttle and steering (VehicleThrottleGet/VehicleSteeringGet, W-S and D-A on a
++    /// keyboard) follow the movement stick, analog
++    /// </summary>
++    [HarmonyPatch(typeof(InputManager), nameof(InputManager.VehicleThrottleGet))]
++    [HarmonyPrefix]
++    private static bool VehicleThrottleGet(InputManager __instance, ref float __result)
++    {
++        __result = __instance.VehicleInputAllowed() ? Actions.Instance["Movement"].ReadValue<Vector2>().y : 0;
++        return false;
++    }
++
++    [HarmonyPatch(typeof(InputManager), nameof(InputManager.VehicleSteeringGet))]
++    [HarmonyPrefix]
++    private static bool VehicleSteeringGet(InputManager __instance, ref float __result)
++    {
++        __result = __instance.VehicleInputAllowed() ? Actions.Instance["Movement"].ReadValue<Vector2>().x : 0;
++        return false;
++    }
++
++    /// <summary>
++    /// R.E.P.O. 0.5.0 lets vehicles (snow bike, golf cart) take input only while the game's own Player action map is
++    /// enabled; in VR the controls come from RepoXR's PlayerInput, so that map says nothing about them. The other
++    /// checks stay
++    /// </summary>
++    [HarmonyPatch(typeof(InputManager), nameof(InputManager.VehicleInputAllowed))]
++    [HarmonyPrefix]
++    private static bool VehicleInputAllowed(InputManager __instance, ref bool __result)
++    {
++        __result = Application.isFocused && SemiFunc.NoTextInputsActive() &&
++                   __instance.disableMovementTimer <= 0 &&
++                   !(GameDirector.instance && GameDirector.instance.DisableInput) &&
++                   !(PlayerController.instance && PlayerController.instance.InputDisableTimer > 0) &&
++                   !(__instance.disableControlsExceptTimer > 0 && (__instance.disableControlsExceptList == null ||
++                                                                   !__instance.disableControlsExceptList.Contains(InputKey.Movement))) &&
++                   !(__instance.disableControlsIncludeTimer > 0 && __instance.disableControlsIncludeList != null &&
++                     __instance.disableControlsIncludeList.Contains(InputKey.Movement));
++        return false;
++    }
++
+     [HarmonyPatch(typeof(InputManager), nameof(InputManager.GetMovement))]
+     [HarmonyPrefix]
+     private static bool GetMovement(InputManager __instance, ref Vector2 __result)
+@@ -165,6 +286,10 @@ internal static class InputPatches
+                 __result = false;
+                 return false;
+ 
++            case var vehicle when VehicleStick.Handles(vehicle):
++                __result = VehicleStick.Down(vehicle);
++                return false;
++
+             default:
+                 __result = __instance.GetAction(key).WasPressedThisFrame();
+                 return false;
+@@ -190,6 +315,12 @@ internal static class InputPatches
+             return false;
+         }
+ 
++        if (VehicleStick.Handles(key))
++        {
++            __result = VehicleStick.Up(key);
++            return false;
++        }
++
+         __result = __instance.GetAction(key).WasReleasedThisFrame();
+ 
+         return false;
+@@ -211,6 +342,12 @@ internal static class InputPatches
+             return false;
+         }
+ 
++        if (VehicleStick.Handles(key))
++        {
++            __result = VehicleStick.Held(key);
++            return false;
++        }
++
+         __result = __instance.GetAction(key).IsPressed();
+ 
+         return false;
+diff --git a/Source/Patches/PhysGrabberPatches.cs b/Source/Patches/PhysGrabberPatches.cs
+index 10d6940..b5c05bf 100644
+--- a/Source/Patches/PhysGrabberPatches.cs
++++ b/Source/Patches/PhysGrabberPatches.cs
+@@ -175,15 +175,25 @@ internal static class PhysGrabberPatches
+     /// <summary>
+     /// Make sure the force grab timer also works in VR, where the grab key is the same as the "take from inventory" key
+     /// </summary>
+-    [HarmonyPatch(typeof(PhysGrabber), nameof(PhysGrabber.Update))]
++    // R.E.P.O. 0.5.0 moved the toggle-grab release (`if (toggleGrab && !(mountedVehicleGrab || grabHeld) &&
++    // !GameplayManager.instance.itemUnequipAutoHold) toggleGrab = false`) out of PhysGrabber.Update into
++    // GrabInputActiveGet(grabHeld, grabDown, ...). Matched against Update, the anchor was missing and the old Advance(-2)
++    // put the call into Update's grabDisableTimer countdown instead, which then never reached 0: grabbing stayed disabled.
++    // Here grabHeld (ldarg.1) goes through ShouldToggleGrabOff, as it did in Update before.
++    [HarmonyPatch(typeof(PhysGrabber), nameof(PhysGrabber.GrabInputActiveGet))]
+     [HarmonyTranspiler]
+     private static IEnumerable<CodeInstruction> ForceHoldPatch(IEnumerable<CodeInstruction> instructions)
+     {
+         return new CodeMatcher(instructions)
+             .MatchForward(false,
++                new CodeMatch(OpCodes.Ldarg_1),
++                new CodeMatch(OpCodes.Or),
++                new CodeMatch(i => i.opcode == OpCodes.Brtrue || i.opcode == OpCodes.Brtrue_S),
++                new CodeMatch(OpCodes.Ldsfld, Field(typeof(GameplayManager), nameof(GameplayManager.instance))),
+                 new CodeMatch(OpCodes.Ldfld,
+                     Field(typeof(GameplayManager), nameof(GameplayManager.itemUnequipAutoHold))))
+-            .Advance(-2)
++            .ThrowIfInvalid("PhysGrabber.GrabInputActiveGet: toggle-grab release not found")
++            .Advance(1)
+             .InsertAndAdvance(
+                 new CodeInstruction(OpCodes.Ldarg_0),
+                 new CodeInstruction(OpCodes.Ldfld, Field(typeof(PhysGrabber), nameof(PhysGrabber.overrideGrabTimer))),
+diff --git a/Source/Rendering/FpsCounter.cs b/Source/Rendering/FpsCounter.cs
+new file mode 100644
+index 0000000..4e48d51
+--- /dev/null
++++ b/Source/Rendering/FpsCounter.cs
+@@ -0,0 +1,153 @@
++using UnityEngine;
++using UnityEngine.UI;
++
++namespace RepoXR.Rendering;
++
++/// <summary>
++/// Quest port: frame rate readout (VR Settings → Rendering → FPS Counter). A small panel low in the left of the view,
++/// half a second averages: frames per second, the average frame time and the slowest frame. Frame times are read
++/// with Time.unscaledDeltaTime, so they include waiting for the compositor; when Unity's frame timing stats are
++/// available, the CPU and GPU times are shown as well.
++/// </summary>
++internal class FpsCounter : MonoBehaviour
++{
++    private const float Interval = 0.5f;
++
++    private Canvas canvas = null!;
++    private Text text = null!;
++    private Image background = null!;
++
++    private int frames;
++    private float elapsed, worst;
++    private readonly FrameTiming[] timings = new FrameTiming[1];
++
++    public static void Create()
++    {
++        var host = new GameObject("RepoXR FPS Counter");
++        DontDestroyOnLoad(host);
++        host.AddComponent<FpsCounter>();
++    }
++
++    private void Awake()
++    {
++        canvas = gameObject.AddComponent<Canvas>();
++        canvas.renderMode = RenderMode.WorldSpace;
++        canvas.sortingOrder = short.MaxValue;
++
++        var rect = (RectTransform)transform;
++        rect.sizeDelta = new Vector2(300, 48);
++        rect.localScale = Vector3.one * 0.001f; // 1 unit = 1 mm
++
++        var panel = new GameObject("Background", typeof(RectTransform));
++        panel.transform.SetParent(transform, false);
++        background = panel.AddComponent<Image>();
++        background.color = new Color(0, 0, 0, 0.55f);
++        background.raycastTarget = false;
++        Stretch((RectTransform)panel.transform);
++
++        var label = new GameObject("Text", typeof(RectTransform));
++        label.transform.SetParent(transform, false);
++        text = label.AddComponent<Text>();
++        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
++        text.fontSize = 22;
++        text.alignment = TextAnchor.MiddleCenter;
++        text.horizontalOverflow = HorizontalWrapMode.Overflow;
++        text.verticalOverflow = VerticalWrapMode.Overflow;
++        text.raycastTarget = false;
++        text.text = "-- FPS";
++        Stretch((RectTransform)label.transform);
++
++        Show(false);
++    }
++
++    private static void Stretch(RectTransform rect)
++    {
++        rect.anchorMin = Vector2.zero;
++        rect.anchorMax = Vector2.one;
++        rect.offsetMin = Vector2.zero;
++        rect.offsetMax = Vector2.zero;
++    }
++
++    private void OnEnable() => Application.onBeforeRender += Follow;
++
++    private void OnDisable() => Application.onBeforeRender -= Follow;
++
++    private void Show(bool show)
++    {
++        if (canvas.enabled != show)
++            canvas.enabled = show;
++    }
++
++    private void Update()
++    {
++        if (!Plugin.Config.ShowFPS.Value)
++        {
++            Show(false);
++            frames = 0;
++            elapsed = worst = 0;
++            return;
++        }
++
++        var dt = Time.unscaledDeltaTime;
++        frames++;
++        elapsed += dt;
++        if (dt > worst)
++            worst = dt;
++
++        FrameTimingManager.CaptureFrameTimings();
++
++        if (elapsed < Interval)
++            return;
++
++        var fps = frames / elapsed;
++        var line = $"{fps:0} FPS  {elapsed * 1000 / frames:0.0} ms  max {worst * 1000:0}";
++        if (FrameTimingManager.GetLatestTimings(1, timings) > 0 && timings[0].cpuFrameTime > 0)
++            line += $"\nCPU {timings[0].cpuFrameTime:0.0}  GPU {(timings[0].gpuFrameTime > 0 ? timings[0].gpuFrameTime.ToString("0.0") : "-")} ms";
++
++        text.text = line;
++        text.color = fps >= 68 ? new Color(0.5f, 1, 0.5f) : fps >= 50 ? new Color(1, 0.9f, 0.4f) : new Color(1, 0.45f, 0.4f);
++        ((RectTransform)transform).sizeDelta = new Vector2(300, line.Contains('\n') ? 76 : 48);
++
++        frames = 0;
++        elapsed = worst = 0;
++    }
++
++    /// <summary>Right before rendering, with this frame's head pose: below and left of the center of the view</summary>
++    private void Follow()
++    {
++        if (!Plugin.Config.ShowFPS.Value)
++            return;
++
++        var camera = Camera.main;
++        if (camera == null)
++        {
++            Show(false);
++            return;
++        }
++
++        var head = camera.transform;
++        transform.SetPositionAndRotation(head.position + head.rotation * new Vector3(-0.17f, -0.2f, 0.8f),
++            head.rotation);
++        var layer = LayerFor(camera);
++        if (gameObject.layer != layer)
++            SetLayer(transform, layer);
++        Show(true);
++    }
++
++    /// <summary>A layer the camera draws: its own, else UI, else Default</summary>
++    private static int LayerFor(Camera camera)
++    {
++        foreach (var layer in new[] { camera.gameObject.layer, 5, 0 })
++            if ((camera.cullingMask & (1 << layer)) != 0)
++                return layer;
++
++        return camera.gameObject.layer;
++    }
++
++    private static void SetLayer(Transform root, int layer)
++    {
++        root.gameObject.layer = layer;
++        foreach (Transform child in root)
++            SetLayer(child, layer);
++    }
++}

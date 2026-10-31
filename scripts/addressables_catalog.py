@@ -1,9 +1,11 @@
-"""Decode a built Addressables content catalog (catalog.json) into the entries an editor would need to rebuild it.
+"""Decode a built Addressables content catalog into the entries an editor would need to rebuild it.
 
 The AssetRipper export has the addressable assets but not the editor-only AddressableAssetSettings/groups. The player
 catalog still records, per asset: its bundle, its address and labels. Output (JSON list):
   {"path": "Assets/...", "bundle": "<bundle file>", "address": "...", "labels": [...], "guid": "<original GUID>"}
-Usage: python scripts/addressables_catalog.py <catalog.json> [--out entries.json]
+The catalog is catalog.json (Addressables 1.x, R.E.P.O. up to v0.4.4) or catalog.bin (Addressables 2.x, since v0.5.0;
+a catalog.json left over from an older install sits next to it, so settings.json says which one the game loads).
+Usage: python scripts/addressables_catalog.py <catalog.json | catalog.bin | aa folder> [--out entries.json]
 """
 
 import argparse
@@ -12,6 +14,7 @@ import json
 import re
 import struct
 import sys
+from pathlib import Path
 
 GUID_KEY = re.compile(r"^[0-9a-f]{32}$")
 
@@ -96,13 +99,127 @@ def decode(catalog: dict) -> list[dict]:
     return list(unique.values())
 
 
+class BinaryCatalog:
+    """Addressables 2.x catalog.bin (BinaryStorageBuffer, ContentCatalogData.ResourceLocator in the package). Values are
+    referenced by byte offset; arrays keep their byte size in the 4 bytes before the offset; uint.MaxValue is null."""
+
+    NULL = 0xFFFFFFFF
+    UNICODE = 0x80000000
+    DYNAMIC = 0x40000000
+    OFFSET_MASK = 0x3FFFFFFF
+
+    def __init__(self, data: bytes):
+        self.data = data
+
+    def u32(self, offset: int, index: int = 0) -> int:
+        return struct.unpack_from("<I", self.data, offset + 4 * index)[0]
+
+    def array(self, offset: int) -> list[int]:
+        """uint array (object ids, or the raw words of a struct array)"""
+        if offset == self.NULL:
+            return []
+        count = self.u32(offset - 4) // 4
+        return list(struct.unpack_from(f"<{count}I", self.data, offset))
+
+    def plain_string(self, string_id: int) -> str:
+        offset = string_id & self.OFFSET_MASK
+        length = self.u32(offset - 4)
+        raw = self.data[offset:offset + length]
+        return raw.decode("utf-16-le" if string_id & self.UNICODE else "ascii")
+
+    def string(self, string_id: int, separator: str) -> str | None:
+        """A string, or one split at a separator into parts stored once each: a chain from the last part back"""
+        if string_id == self.NULL:
+            return None
+        if not string_id & self.DYNAMIC or not separator:
+            return self.plain_string(string_id)
+        parts, next_id = [], string_id
+        while next_id != self.NULL:
+            offset = next_id & self.OFFSET_MASK
+            parts.append(self.plain_string(self.u32(offset)))
+            next_id = self.u32(offset, 1)
+        return separator.join(reversed(parts))
+
+    def type_name(self, offset: int) -> str | None:
+        if offset == self.NULL:
+            return None
+        return self.string(self.u32(offset, 1), ".")
+
+    def object(self, offset: int):
+        """A boxed value: (type id, value id)"""
+        if offset == self.NULL:
+            return None
+        kind = self.type_name(self.u32(offset))
+        value = self.u32(offset, 1)
+        if kind == "System.String":
+            # string id + the separator it was split at (a char)
+            return self.string(self.u32(value), chr(struct.unpack_from("<H", self.data, value + 4)[0]))
+        if kind == "System.Int32":
+            return struct.unpack_from("<i", self.data, value)[0]
+        if kind == "UnityEngine.Hash128":
+            return self.data[value:value + 16].hex()
+        return f"<{kind}>"
+
+    def location(self, offset: int) -> dict:
+        primary_key, internal_id, provider, dependencies, _hash, _extra, _type = struct.unpack_from("<IIIIiII", self.data, offset)
+        return {"primary": self.string(primary_key, "/"), "internal_id": self.string(internal_id, "/"),
+                "provider": self.string(provider, "."), "dependencies": self.array(dependencies)}
+
+    def decode(self) -> list[dict]:
+        _magic, _version, keys_offset = struct.unpack_from("<iiI", self.data, 0)
+        words = self.array(keys_offset)
+        keys_for_location: dict[int, list] = {}
+        for name_offset, set_offset in zip(words[0::2], words[1::2]):
+            key = self.object(name_offset)
+            for location in self.array(set_offset):
+                keys_for_location.setdefault(location, []).append(key)
+
+        locations = {offset: self.location(offset) for offset in keys_for_location}
+        # dependencies may point at bundle locations no key leads to
+        for loc in list(locations.values()):
+            for dep in loc["dependencies"]:
+                if dep not in locations:
+                    locations[dep] = self.location(dep)
+
+        result = []
+        for offset, loc in locations.items():
+            if not loc["provider"].endswith("BundledAssetProvider"):
+                continue
+            entry_keys = [k for k in keys_for_location.get(offset, []) if isinstance(k, str)]
+            address = loc["primary"] or loc["internal_id"]
+            labels = sorted({k for k in entry_keys if k != address and not GUID_KEY.match(k) and not k.startswith("Assets/")})
+            guids = sorted({k for k in entry_keys if GUID_KEY.match(k)})
+            # The first dependency is the bundle that holds the asset, the others the bundles it needs
+            bundles = [locations[d] for d in loc["dependencies"]]
+            bundle = re.split(r"[\\/]", bundles[0]["internal_id"])[-1] if bundles else None
+            result.append({"path": loc["internal_id"], "bundle": bundle, "address": address, "labels": labels,
+                           "guid": guids[0] if guids else None})
+
+        unique = {}
+        for item in sorted(result, key=lambda i: i["path"]):
+            unique.setdefault(item["path"], item)
+        return list(unique.values())
+
+
+def load(path: Path) -> list[dict]:
+    """Entries of a catalog file, or of the catalog an aa folder's settings.json names"""
+    if path.is_dir():
+        settings = json.loads((path / "settings.json").read_text(encoding="utf-8"))
+        main = next(c for c in settings["m_CatalogLocations"] if "AddressablesMainContentCatalog" in c["m_Keys"])
+        path = path / re.split(r"[\\/]", main["m_InternalId"])[-1]
+    data = path.read_bytes()
+    if data.lstrip()[:1] == b"{":
+        return decode(json.loads(data))
+    return BinaryCatalog(data).decode()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("catalog")
     parser.add_argument("--out")
     args = parser.parse_args()
 
-    entries = decode(json.load(open(args.catalog)))
+    entries = load(Path(args.catalog))
     text = json.dumps(entries, indent=2, ensure_ascii=False)
     if args.out:
         open(args.out, "w", newline="\n").write(text)

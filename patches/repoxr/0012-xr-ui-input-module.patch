@@ -1,0 +1,103 @@
+diff --git a/Source/UI/XRRayInteractorManager.cs b/Source/UI/XRRayInteractorManager.cs
+index 447961f..34c727f 100644
+--- a/Source/UI/XRRayInteractorManager.cs
++++ b/Source/UI/XRRayInteractorManager.cs
+@@ -4,7 +4,9 @@ using RepoXR.Assets;
+ using RepoXR.Input;
+ using UnityEngine;
+ using UnityEngine.InputSystem;
++using UnityEngine.EventSystems;
+ using UnityEngine.XR.Interaction.Toolkit;
++using UnityEngine.XR.Interaction.Toolkit.UI;
+ 
+ namespace RepoXR.UI;
+ 
+@@ -56,9 +58,78 @@ public class XRRayInteractorManager : MonoBehaviour
+         }
+     }
+ 
++    private float nextModuleCheck;
++
++    /// <summary>
++    /// Quest port: the rays only see UI through XRI's XRUIInputModule, and an EventSystem runs one input module, the
++    /// current EventSystem one. R.E.P.O. 0.5.0's scene EventSystem has a StandaloneInputModule; when XRI put its module
++    /// elsewhere or the game's module stayed first, the rays hit nothing ("ray on nothing" with the trigger working).
++    /// Keep exactly one EventSystem, the one with the XRUIInputModule, and only that module enabled on it
++    /// </summary>
++    private static void EnsureXRUIInputModule()
++    {
++        var systems = FindObjectsOfType<EventSystem>(true);
++        var xrModule = FindObjectsOfType<XRUIInputModule>(true).FirstOrDefault();
++        if (!xrModule)
++        {
++            var host = EventSystem.current ? EventSystem.current : systems.FirstOrDefault();
++            if (!host)
++                return;
++            xrModule = host.gameObject.AddComponent<XRUIInputModule>();
++        }
++
++        var main = xrModule.GetComponent<EventSystem>();
++        var changes = new System.Collections.Generic.List<string>();
++        if (!xrModule.enabled)
++        {
++            xrModule.enabled = true;
++            changes.Add("XRUIInputModule enabled");
++        }
++        foreach (var module in main.GetComponents<BaseInputModule>())
++            if (module != xrModule && module.enabled)
++            {
++                module.enabled = false;
++                changes.Add($"{module.GetType().Name} off");
++            }
++        foreach (var system in systems)
++            if (system != main && system.enabled)
++            {
++                system.enabled = false;
++                changes.Add($"EventSystem '{system.name}' off");
++            }
++        if (!main.enabled || !main.gameObject.activeInHierarchy)
++        {
++            main.enabled = true;
++            main.gameObject.SetActive(true);
++            changes.Add($"EventSystem '{main.name}' on");
++        }
++        if (EventSystem.current != main)
++        {
++            EventSystem.current = main;
++            changes.Add($"current EventSystem '{main.name}'");
++        }
++
++        if (changes.Count > 0)
++            Logger.LogInfo($"[UI] input module: {string.Join(", ", changes)}; EventSystems: " +
++                           string.Join("; ", systems.Select(e => $"{e.name} [{string.Join(", ", e.GetComponents<BaseInputModule>().Select(m => m.GetType().Name + (m.enabled ? "" : " (off)")))}]")));
++    }
++
+     // Quest port: one log line per trigger press while a menu is up, to see why a click does or does not land
+     private void Update()
+     {
++        if (Time.unscaledTime >= nextModuleCheck)
++        {
++            nextModuleCheck = Time.unscaledTime + 1f;
++            try
++            {
++                EnsureXRUIInputModule();
++            }
++            catch (Exception e)
++            {
++                Logger.LogWarning($"[UI] input module check failed: {e.Message}");
++            }
++        }
++
+         if (inputReports < 6 && Time.unscaledTime >= nextInputReport)
+         {
+             nextInputReport = Time.unscaledTime + 5f;
+@@ -81,6 +152,9 @@ public class XRRayInteractorManager : MonoBehaviour
+             ? result.gameObject.name
+             : "nothing";
+         var menu = MenuManager.instance;
++        var current = EventSystem.current;
++        Logger.LogInfo($"[UI] event system {(current ? current.name : "none")}, module {(current && current.currentInputModule ? current.currentInputModule.GetType().Name : "none")}, " +
++                       $"UI interaction {interactor.enableUIInteraction}");
+         Logger.LogInfo($"[UI] trigger ({activeController}): ray on {hit}; menu target {(menu ? menu.currentMenuID : "-")}, " +
+                        $"keyboard navigating {(menu && menu.isKeyboardNavigating)}, page {(menu && menu.currentMenuPage ? menu.currentMenuPage.name : "-")}, " +
+                        $"input mode {SemiFunc.InputMode()}, UI click {SemiFunc.InputUIClick()}");

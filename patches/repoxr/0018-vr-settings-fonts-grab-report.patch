@@ -1,0 +1,198 @@
+diff --git a/Source/Patches/PhysGrabberPatches.cs b/Source/Patches/PhysGrabberPatches.cs
+index 569d8fd..10d6940 100644
+--- a/Source/Patches/PhysGrabberPatches.cs
++++ b/Source/Patches/PhysGrabberPatches.cs
+@@ -269,4 +269,56 @@ internal static class PhysGrabberUniversalPatches
+                 : grabber.climbStickTransform.rotation;
+         }
+     }
++
++    private static float nextGrabReport;
++    private static int grabReports;
++
++    /// <summary>
++    /// Quest port, diagnostics for R.E.P.O. 0.5.0: the VR input the grabber sees. A few reports after a level loads
++    /// (control scheme, devices, the Grab/Movement/Interact actions), and one line per Grab press or release with the
++    /// grabber's state ("[Grab] ...")
++    /// </summary>
++    [HarmonyPatch(typeof(PhysGrabber), nameof(PhysGrabber.Update))]
++    [HarmonyPostfix]
++    private static void GrabInputReport(PhysGrabber __instance)
++    {
++        if (!__instance.isLocal)
++            return;
++
++        try
++        {
++            var input = VRInputSystem.Instance;
++            var grab = Actions.Instance["Grab"];
++            if (grabReports < 6 && Time.unscaledTime >= nextGrabReport)
++            {
++                nextGrabReport = Time.unscaledTime + 5f;
++                grabReports++;
++                var player = input.GetPlayerInput();
++                Logger.LogInfo($"[Grab] input: scheme {input.CurrentControlScheme}, active {player.inputIsActive}, map {player.currentActionMap?.name}, " +
++                               $"devices [{string.Join(", ", System.Linq.Enumerable.Select(player.devices, d => d.layout))}]");
++                foreach (var name in new[] { "Grab", "Movement", "Interact", "Menu", "Jump" })
++                {
++                    var action = Actions.Instance[name];
++                    Logger.LogInfo(action == null
++                        ? $"[Grab] action {name}: missing"
++                        : $"[Grab] action {name}: enabled {action.enabled}, bindings [{string.Join("; ", System.Linq.Enumerable.Select(action.bindings, b => b.effectivePath))}], " +
++                          $"controls [{string.Join("; ", System.Linq.Enumerable.Select(action.controls, c => c.path))}], phase {action.phase}");
++                }
++            }
++
++            if (grab != null && (grab.WasPressedThisFrame() || grab.WasReleasedThisFrame()))
++                Logger.LogInfo($"[Grab] {(grab.WasPressedThisFrame() ? "pressed" : "released")}: hold {SemiFunc.InputHold(InputKey.Grab)}, down {SemiFunc.InputDown(InputKey.Grab)}, " +
++                               $"toggle {InputManager.instance.InputToggleGet(InputKey.Grab)}, grabbed {__instance.grabbed}, beam {__instance.physGrabBeamActive}, " +
++                               $"disable timer {__instance.grabDisableTimer:F2}, looking at {(__instance.currentlyLookingAtPhysGrabObject ? __instance.currentlyLookingAtPhysGrabObject.name : "-")}, " +
++                               $"input disabled {(PlayerController.instance ? PlayerController.instance.InputDisableTimer : -1):F2}, avatar disabled {__instance.playerAvatar.isDisabled}");
++        }
++        catch (System.Exception e)
++        {
++            if (grabReports < 7)
++            {
++                grabReports++;
++                Logger.LogWarning($"[Grab] report failed: {e}");
++            }
++        }
++    }
+ }
+\ No newline at end of file
+diff --git a/Source/Patches/UI/MenuPatches.cs b/Source/Patches/UI/MenuPatches.cs
+index c3004ce..e69f6a4 100644
+--- a/Source/Patches/UI/MenuPatches.cs
++++ b/Source/Patches/UI/MenuPatches.cs
+@@ -1,6 +1,7 @@
+ ﻿using HarmonyLib;
+ using RepoXR.Assets;
+ using RepoXR.Managers;
++using RepoXR.UI;
+ using RepoXR.UI.Menu;
+ using UnityEngine;
+ using UnityEngine.UI;
+@@ -34,12 +35,17 @@ internal static class MenuPatches
+         if (!SemiFunc.MenuLevel() && !VRSession.InVR)
+             return;
+         
++        GameFonts.FixBundlePrefabs();
++
++        // Quest port: R.E.P.O. 0.5.0's settings page has six tabs (Gameplay 260 ... Gamepad 120, Language 85, 35 apart),
++        // and the VR Settings button at (126, 83) sat right on top of Language. It goes below Language, Back below it
+         var vrButton = Object.Instantiate(AssetCollection.VRSettingsButton, __instance.transform)
+             .GetComponent<Button>();
+         var vrRect = vrButton.GetComponent<RectTransform>();
++        var language = __instance.transform.Find("Menu Button - Language") as RectTransform;
+ 
+         // Brute forcing element positions
+-        vrRect.anchoredPosition = new Vector2(126, 83);
++        vrRect.anchoredPosition = language ? language.anchoredPosition - new Vector2(0, 35) : new Vector2(126, 83);
+         vrButton.onClick.AddListener(() =>
+         {
+             __instance.ButtonEventBack();
+@@ -48,6 +54,6 @@ internal static class MenuPatches
+ 
+         // Move back button a bit down
+         __instance.transform.Find("Menu Button - Back").GetComponent<RectTransform>().anchoredPosition =
+-            new Vector2(126, 35);
++            language ? vrRect.anchoredPosition - new Vector2(0, 45) : new Vector2(126, 35);
+     }
+ }
+\ No newline at end of file
+diff --git a/Source/UI/GameFonts.cs b/Source/UI/GameFonts.cs
+new file mode 100644
+index 0000000..5151928
+--- /dev/null
++++ b/Source/UI/GameFonts.cs
+@@ -0,0 +1,78 @@
++using System.Linq;
++using RepoXR.Assets;
++using TMPro;
++using UnityEngine;
++
++namespace RepoXR.UI;
++
++/// <summary>
++/// Quest port: RepoXR's own UI comes from an asset bundle built with Unity 2022 and TextMeshPro 3. Under Unity 6's
++/// TextMeshPro (part of uGUI 2.0) the bundle's text arrives without a usable font: MenuButton.Awake threw in
++/// TMP's MaterialReference while instantiating the VR Settings button, and the bundle's texts would not render.
++/// Once the game's own menu is up, every text in the bundle's prefabs gets the game's menu font
++/// </summary>
++internal static class GameFonts
++{
++    private static bool done;
++
++    public static void FixBundlePrefabs()
++    {
++        if (done)
++            return;
++
++        var reference = Object.FindObjectsOfType<MenuButton>(true)
++            .Select(b => b.buttonText ? b.buttonText.font : null)
++            .FirstOrDefault(Usable);
++        if (!reference)
++        {
++            Logger.LogWarning("[Fonts] no game menu font found yet");
++            return;
++        }
++
++        done = true;
++        var fixedTexts = 0;
++        foreach (var prefab in new[]
++                 {
++                     AssetCollection.RebindHeader, AssetCollection.RebindButton, AssetCollection.RebindButtonToggle,
++                     AssetCollection.Keyboard, AssetCollection.ExpressionWheel, AssetCollection.ValuableDiscover,
++                     AssetCollection.MenuSettings, AssetCollection.MenuSettingsCategory, AssetCollection.MenuShowcase,
++                     AssetCollection.RuntimeSetting, AssetCollection.BoolSetting, AssetCollection.SliderSetting,
++                     AssetCollection.VRSettingsButton, AssetCollection.VRRig, AssetCollection.VRTumble
++                 })
++            fixedTexts += Fix(prefab, reference);
++
++        Logger.LogInfo($"[Fonts] {fixedTexts} texts in RepoXR's prefabs given the game's font {reference.name}");
++    }
++
++    /// <summary>Gives every text under <paramref name="root"/> without a usable font the reference font</summary>
++    public static int Fix(GameObject? root, TMP_FontAsset reference)
++    {
++        if (!root)
++            return 0;
++
++        var count = 0;
++        foreach (var text in root!.GetComponentsInChildren<TMP_Text>(true))
++        {
++            if (Usable(text.font) && text.fontSharedMaterial)
++                continue;
++
++            text.font = reference;
++            text.fontSharedMaterial = reference.material;
++            count++;
++        }
++
++        return count;
++    }
++
++    private static bool Usable(TMP_FontAsset? font)
++    {
++        try
++        {
++            return font && font!.material && font.atlasTexture;
++        }
++        catch
++        {
++            return false;
++        }
++    }
++}
+diff --git a/Source/UI/MainMenu.cs b/Source/UI/MainMenu.cs
+index e77e180..a387919 100644
+--- a/Source/UI/MainMenu.cs
++++ b/Source/UI/MainMenu.cs
+@@ -32,6 +32,7 @@ public class MainMenu : MonoBehaviour
+         yield return null;
+         
+         DisableEventSystem();
++        GameFonts.FixBundlePrefabs();
+         SetupMainCamera();
+         SetupMainCanvas();
+         SetupControllers();

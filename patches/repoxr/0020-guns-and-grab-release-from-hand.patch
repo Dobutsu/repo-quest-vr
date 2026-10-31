@@ -1,0 +1,74 @@
+diff --git a/Source/Patches/Item/ItemGunPatches.cs b/Source/Patches/Item/ItemGunPatches.cs
+new file mode 100644
+index 0000000..07605ff
+--- /dev/null
++++ b/Source/Patches/Item/ItemGunPatches.cs
+@@ -0,0 +1,30 @@
++using System.Collections.Generic;
++using System.Reflection.Emit;
++using HarmonyLib;
++
++using static HarmonyLib.AccessTools;
++
++namespace RepoXR.Patches.Item;
++
++[RepoXRPatch(RepoXRPatchTarget.Universal)]
++internal static class ItemGunPatches
++{
++    /// <summary>
++    /// R.E.P.O. 0.5.0 turns a held gun so that its muzzle points along the line from the camera through the grab
++    /// point, and stores that as the grabber's camera-relative rotation. RepoXR applies the held rotation relative to
++    /// the hand (PhysGrabObject.PhysicsGrabbingManipulation), so measured from the head the gun pointed somewhere else
++    /// whenever head and hand did; from the hand, the gun points where the grab beam goes
++    /// </summary>
++    [HarmonyPatch(typeof(ItemGun), nameof(ItemGun.AimTargetUpdate))]
++    [HarmonyTranspiler]
++    private static IEnumerable<CodeInstruction> AimFromHandPatch(IEnumerable<CodeInstruction> instructions)
++    {
++        return new CodeMatcher(instructions)
++            .MatchForward(false,
++                new CodeMatch(OpCodes.Callvirt,
++                    Method(typeof(PlayerLocalCamera), nameof(PlayerLocalCamera.GetOverrideTransform))))
++            .ThrowIfInvalid("ItemGun.AimTargetUpdate: GetOverrideTransform not found")
++            .Set(OpCodes.Call, PlayerLocalCameraExtensions.GetHandOverrideTransformMethod)
++            .InstructionEnumeration();
++    }
++}
+diff --git a/Source/Patches/PhysGrabberPatches.cs b/Source/Patches/PhysGrabberPatches.cs
+index b5c05bf..ec9c5c4 100644
+--- a/Source/Patches/PhysGrabberPatches.cs
++++ b/Source/Patches/PhysGrabberPatches.cs
+@@ -280,6 +280,33 @@ internal static class PhysGrabberUniversalPatches
+         }
+     }
+ 
++    /// <summary>
++    /// R.E.P.O. 0.5.0 moved the end of object rotation into ObjectTurningRelease, which stores the new rotation relative
++    /// to the camera; RepoXR applies it relative to the hand, so a rotated object jumped when the rotate button was
++    /// let go. Same for ForceGrabPhysObject (items and vehicles the game makes you hold), which measured the grab from
++    /// the camera while every other grab starts from the hand
++    /// </summary>
++    [HarmonyPatch(typeof(PhysGrabber), nameof(PhysGrabber.ObjectTurningRelease))]
++    [HarmonyTranspiler]
++    private static IEnumerable<CodeInstruction> TurningReleaseFromHandPatch(IEnumerable<CodeInstruction> instructions) =>
++        HandInsteadOfCamera(instructions, "PhysGrabber.ObjectTurningRelease");
++
++    [HarmonyPatch(typeof(PhysGrabber), nameof(PhysGrabber.ForceGrabPhysObject))]
++    [HarmonyTranspiler]
++    private static IEnumerable<CodeInstruction> ForceGrabFromHandPatch(IEnumerable<CodeInstruction> instructions) =>
++        HandInsteadOfCamera(instructions, "PhysGrabber.ForceGrabPhysObject");
++
++    private static IEnumerable<CodeInstruction> HandInsteadOfCamera(IEnumerable<CodeInstruction> instructions, string where)
++    {
++        return new CodeMatcher(instructions)
++            .MatchForward(false,
++                new CodeMatch(OpCodes.Callvirt,
++                    Method(typeof(PlayerLocalCamera), nameof(PlayerLocalCamera.GetOverrideTransform))))
++            .ThrowIfInvalid($"{where}: GetOverrideTransform not found")
++            .Repeat(matcher => matcher.Set(OpCodes.Call, PlayerLocalCameraExtensions.GetHandOverrideTransformMethod))
++            .InstructionEnumeration();
++    }
++
+     private static float nextGrabReport;
+     private static int grabReports;
+ 

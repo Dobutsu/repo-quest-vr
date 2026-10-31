@@ -30,17 +30,17 @@ from unity_fileid import script_file_id  # noqa: E402
 CACHE = WORK / "packages"
 BUILTIN_PACKAGES = builtin_packages()
 
-# package, version, DLLs in Assets/Plugins it replaces (versions read from the game's DLLs)
+# package, version, DLLs in Assets/Plugins it replaces (versions read from the game's DLLs; R.E.P.O. v0.5.0 on Unity
+# 6000.3, the same set as RepoXR-Unity's Unity 6 project). Since Unity 6 TextMesh Pro is part of uGUI
 PACKAGES = [
-    ("com.unity.inputsystem", "1.14.2", ["Unity.InputSystem", "Unity.InputSystem.ForUI"]),
-    ("com.unity.ugui", "1.0.0", ["UnityEngine.UI"]),
-    ("com.unity.textmeshpro", "3.0.7", ["Unity.TextMeshPro"]),
-    ("com.unity.localization", "1.5.9", ["Unity.Localization", "Unity.InternalAPIEngineBridge.013"]),
-    ("com.unity.addressables", "1.27.0", ["Unity.Addressables", "Unity.ResourceManager"]),
-    ("com.unity.scriptablebuildpipeline", "1.23.0", ["Unity.ScriptableBuildPipeline"]),
-    ("com.unity.nuget.newtonsoft-json", "3.0.2", ["Newtonsoft.Json"]),
-    ("com.unity.postprocessing", "3.5.0", ["Unity.Postprocessing.Runtime"]),
-    ("com.unity.mathematics", "1.2.6", ["Unity.Mathematics"]),
+    ("com.unity.inputsystem", "1.19.0", ["Unity.InputSystem", "Unity.InputSystem.ForUI"]),
+    ("com.unity.ugui", "2.0.0", ["UnityEngine.UI", "Unity.TextMeshPro", "Unity.InternalAPIEngineBridge.004"]),
+    ("com.unity.localization", "1.5.12", ["Unity.Localization", "Unity.InternalAPIEngineBridge.013"]),
+    ("com.unity.addressables", "2.9.1", ["Unity.Addressables", "Unity.ResourceManager"]),
+    ("com.unity.scriptablebuildpipeline", "2.6.1", ["Unity.ScriptableBuildPipeline"]),
+    ("com.unity.nuget.newtonsoft-json", "3.2.2", ["Newtonsoft.Json"]),
+    ("com.unity.postprocessing", "3.5.4", ["Unity.Postprocessing.Runtime"]),
+    ("com.unity.mathematics", "1.3.3", ["Unity.Mathematics"]),
 ]
 
 # python.org builds ship without a CA store
@@ -98,7 +98,7 @@ def unitypackage_shaders(package: Path, assets: Path, write: bool) -> dict[str, 
 
 
 def dll_types(path: Path) -> list[tuple[str, str]]:
-    pe = dnfile.dnPE(str(path))
+    pe = dnfile.dnPE(data=path.read_bytes())
     md = pe.net.mdtables
     nested = {row.NestedClass.row_index for row in (md.NestedClass.rows if md.NestedClass else [])}
     text = lambda v: str(v.value) if hasattr(v, "value") else str(v)

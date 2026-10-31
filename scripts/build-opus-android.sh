@@ -9,7 +9,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 version="1.5.2"
 src="$root/work/downloads/opus-$version"
 out="$root/work/opus-android"
-ndk="/Applications/Unity/Hub/Editor/2022.3.62f3/PlaybackEngines/AndroidPlayer/NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin"
+ndk="$(python3 "$root/scripts/lib/paths.py" unity-editor)/PlaybackEngines/AndroidPlayer/NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin"
 
 if [ ! -d "$src" ]; then
     mkdir -p "$root/work/downloads"

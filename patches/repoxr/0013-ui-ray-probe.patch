@@ -1,0 +1,93 @@
+diff --git a/Source/UI/XRRayInteractorManager.cs b/Source/UI/XRRayInteractorManager.cs
+index 34c727f..dc813ca 100644
+--- a/Source/UI/XRRayInteractorManager.cs
++++ b/Source/UI/XRRayInteractorManager.cs
+@@ -7,6 +7,7 @@ using UnityEngine.InputSystem;
+ using UnityEngine.EventSystems;
+ using UnityEngine.XR.Interaction.Toolkit;
+ using UnityEngine.XR.Interaction.Toolkit.UI;
++using UnityEngine.UI;
+ 
+ namespace RepoXR.UI;
+ 
+@@ -155,11 +156,70 @@ public class XRRayInteractorManager : MonoBehaviour
+         var current = EventSystem.current;
+         Logger.LogInfo($"[UI] event system {(current ? current.name : "none")}, module {(current && current.currentInputModule ? current.currentInputModule.GetType().Name : "none")}, " +
+                        $"UI interaction {interactor.enableUIInteraction}");
++        try
++        {
++            ProbeUIRay(interactor);
++        }
++        catch (Exception e)
++        {
++            Logger.LogWarning($"[UI] probe failed: {e.Message}");
++        }
+         Logger.LogInfo($"[UI] trigger ({activeController}): ray on {hit}; menu target {(menu ? menu.currentMenuID : "-")}, " +
+                        $"keyboard navigating {(menu && menu.isKeyboardNavigating)}, page {(menu && menu.currentMenuPage ? menu.currentMenuPage.name : "-")}, " +
+                        $"input mode {SemiFunc.InputMode()}, UI click {SemiFunc.InputUIClick()}");
+     }
+ 
++    /// <summary>
++    /// Quest port: why the ray finds no UI. The interactor's own view (3D and UI hits), then the menu canvas checked by
++    /// hand: where the ray meets its plane, how far, whether that point is on the canvas, which raycast targets are
++    /// under it, the canvas's raycasters and masks, and colliders in the way
++    /// </summary>
++    private static void ProbeUIRay(XRRayInteractor interactor)
++    {
++        var origin = interactor.rayOriginTransform ? interactor.rayOriginTransform : interactor.transform;
++        var ray = new Ray(origin.position, origin.forward);
++        interactor.TryGetCurrentRaycast(out var hit3D, out _, out var hitUI, out _, out var uiClosest);
++        Logger.LogInfo($"[UI] probe: ray {ray.origin} -> {ray.direction}, max {interactor.maxRaycastDistance} m, " +
++                       $"line {interactor.lineType}, mask {interactor.raycastMask.value}, 3D hit {(hit3D.HasValue ? hit3D.Value.collider.name + " @" + hit3D.Value.distance.ToString("F1") : "none")}, " +
++                       $"UI hit {(hitUI.HasValue && hitUI.Value.gameObject ? hitUI.Value.gameObject.name : "none")}, UI closest {uiClosest}");
++
++        Logger.LogInfo("[UI] probe event systems: " + string.Join("; ", FindObjectsOfType<EventSystem>(true).Select(e =>
++            $"{e.name} #{e.GetInstanceID()} {(e.enabled && e.gameObject.activeInHierarchy ? "on" : "off")}{(e == EventSystem.current ? " (current)" : "")} " +
++            $"[{string.Join(", ", e.GetComponents<BaseInputModule>().Select(m => $"{m.GetType().Name}{(m.enabled ? "" : " off")}"))}]")) +
++            $"; XRUIInputModules: {FindObjectsOfType<XRUIInputModule>(true).Length}");
++
++        var canvas = HUDCanvas.instance ? HUDCanvas.instance.GetComponent<Canvas>() : null;
++        if (!canvas)
++            return;
++        var t = canvas.transform;
++        var plane = new Plane(-t.forward, t.position);
++        var onPlane = plane.Raycast(ray, out var enter);
++        var point = ray.GetPoint(enter);
++        var local = t.InverseTransformPoint(point);
++        var rect = ((RectTransform)t).rect;
++        Logger.LogInfo($"[UI] probe canvas {canvas.name}: mode {canvas.renderMode}, pos {t.position}, rot {t.eulerAngles}, " +
++                       $"scale {t.lossyScale}, rect {rect}, worldCamera {(canvas.worldCamera ? canvas.worldCamera.name : "none")}, " +
++                       $"plane hit {onPlane} at {enter:F1} m, local {local}, inside {rect.Contains(local)}, facing {Vector3.Dot(ray.direction, t.forward) > 0}");
++        Logger.LogInfo("[UI] probe raycasters: " + string.Join(", ", canvas.GetComponents<BaseRaycaster>()
++            .Select(r => $"{r.GetType().Name}{(r.enabled ? "" : " (off)")}")) +
++            "; masks on the way down: " + string.Join(", ", canvas.GetComponentsInChildren<RectMask2D>(true).Take(5)
++            .Select(m => $"{m.name} {m.enabled} {((RectTransform)m.transform).rect}")));
++
++        var under = canvas.GetComponentsInChildren<Graphic>()
++            .Where(g => g.raycastTarget && g.isActiveAndEnabled)
++            .Where(g =>
++            {
++                var gl = g.rectTransform.InverseTransformPoint(point);
++                return g.rectTransform.rect.Contains(new Vector2(gl.x, gl.y));
++            })
++            .Select(g => g.name).Take(8).ToList();
++        Logger.LogInfo($"[UI] probe targets under the ray point: {(under.Count == 0 ? "none" : string.Join(", ", under))}");
++
++        var blockers = Physics.RaycastAll(ray, 100f).OrderBy(h => h.distance).Take(5)
++            .Select(h => $"{h.collider.name} (layer {h.collider.gameObject.layer}) @{h.distance:F1}");
++        Logger.LogInfo($"[UI] probe colliders on the ray: {string.Join(", ", blockers)}");
++    }
++
+     private void OnDestroy()
+     {
+         Instance = null;
+@@ -329,6 +389,9 @@ public class XRRayInteractorManager : MonoBehaviour
+         var renderer = go.GetComponent<LineRenderer>();
+         
+         interactor.raycastMask = 1 << 5;
++        // Quest port: R.E.P.O. 0.5.0's main menu room puts the menu canvas 20-25 m from the camera; XRI's default reach
++        // is 30 m, a ray at an angle from the hand could fall short
++        interactor.maxRaycastDistance = 100f;
+ 
+         visual.lineBendRatio = 1;
+         visual.invalidColorGradient = new Gradient

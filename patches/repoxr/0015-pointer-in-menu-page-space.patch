@@ -1,0 +1,74 @@
+diff --git a/Source/UI/XRRayInteractorManager.cs b/Source/UI/XRRayInteractorManager.cs
+index 7fdbc96..ac1a52c 100644
+--- a/Source/UI/XRRayInteractorManager.cs
++++ b/Source/UI/XRRayInteractorManager.cs
+@@ -149,7 +149,25 @@ public class XRRayInteractorManager : MonoBehaviour
+         if (!actions.uiPressAction.action.WasPressedThisFrame())
+             return;
+ 
+-        var hit = TryGetUIHit(out var hitObject, out _) ? $"{hitObject.name} ({uiHitSource})" : "nothing";
++        var hit = TryGetUIHit(out var hitObject, out var hitWorld) ? $"{hitObject.name} ({uiHitSource})" : "nothing";
++        if (hitObject && hitObject.GetComponentInParent<MenuButton>() is { } button)
++        {
++            try
++            {
++                var rect = (RectTransform)button.transform;
++                var pagePos = SemiFunc.UIGetRectTransformPositionOnScreen(rect, false);
++                var pointer = GetUIHitPosition(rect);
++                var canvasLocal = rect.GetComponentInParent<Canvas>().transform.InverseTransformPoint(hitWorld);
++                var page = rect.GetComponentInParent<MenuPage>();
++                Logger.LogInfo($"[UI] hover {button.name}: element at {pagePos} size {rect.rect.size}, pointer {pointer} " +
++                               $"(canvas-local {canvasLocal}), page {(page ? page.name + " pos " + page.transform.localPosition + " scale " + page.transform.localScale : "none")}, " +
++                               $"menu id {button.menuSelectableElement?.menuID}");
++            }
++            catch (Exception e)
++            {
++                Logger.LogWarning($"[UI] hover report failed: {e}");
++            }
++        }
+         var menu = MenuManager.instance;
+         var current = EventSystem.current;
+         Logger.LogInfo($"[UI] event system {(current ? current.name : "none")}, module {(current && current.currentInputModule ? current.currentInputModule.GetType().Name : "none")}, " +
+@@ -176,10 +194,8 @@ public class XRRayInteractorManager : MonoBehaviour
+     {
+         var origin = interactor.rayOriginTransform ? interactor.rayOriginTransform : interactor.transform;
+         var ray = new Ray(origin.position, origin.forward);
+-        interactor.TryGetCurrentRaycast(out var hit3D, out _, out var hitUI, out _, out var uiClosest);
+         Logger.LogInfo($"[UI] probe: ray {ray.origin} -> {ray.direction}, max {interactor.maxRaycastDistance} m, " +
+-                       $"line {interactor.lineType}, mask {interactor.raycastMask.value}, 3D hit {(hit3D.HasValue ? hit3D.Value.collider.name + " @" + hit3D.Value.distance.ToString("F1") : "none")}, " +
+-                       $"UI hit {(hitUI.HasValue && hitUI.Value.gameObject ? hitUI.Value.gameObject.name : "none")}, UI closest {uiClosest}");
++                       $"line {interactor.lineType}, mask {interactor.raycastMask.value}");
+ 
+         Logger.LogInfo("[UI] probe event systems: " + string.Join("; ", FindObjectsOfType<EventSystem>(true).Select(e =>
+             $"{e.name} #{e.GetInstanceID()} {(e.enabled && e.gameObject.activeInHierarchy ? "on" : "off")}{(e == EventSystem.current ? " (current)" : "")} " +
+@@ -253,11 +269,7 @@ public class XRRayInteractorManager : MonoBehaviour
+         if (!TryGetUIHit(out var hitObject, out var worldPosition))
+             return Vector2.one * -1000;
+ 
+-        var canvas = rect is null
+-            ? hitObject.GetComponentInParent<Canvas>().transform
+-            : rect.GetComponentInParent<Canvas>().transform;
+-
+-        var local = canvas.InverseTransformPoint(worldPosition);
++        var local = HitSpace(rect ? rect! : (RectTransform)hitObject.transform).InverseTransformPoint(worldPosition);
+         return new Vector2(local.x, local.y);
+     }
+ 
+@@ -268,6 +280,17 @@ public class XRRayInteractorManager : MonoBehaviour
+             : hitObject.GetComponent<RectTransform>();
+     }
+ 
++    /// <summary>
++    /// The space the pointer is given in: the element's menu page, like the element positions RepoXR hands the game
++    /// (UIPatches.UIGetRectTransformPositionOnCanvas), or its canvas outside menu pages. Upstream used the canvas for
++    /// the pointer, which matched while 0.4.4's menu pages sat at the canvas origin; 0.5.0's do not (Quest port)
++    /// </summary>
++    private static Transform HitSpace(RectTransform element)
++    {
++        var page = element.GetComponentInParent<MenuPage>();
++        return page ? page.transform : element.GetComponentInParent<Canvas>().transform;
++    }
++
+     private int uiHitFrame = -1;
+     private bool uiHitValid;
+     private GameObject uiHitObject;

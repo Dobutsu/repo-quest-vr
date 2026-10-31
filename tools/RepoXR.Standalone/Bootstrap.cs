@@ -40,7 +40,9 @@ namespace RepoXR.Standalone
             try
             {
                 InitializeBepInExPaths();
-                BepInEx.Logging.Logger.Listeners.Add(new UnityLogListener());
+                // Not BepInEx's UnityLogListener: it writes through UnityLogWriter, which never reaches logcat on
+                // Android, so none of RepoXR's own log lines showed up on the Quest
+                BepInEx.Logging.Logger.Listeners.Add(new DebugLogListener());
 
                 var pluginType = Type.GetType(PluginTypeName, true);
                 if (Application.platform == RuntimePlatform.Android)
@@ -68,6 +70,27 @@ namespace RepoXR.Standalone
             catch (Exception e)
             {
                 Debug.LogError($"[RepoXR.Standalone] Steam setup failed, staying offline: {e}");
+            }
+        }
+
+        /// <summary>BepInEx log events (RepoXR's Logger) to Debug.Log, i.e. logcat on Android</summary>
+        private sealed class DebugLogListener : ILogListener
+        {
+            public void LogEvent(object sender, LogEventArgs eventArgs)
+            {
+                if (eventArgs.Source is UnityLogSource || (eventArgs.Level & LogLevel.Debug) != 0)
+                    return;
+                var line = $"[{eventArgs.Source.SourceName}] {eventArgs.Data}";
+                if ((eventArgs.Level & (LogLevel.Error | LogLevel.Fatal)) != 0)
+                    Debug.LogError(line);
+                else if ((eventArgs.Level & LogLevel.Warning) != 0)
+                    Debug.LogWarning(line);
+                else
+                    Debug.Log(line);
+            }
+
+            public void Dispose()
+            {
             }
         }
 

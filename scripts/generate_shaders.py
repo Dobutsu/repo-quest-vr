@@ -469,13 +469,15 @@ def build_shader(name: str, props_block: str, declared: dict[str, str], stored: 
                 body.append("o.Metallic = _Metallic * tex2D(_MetallicTexture, uv).r;")
             else:
                 body.append("o.Metallic = _Metallic;")
+        # Clamped: Shader Graph materials keep sliders out of 0..1 (Shop Floor Grime -1.71, Arctic Ice Floor 8.85), and
+        # the Standard BRDF turns a negative smoothness into a black surface (the shops' floors)
         if smoothness:
             declare("float", smoothness)
             if "_SmoothnessTexture" in tex:
                 declare("sampler2D", "_SmoothnessTexture")
-                body.append(f"o.Smoothness = {smoothness} * tex2D(_SmoothnessTexture, uv).r;")
+                body.append(f"o.Smoothness = saturate({smoothness} * tex2D(_SmoothnessTexture, uv).r);")
             else:
-                body.append(f"o.Smoothness = {smoothness};")
+                body.append(f"o.Smoothness = saturate({smoothness});")
         emission = []
         if emission_tex:
             declare("sampler2D", emission_tex)

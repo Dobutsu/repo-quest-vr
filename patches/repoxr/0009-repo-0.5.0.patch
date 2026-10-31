@@ -1,0 +1,624 @@
+diff --git a/Source/Config.cs b/Source/Config.cs
+index e0be7ca..3dc9197 100644
+--- a/Source/Config.cs
++++ b/Source/Config.cs
+@@ -135,6 +135,23 @@ public class Config(string assemblyPath, ConfigFile file)
+     public ConfigEntry<bool> OtherFlashlightShadows { get; } = file.Create("Rendering", nameof(OtherFlashlightShadows), false,
+         "Whether other players' flashlights cast shadows. Each one renders the scene again into its own shadow map: with a full lobby this cost 7-10 ms of GPU time per frame on Quest. Their light stays either way.");
+ 
++    // Quest port: unity-tools/Runtime/LevelCulling.cs reads these three; hiding is rendering only
++    [ConfigDescriptor(customName: "Level Culling")]
++    public ConfigEntry<bool> LevelCulling { get; } = file.Create("Rendering", nameof(LevelCulling), true,
++        "Do not draw the parts of the level that are too far to matter: small objects beyond the distance below, and everything the fog hides completely. Only drawing changes: objects keep working, and multiplayer is not affected. Saves CPU time on Quest.");
++
++    [ConfigDescriptor(customName: "Small Object Distance", stepSize: 5f, suffix: " m")]
++    public ConfigEntry<int> CullSmallDistance { get; } = file.Create("Rendering", nameof(CullSmallDistance), 20,
++        new ConfigDescription(
++            "With Level Culling on: props, valuables and items smaller than 1.5 m are not drawn beyond this distance.",
++            new AcceptableValueRange<int>(10, 60)));
++
++    [ConfigDescriptor(customName: "Room Distance", stepSize: 5f, suffix: " m")]
++    public ConfigEntry<int> CullFarDistance { get; } = file.Create("Rendering", nameof(CullFarDistance), 0,
++        new ConfigDescription(
++            "With Level Culling on: nothing is drawn beyond this distance. 0 m: as far as the fog lets you see (no visible difference). Lower values hide far rooms for more performance.",
++            new AcceptableValueRange<int>(0, 100)));
++
+     [ConfigDescriptor(customName: "Post Processing")]
+     public ConfigEntry<bool> PostProcessing { get; } = file.Create("Rendering", nameof(PostProcessing), false,
+         "The game's post-processing: color grading, vignette, grain and the other screen effects. Off gives a brighter image and saves about 5 ms of GPU time per frame on Quest.");
+diff --git a/Source/Patches/CameraEffectsPatches.cs b/Source/Patches/CameraEffectsPatches.cs
+index 3ed9ba9..51ae552 100644
+--- a/Source/Patches/CameraEffectsPatches.cs
++++ b/Source/Patches/CameraEffectsPatches.cs
+@@ -18,7 +18,8 @@ internal static class CameraEffectsPatches
+     /// <summary>
+     /// Disable camera shake in the main menu
+     /// </summary>
+-    [HarmonyPatch(typeof(CameraShake), nameof(CameraShake.Shake))]
++    // R.E.P.O. 0.5.0: Shake(strength, time) forwards to the new Shake(strength, time, rumbleMultiplier)
++    [HarmonyPatch(typeof(CameraShake), nameof(CameraShake.Shake), typeof(float), typeof(float), typeof(float))]
+     [HarmonyPrefix]
+     private static bool DisableShakeMenu()
+     {
+diff --git a/Source/Patches/CameraPatches.cs b/Source/Patches/CameraPatches.cs
+index ddbb978..4285bd5 100644
+--- a/Source/Patches/CameraPatches.cs
++++ b/Source/Patches/CameraPatches.cs
+@@ -1,4 +1,5 @@
+-﻿using System.Collections.Generic;
++﻿using System;
++using System.Collections.Generic;
+ using System.Reflection.Emit;
+ using HarmonyLib;
+ using RepoXR.Managers;
+@@ -103,14 +104,55 @@ internal static class CameraPatches
+     /// <summary>
+     /// Make sure to synchronize the VR camera transforms instead of only the aim transforms
+     /// </summary>
++    // R.E.P.O. 0.5.0 keeps CameraAim.Instance in a CameraAim local (null check, then its transform twice); putting
++    // `this` into that local is a type error IL2CPP's C++ rejects. The local keeps CameraAim; only the two transform
++    // reads take the PlayerLocalCamera's own transform instead
+     [HarmonyPatch(typeof(PlayerLocalCamera), nameof(PlayerLocalCamera.OnPhotonSerializeView))]
+     [HarmonyTranspiler]
+     private static IEnumerable<CodeInstruction> CameraSerializeVRParams(IEnumerable<CodeInstruction> instructions)
+     {
+-        return new CodeMatcher(instructions)
+-            .MatchForward(false, new CodeMatch(OpCodes.Ldsfld, Field(typeof(CameraAim), nameof(CameraAim.Instance))))
+-            .Repeat(matcher => matcher.SetOpcodeAndAdvance(OpCodes.Ldarg_0))
+-            .InstructionEnumeration();
++        var getTransform = PropertyGetter(typeof(Component), nameof(Component.transform));
++        var matcher = new CodeMatcher(instructions)
++            .MatchForward(false,
++                new CodeMatch(OpCodes.Ldsfld, Field(typeof(CameraAim), nameof(CameraAim.Instance))),
++                new CodeMatch(instruction => instruction.IsStloc()))
++            .ThrowIfInvalid("PlayerLocalCamera.OnPhotonSerializeView: CameraAim.Instance local not found");
++        var local = matcher.InstructionAt(1);
++        var replaced = 0;
++
++        matcher.Start();
++        while (matcher.IsValid && matcher.Pos < matcher.Length - 1)
++        {
++            var current = matcher.Instruction;
++            if (current.IsLdloc() && SameLocal(current, local) && matcher.InstructionAt(1).Calls(getTransform))
++            {
++                matcher.SetInstruction(new CodeInstruction(OpCodes.Ldarg_0).WithLabels(current.labels)
++                    .WithBlocks(current.blocks));
++                replaced++;
++            }
++            matcher.Advance(1);
++        }
++
++        if (replaced == 0)
++            throw new InvalidOperationException("PlayerLocalCamera.OnPhotonSerializeView: no CameraAim transform read");
++        return matcher.InstructionEnumeration();
++
++        static bool SameLocal(CodeInstruction load, CodeInstruction store) =>
++            LocalIndex(load) == LocalIndex(store) && LocalIndex(load) >= 0;
++
++        static int LocalIndex(CodeInstruction instruction) => instruction.opcode.Value switch
++        {
++            // ldloc.0-3 = 0x06-0x09, stloc.0-3 = 0x0A-0x0D
++            >= 0x06 and <= 0x09 => instruction.opcode.Value - 0x06,
++            >= 0x0A and <= 0x0D => instruction.opcode.Value - 0x0A,
++            _ => instruction.operand switch
++            {
++                LocalBuilder builder => builder.LocalIndex,
++                int index => index,
++                byte index => index,
++                _ => -1,
++            },
++        };
+     }
+ 
+     /// <summary>
+diff --git a/Source/Patches/DebugPatches.cs b/Source/Patches/DebugPatches.cs
+index f694de4..c9665bc 100644
+--- a/Source/Patches/DebugPatches.cs
++++ b/Source/Patches/DebugPatches.cs
+@@ -14,9 +14,11 @@ internal static class DebugPatches
+     [HarmonyTranspiler]
+     private static IEnumerable<CodeInstruction> InjectVRTextPatch(IEnumerable<CodeInstruction> instructions)
+     {
+-        return new CodeMatcher(instructions)
+-            .MatchForward(false, new CodeMatch(OpCodes.Ldstr, "{0}\n{1} ({2})"))
+-            .SetOperandAndAdvance("{0} (VR)\n{1} ({2})")
+-            .InstructionEnumeration();
++        // R.E.P.O. 0.5.0 builds the text from pieces, without this format string: leave it as it is then
++        var matcher = new CodeMatcher(instructions)
++            .MatchForward(false, new CodeMatch(OpCodes.Ldstr, "{0}\n{1} ({2})"));
++        if (matcher.IsValid)
++            matcher.SetOperandAndAdvance("{0} (VR)\n{1} ({2})");
++        return matcher.InstructionEnumeration();
+     }
+ }
+\ No newline at end of file
+diff --git a/Source/Patches/Enemy/EnemyCeilingEyePatches.cs b/Source/Patches/Enemy/EnemyCeilingEyePatches.cs
+index 9c9bb13..028bac6 100644
+--- a/Source/Patches/Enemy/EnemyCeilingEyePatches.cs
++++ b/Source/Patches/Enemy/EnemyCeilingEyePatches.cs
+@@ -2,6 +2,7 @@
+ using System.Reflection.Emit;
+ using BepInEx.Configuration;
+ using HarmonyLib;
++using UnityEngine;
+ using RepoXR.Assets;
+ using RepoXR.Managers;
+ using RepoXR.Player.Camera;
+@@ -22,7 +23,8 @@ internal static class EnemyCeilingEyePatches
+     {
+         return new CodeMatcher(instructions)
+             .MatchForward(false,
+-                new CodeMatch(OpCodes.Callvirt, Method(typeof(CameraAim), nameof(CameraAim.AimTargetSoftSet))))
++                new CodeMatch(OpCodes.Callvirt, Method(typeof(CameraAim), nameof(CameraAim.AimTargetSoftSet),
++                    [typeof(Vector3), typeof(float), typeof(float), typeof(float), typeof(GameObject), typeof(int)])))
+             .Advance(-11)
+             .SetOperandAndAdvance(Field(typeof(VRCameraAim), nameof(VRCameraAim.instance)))
+             .Advance(10)
+diff --git a/Source/Patches/Enemy/EnemyHeartHuggerPatches.cs b/Source/Patches/Enemy/EnemyHeartHuggerPatches.cs
+index a6d6667..887efb4 100644
+--- a/Source/Patches/Enemy/EnemyHeartHuggerPatches.cs
++++ b/Source/Patches/Enemy/EnemyHeartHuggerPatches.cs
+@@ -2,6 +2,7 @@
+ using System.Reflection.Emit;
+ using BepInEx.Configuration;
+ using HarmonyLib;
++using UnityEngine;
+ using RepoXR.Player.Camera;
+ 
+ using static HarmonyLib.AccessTools;
+@@ -22,7 +23,8 @@ internal static class EnemyHeartHuggerPatches
+             .MatchForward(false, new CodeMatch(OpCodes.Ldsfld, Field(typeof(CameraAim), nameof(CameraAim.Instance))))
+             .SetOperandAndAdvance(Field(typeof(VRCameraAim), nameof(VRCameraAim.instance)))
+             .MatchForward(false,
+-                new CodeMatch(OpCodes.Callvirt, Method(typeof(CameraAim), nameof(CameraAim.AimTargetSoftSet))))
++                new CodeMatch(OpCodes.Callvirt, Method(typeof(CameraAim), nameof(CameraAim.AimTargetSoftSet),
++                    [typeof(Vector3), typeof(float), typeof(float), typeof(float), typeof(GameObject), typeof(int)])))
+             .SetAndAdvance(OpCodes.Call, Plugin.GetConfigGetter())
+             .InsertAndAdvance(
+                 new CodeInstruction(OpCodes.Callvirt, PropertyGetter(typeof(Config), nameof(Config.ReducedAimImpact))),
+diff --git a/Source/Patches/InputPatches.cs b/Source/Patches/InputPatches.cs
+index 07feb5d..4d44eae 100644
+--- a/Source/Patches/InputPatches.cs
++++ b/Source/Patches/InputPatches.cs
+@@ -150,6 +150,12 @@ internal static class InputPatches
+                 or InputKey.Inventory3 or InputKey.Interact when __instance.disableMovementTimer > 0:
+                 return true;
+ 
++            // R.E.P.O. 0.5.0 clicks its menus through InputKey.UIClick (SemiFunc.InputUIClick) instead of
++            // Input.GetMouseButtonDown, which the mouse input patches below replaced; the VR actions have no UIClick
++            case InputKey.UIClick when XRRayInteractorManager.Instance is { } rays:
++                __result = rays.GetTriggerDown();
++                return false;
++
+             // Do not allow pause menu during loading
+             case InputKey.Menu when LoadingUI.instance.isActiveAndEnabled:
+ 
+@@ -178,6 +184,12 @@ internal static class InputPatches
+         if (__instance.disableControlsExceptTimer > 0 && !__instance.disableControlsExceptList.Contains(key))
+             return true;
+ 
++        if (key == InputKey.UIClick && XRRayInteractorManager.Instance is { } rays)
++        {
++            __result = rays.GetTriggerUp();
++            return false;
++        }
++
+         __result = __instance.GetAction(key).WasReleasedThisFrame();
+ 
+         return false;
+@@ -193,6 +205,12 @@ internal static class InputPatches
+         if (__instance.disableControlsExceptTimer > 0 && !__instance.disableControlsExceptList.Contains(key))
+             return true;
+ 
++        if (key == InputKey.UIClick && XRRayInteractorManager.Instance is { } rays)
++        {
++            __result = rays.GetTriggerButton();
++            return false;
++        }
++
+         __result = __instance.GetAction(key).IsPressed();
+ 
+         return false;
+@@ -243,9 +261,10 @@ internal static class InputPatches
+     /// </summary>
+     [HarmonyPatch(typeof(InputManager), nameof(InputManager.InputDisplayGetString))]
+     [HarmonyPrefix]
+-    private static bool InputDisplayGetString(InputAction action, int bindingIndex, ref string __result)
++    // by position: R.E.P.O. 0.5.0 renamed the parameters (_action, _index)
++    private static bool InputDisplayGetString(InputAction __0, int __1, ref string __result)
+     {
+-        var binding = action.bindings[bindingIndex].effectivePath;
++        var binding = __0.bindings[__1].effectivePath;
+         __result = Utils.GetControlSpriteString(binding);
+ 
+         return false;
+@@ -254,7 +273,7 @@ internal static class InputPatches
+     /// <summary>
+     /// Use our own <see cref="VRInputSystem.InputToggleGet"/> since we might have other bindings not present in the base game
+     /// </summary>
+-    [HarmonyPatch(typeof(InputManager), nameof(InputManager.InputToggleGet))]
++    [HarmonyPatch(typeof(InputManager), nameof(InputManager.InputToggleGet), typeof(InputKey))]  // 0.5.0 added a scheme overload
+     [HarmonyPrefix]
+     private static bool InputToggleGet(ref InputKey key, ref bool __result)
+     {
+@@ -266,13 +285,16 @@ internal static class InputPatches
+     /// <summary>
+     /// Prevent the addition of underlines in the input text
+     /// </summary>
+-    [HarmonyPatch(typeof(InputManager), nameof(InputManager.InputDisplayReplaceTags))]
++    // R.E.P.O. 0.5.0: InputManager.InputDisplayReplaceTags is obsolete and forwards (through
++    // SemiFunc.InputDisplayReplaceTags) to the new InputGlyphs.ReplaceTags
++    [HarmonyPatch(typeof(InputGlyphs), nameof(InputGlyphs.ReplaceTags))]
+     [HarmonyPrefix]
+-    private static bool NoUnderlinePatch(InputManager __instance, ref string __result, ref string _text)
++    private static bool NoUnderlinePatch(ref string __result, string __0)
+     {
+-        _text = __instance.tagDictionary.Aggregate(_text,
++        var __instance = InputManager.instance;
++        var _text = __instance.tagDictionary.Aggregate(__0,
+             (current, keyValuePair) => current.Replace(keyValuePair.Key,
+-                __instance.InputDisplayGet(keyValuePair.Value, MenuKeybind.KeyType.InputKey, MovementDirection.Up)));
++                __instance.InputDisplayGet(keyValuePair.Value, KeyType.InputKey, MovementDirection.Up)));
+ 
+         __result = _text;
+ 
+diff --git a/Source/Patches/Item/ItemVehiclePatches.cs b/Source/Patches/Item/ItemVehiclePatches.cs
+index 9ca0ae3..aced992 100644
+--- a/Source/Patches/Item/ItemVehiclePatches.cs
++++ b/Source/Patches/Item/ItemVehiclePatches.cs
+@@ -28,45 +28,13 @@ internal static class ItemVehiclePatches
+         static float GetDriftDeadzone(ItemVehicle vehicle) => vehicle.currentDriver.IsVRPlayer() ? 0.5f : 0.1f;
+     }
+ 
+-    [HarmonyPatch(typeof(ItemVehicle), nameof(ItemVehicle.ApplyVehicleMovement))]
+-    [HarmonyTranspiler]
+-    private static IEnumerable<CodeInstruction> ApplyVehicleMovementPatch(IEnumerable<CodeInstruction> instructions)
+-    {
+-        return new CodeMatcher(instructions)
+-            .MatchForward(false,
+-                new CodeMatch(OpCodes.Callvirt,
+-                    Method(typeof(PlayerLocalCamera), nameof(PlayerLocalCamera.GetOverrideTransform))))
+-            .Repeat(m => m.Set(OpCodes.Call, ((Func<PlayerLocalCamera, Transform>)GetVehicleTargetForward).Method))
+-            .InstructionEnumeration();
+-    }
+-
+-    [HarmonyPatch(typeof(ItemVehicle), nameof(ItemVehicle.ApplyVehicleSteering))]
+-    [HarmonyTranspiler]
+-    private static IEnumerable<CodeInstruction> ApplyVehicleSteeringPatch(IEnumerable<CodeInstruction> instructions)
+-    {
+-        return new CodeMatcher(instructions)
+-            .MatchForward(false,
+-                new CodeMatch(OpCodes.Callvirt,
+-                    Method(typeof(PlayerLocalCamera), nameof(PlayerLocalCamera.GetOverrideTransform))))
+-            .Set(OpCodes.Call, ((Func<PlayerLocalCamera, Transform>)GetVehicleTargetForward).Method)
+-            .InstructionEnumeration();
+-    }
+-
+-    [HarmonyPatch(typeof(ItemVehicle), nameof(ItemVehicle.ApplyVehicleDrift))]
+-    [HarmonyTranspiler]
+-    private static IEnumerable<CodeInstruction> ApplyVehicleDriftPatch(IEnumerable<CodeInstruction> instructions)
+-    {
+-        return new CodeMatcher(instructions)
+-            .MatchForward(false,
+-                new CodeMatch(OpCodes.Callvirt,
+-                    Method(typeof(PlayerLocalCamera), nameof(PlayerLocalCamera.GetOverrideTransform))))
+-            .Set(OpCodes.Call, ((Func<PlayerLocalCamera, Transform>)GetVehicleTargetForward).Method)
+-            .InstructionEnumeration();
+-    }
+-
+-    [HarmonyPatch(typeof(ItemVehicle), nameof(ItemVehicle.UpdateSteering))]
++    /// <summary>
++    /// R.E.P.O. 0.5.0: movement, steering and drift no longer ask the camera themselves, they all read
++    /// <see cref="ItemVehicle.ControlCameraForward"/>; the VR forward (head or hand) goes in there once
++    /// </summary>
++    [HarmonyPatch(typeof(ItemVehicle), nameof(ItemVehicle.ControlCameraForward), MethodType.Getter)]
+     [HarmonyTranspiler]
+-    private static IEnumerable<CodeInstruction> UpdateSteeringPatch(IEnumerable<CodeInstruction> instructions)
++    private static IEnumerable<CodeInstruction> ControlCameraForwardPatch(IEnumerable<CodeInstruction> instructions)
+     {
+         return new CodeMatcher(instructions)
+             .MatchForward(false,
+diff --git a/Source/Patches/PhysGrabberPatches.cs b/Source/Patches/PhysGrabberPatches.cs
+index b1599a0..569d8fd 100644
+--- a/Source/Patches/PhysGrabberPatches.cs
++++ b/Source/Patches/PhysGrabberPatches.cs
+@@ -110,8 +110,9 @@ internal static class PhysGrabberPatches
+     {
+         return new CodeMatcher(instructions)
+             // Use VR controls for rotation instead of mouse inputs
+-            .MatchForward(false, new CodeMatch(OpCodes.Ldstr, "Mouse X"))
+-            .RemoveInstructions(10)
++            // R.E.P.O. 0.5.0: x = SemiFunc.InputMouseX() * sensitivity; y = SemiFunc.InputMouseY() * sensitivity (8 instructions)
++            .MatchForward(false, new CodeMatch(OpCodes.Call, Method(typeof(SemiFunc), nameof(SemiFunc.InputMouseX))))
++            .RemoveInstructions(8)
+             .Insert(
+                 // TESTER: Check these operands in Debug vs Release builds
+                 new CodeInstruction(OpCodes.Ldloca_S, Plugin.GameDebugBuild ? 13 : 5), // Mouse X
+@@ -235,14 +236,20 @@ internal static class PhysGrabberUniversalPatches
+     /// <summary>
+     /// Make our tumble climb follow our hand rotation instead of the camera rotation
+     /// </summary>
+-    [HarmonyPatch(typeof(PhysGrabber), nameof(PhysGrabber.GrabStateClimb))]
++    // R.E.P.O. 0.5.0: the climb rotation moved out of GrabStateClimb into ClimbTargetUpdate, which starts from the
++    // climb stick's rotation (`var rotation = climbStickTransform.rotation`); that read becomes the hand's rotation.
++    // (Matched against GrabStateClimb, which no longer calls Quaternion.Angle, the old Advance(-5) cut into its end and
++    // IL2CPP refused the method)
++    [HarmonyPatch(typeof(PhysGrabber), nameof(PhysGrabber.ClimbTargetUpdate))]
+     [HarmonyTranspiler]
+     private static IEnumerable<CodeInstruction> HandBasedTumbleClimbPatch(IEnumerable<CodeInstruction> instructions)
+     {
+         return new CodeMatcher(instructions)
+             .MatchForward(false,
+-                new CodeMatch(OpCodes.Call, Method(typeof(Quaternion), nameof(Quaternion.Angle))))
+-            .Advance(-5)
++                new CodeMatch(OpCodes.Ldfld, Field(typeof(PhysGrabber), nameof(PhysGrabber.climbStickTransform))),
++                new CodeMatch(OpCodes.Callvirt, PropertyGetter(typeof(Transform), nameof(Transform.rotation))),
++                new CodeMatch(OpCodes.Stloc_0))
++            .ThrowIfInvalid("PhysGrabber.ClimbTargetUpdate: climbStickTransform.rotation not found")
+             .SetAndAdvance(OpCodes.Call, ((Func<PhysGrabber, Quaternion>)GetRotation).Method)
+             .RemoveInstruction()
+             .InstructionEnumeration();
+diff --git a/Source/Patches/Player/MapToolPatches.cs b/Source/Patches/Player/MapToolPatches.cs
+index 8ada85a..273f09a 100644
+--- a/Source/Patches/Player/MapToolPatches.cs
++++ b/Source/Patches/Player/MapToolPatches.cs
+@@ -114,7 +114,7 @@ internal static class MapToolPatches
+     private static IEnumerable<CodeInstruction> NoShakePatch(IEnumerable<CodeInstruction> instructions)
+     {
+         return new CodeMatcher(instructions)
+-            .MatchForward(false, new CodeMatch(OpCodes.Callvirt, Method(typeof(CameraShake), nameof(CameraShake.Shake))))
++            .MatchForward(false, new CodeMatch(OpCodes.Callvirt, Method(typeof(CameraShake), nameof(CameraShake.Shake), [typeof(float), typeof(float)])))
+             .Repeat(matcher => matcher
+                 .Advance(-4)
+                 .SetOpcodeAndAdvance(OpCodes.Nop)
+diff --git a/Source/Patches/UI/MenuPageSavesPatches.cs b/Source/Patches/UI/MenuPageSavesPatches.cs
+index 3964fa4..8bf31f8 100644
+--- a/Source/Patches/UI/MenuPageSavesPatches.cs
++++ b/Source/Patches/UI/MenuPageSavesPatches.cs
+@@ -7,9 +7,10 @@ namespace RepoXR.Patches.UI;
+ internal static class MenuPageSavesPatches
+ {
+     /// <summary>
+-    /// Make sure to close the keyboard after renaming
++    /// Make sure to close the keyboard after renaming (R.E.P.O. 0.5.0: every text prompt, the save rename among them, is
++    /// the shared MenuPagePopUpTextInput)
+     /// </summary>
+-    [HarmonyPatch(typeof(MenuPageSavesRename), nameof(MenuPageSavesRename.ButtonConfirm))]
++    [HarmonyPatch(typeof(MenuPagePopUpTextInput), nameof(MenuPagePopUpTextInput.ButtonEventConfirm))]
+     [HarmonyPostfix]
+     private static void OnConfirm()
+     {
+@@ -20,7 +21,7 @@ internal static class MenuPageSavesPatches
+     /// <summary>
+     /// Make sure to close the keyboard after canceling the renaming
+     /// </summary>
+-    [HarmonyPatch(typeof(MenuPageSavesRename), nameof(MenuPageSavesRename.ExitPage))]
++    [HarmonyPatch(typeof(MenuPagePopUpTextInput), nameof(MenuPagePopUpTextInput.ButtonEventCancel))]
+     [HarmonyPostfix]
+     private static void OnExitPage()
+     {
+diff --git a/Source/Patches/UI/MenuTextInputPatches.cs b/Source/Patches/UI/MenuTextInputPatches.cs
+index 5f8710d..503367b 100644
+--- a/Source/Patches/UI/MenuTextInputPatches.cs
++++ b/Source/Patches/UI/MenuTextInputPatches.cs
+@@ -19,6 +19,10 @@ internal static class MenuTextInputPatches
+     [HarmonyPostfix]
+     private static void OnMenuTextInputCreate(MenuTextInput __instance)
+     {
++        // R.E.P.O. 0.5.0: the password page's field is a MenuTextInput too, but PasswordUI brings its own keyboard
++        if (__instance.GetComponentInParent<MenuPagePassword>() != null)
++            return;
++
+         var canvas = __instance.GetComponentInParent<Canvas>().GetComponent<RectTransform>();
+         var keyboardContainer = new GameObject("Keyboard Scale")
+             {
+@@ -52,33 +56,6 @@ internal static class MenuTextInputPatches
+             .InstructionEnumeration();
+     }
+     
+-    // Bunch of menu close detection patches
+-
+-    [HarmonyPatch(typeof(MenuPageServerListCreateNew), nameof(MenuPageServerListCreateNew.ExitPage))]
+-    [HarmonyPostfix]
+-    private static void OnCreateServerButtonExit()
+-    {
+-        InputKeyboard.instance.Close();
+-    }
+-
+-    [HarmonyPatch(typeof(MenuPageServerListCreateNew), nameof(MenuPageServerListCreateNew.ButtonConfirm))]
+-    [HarmonyPostfix]
+-    private static void OnCreateServerButtonConfirm()
+-    {
+-        InputKeyboard.instance.Close();
+-    }
+-
+-    [HarmonyPatch(typeof(MenuPageServerListSearch), nameof(MenuPageServerListSearch.ExitPage))]
+-    [HarmonyPostfix]
+-    private static void OnSearchServerButtonExit()
+-    {
+-        InputKeyboard.instance.Close();
+-    }
+-
+-    [HarmonyPatch(typeof(MenuPageServerListSearch), nameof(MenuPageServerListSearch.ButtonConfirm))]
+-    [HarmonyPostfix]
+-    private static void OnSearchServerButtonConfirm()
+-    {
+-        InputKeyboard.instance.Close();
+-    }
+-}
+\ No newline at end of file
++    // Menu close detection: R.E.P.O. 0.5.0 replaced MenuPageServerListCreateNew and MenuPageServerListSearch (and the
++    // save rename page) with one text prompt, MenuPagePopUpTextInput, its close detection is in MenuPageSavesPatches
++}
+diff --git a/Source/Patches/UI/PasswordMenuPatches.cs b/Source/Patches/UI/PasswordMenuPatches.cs
+index 8a55652..1009d71 100644
+--- a/Source/Patches/UI/PasswordMenuPatches.cs
++++ b/Source/Patches/UI/PasswordMenuPatches.cs
+@@ -30,20 +30,6 @@ internal static class PasswordMenuPatches
+         __instance.GetComponent<PasswordUI>().OnConfirm();
+     }
+ 
+-    /// <summary>
+-    /// Fix the cursor position in VR
+-    /// </summary>
+-    [HarmonyPatch(typeof(MenuPagePassword), nameof(MenuPagePassword.PasswordTextSet))]
+-    [HarmonyTranspiler]
+-    private static IEnumerable<CodeInstruction> TextCursorPatch(IEnumerable<CodeInstruction> instructions)
+-    {
+-        return new CodeMatcher(instructions)
+-            .MatchForward(false,
+-                new CodeMatch(OpCodes.Callvirt, PropertyGetter(typeof(Transform), nameof(Transform.position))))
+-            .SetOperandAndAdvance(PropertyGetter(typeof(Transform), nameof(Transform.localPosition)))
+-            .MatchForward(false,
+-                new CodeMatch(OpCodes.Callvirt, PropertySetter(typeof(Transform), nameof(Transform.position))))
+-            .SetOperandAndAdvance(PropertySetter(typeof(Transform), nameof(Transform.localPosition)))
+-            .InstructionEnumeration();
+-    }
+-}
+\ No newline at end of file
++    // R.E.P.O. 0.5.0: the password page has no PasswordTextSet of its own any more, its field is a MenuTextInput, whose
++    // cursor MenuTextInputPatches.TextCursorPatch fixes
++}
+diff --git a/Source/Patches/UI/PlayerNamePrefixPatches.cs b/Source/Patches/UI/PlayerNamePrefixPatches.cs
+index 16c2ac0..8034856 100644
+--- a/Source/Patches/UI/PlayerNamePrefixPatches.cs
++++ b/Source/Patches/UI/PlayerNamePrefixPatches.cs
+@@ -55,8 +55,7 @@ internal static class PlayerNamePrefixPatches
+             yield break;
+ 
+             static bool HostIsInVR(MenuPageLobby lobby) => lobby.lobbyPlayers.Any(player =>
+-                player.photonView.Owner.IsMasterClient &&
+-                player.photonView.Owner.CustomProperties.ContainsKey("VRPlayer"));
++                player.IsMasterClient && player.CustomProperties.ContainsKey("VRPlayer"));  // 0.5.0: Photon players
+         }
+     }
+ 
+diff --git a/Source/Patches/UI/UIPatches.cs b/Source/Patches/UI/UIPatches.cs
+index 950e0b2..1079747 100644
+--- a/Source/Patches/UI/UIPatches.cs
++++ b/Source/Patches/UI/UIPatches.cs
+@@ -147,7 +147,8 @@ internal static class UIPatches
+     /// <summary>
+     /// Detect UI hits using VR pointers instead of mouse cursor
+     /// </summary>
+-    [HarmonyPatch(typeof(SemiFunc), nameof(SemiFunc.UIMouseGetLocalPositionWithinRectTransform))]
++    // R.E.P.O. 0.5.0 added an overload with an explicit mouse position, this one passes the cursor's
++    [HarmonyPatch(typeof(SemiFunc), nameof(SemiFunc.UIMouseGetLocalPositionWithinRectTransform), typeof(RectTransform))]
+     [HarmonyPrefix]
+     private static bool UIMouseGetLocalPositionWithinRectTransformPatch(RectTransform rectTransform,
+         ref Vector2 __result)
+@@ -287,7 +288,7 @@ internal static class UIPatches
+     {
+         var manager = XRRayInteractorManager.Instance;
+ 
+-        if (!__instance.menuElementHover.isHovering || manager == null || SemiFunc.InputDown(InputKey.Confirm) ||
++        if (!__instance.menuElementHover.isHovering || manager == null || SemiFunc.InputDown(InputKey.UIClick) ||
+             SemiFunc.InputDown(InputKey.Grab))
+             return;
+ 
+diff --git a/Source/Patches/Valuables/ValuableArcticSnowBikePatches.cs b/Source/Patches/Valuables/ValuableArcticSnowBikePatches.cs
+index 935c66c..0e3cd3c 100644
+--- a/Source/Patches/Valuables/ValuableArcticSnowBikePatches.cs
++++ b/Source/Patches/Valuables/ValuableArcticSnowBikePatches.cs
+@@ -16,14 +16,19 @@ internal static class ValuableArcticSnowBikePatches
+     /// <summary>
+     /// Steer the arctic bike using your hand instead of head
+     /// </summary>
+-    [HarmonyPatch(typeof(ValuableArcticSnowBike), nameof(ValuableArcticSnowBike.UpdateSteering))]
++    // R.E.P.O. 0.5.0: the heading comes from DriveHeadingUpdate, driver.localCamera.GetOverrideTransform().eulerAngles.y
++    [HarmonyPatch(typeof(ValuableArcticSnowBike), nameof(ValuableArcticSnowBike.DriveHeadingUpdate))]
+     [HarmonyTranspiler]
+     private static IEnumerable<CodeInstruction> BikeHandSteeringPatch(IEnumerable<CodeInstruction> instructions)
+     {
+         return new CodeMatcher(instructions)
+             .MatchForward(false,
+-                new CodeMatch(OpCodes.Ldfld, Field(typeof(PlayerAvatar), nameof(PlayerAvatar.localCamera))))
++                new CodeMatch(OpCodes.Ldfld, Field(typeof(PlayerAvatar), nameof(PlayerAvatar.localCamera))),
++                new CodeMatch(OpCodes.Callvirt,
++                    Method(typeof(PlayerLocalCamera), nameof(PlayerLocalCamera.GetOverrideTransform))))
+             .Set(OpCodes.Call, ((Func<PlayerAvatar, Transform>)GetSourceTransform).Method)
++            .Advance(1)
++            .RemoveInstruction()
+             .InstructionEnumeration();
+ 
+         static Transform GetSourceTransform(PlayerAvatar player)
+diff --git a/Source/Patches/Valuables/ValuableGumballPatches.cs b/Source/Patches/Valuables/ValuableGumballPatches.cs
+index ecfd723..7c9d1c1 100644
+--- a/Source/Patches/Valuables/ValuableGumballPatches.cs
++++ b/Source/Patches/Valuables/ValuableGumballPatches.cs
+@@ -2,6 +2,7 @@
+ using System.Reflection.Emit;
+ using BepInEx.Configuration;
+ using HarmonyLib;
++using UnityEngine;
+ using RepoXR.Player.Camera;
+ using static HarmonyLib.AccessTools;
+ 
+@@ -21,7 +22,8 @@ internal static class ItemGumballPatches
+             .MatchForward(false, new CodeMatch(OpCodes.Ldsfld, Field(typeof(CameraAim), nameof(CameraAim.Instance))))
+             .SetOperandAndAdvance(Field(typeof(VRCameraAim), nameof(VRCameraAim.instance)))
+             .MatchForward(false,
+-                new CodeMatch(OpCodes.Callvirt, Method(typeof(CameraAim), nameof(CameraAim.AimTargetSoftSet))))
++                new CodeMatch(OpCodes.Callvirt, Method(typeof(CameraAim), nameof(CameraAim.AimTargetSoftSet),
++                    [typeof(Vector3), typeof(float), typeof(float), typeof(float), typeof(GameObject), typeof(int)])))
+             .SetAndAdvance(OpCodes.Call, Plugin.GetConfigGetter())
+             .InsertAndAdvance(
+                 new CodeInstruction(OpCodes.Callvirt, PropertyGetter(typeof(Config), nameof(Config.ReducedAimImpact))),
+diff --git a/Source/UI/Menu/InputKeyboard.cs b/Source/UI/Menu/InputKeyboard.cs
+index 1d322ee..8f826ec 100644
+--- a/Source/UI/Menu/InputKeyboard.cs
++++ b/Source/UI/Menu/InputKeyboard.cs
+@@ -82,10 +82,9 @@ public class InputKeyboard : MonoBehaviour
+                 break;
+             
+             case KeyboardKeyFunc.Function.Enter:
+-                if (menuInput.GetComponentInParent<MenuPageServerListCreateNew>() is {} createPage)
+-                    createPage.ButtonConfirm();
+-                else if (menuInput.GetComponentInParent<MenuPageServerListSearch>() is {} searchPage)
+-                    searchPage.ButtonConfirm();
++                // R.E.P.O. 0.5.0: server name, server search and save rename all use this one text prompt
++                if (menuInput.GetComponentInParent<MenuPagePopUpTextInput>() is {} popUp)
++                    popUp.ButtonEventConfirm();
+                     
+                 break;
+         }
+diff --git a/Source/UI/PasswordUI.cs b/Source/UI/PasswordUI.cs
+index be6a3bc..cd3547b 100644
+--- a/Source/UI/PasswordUI.cs
++++ b/Source/UI/PasswordUI.cs
+@@ -60,7 +60,7 @@ public class PasswordUI : MonoBehaviour
+     
+     private void OnKeyboardKeyPressed(KeyboardValueKey key)
+     {
+-        passwordPage.password += keyboard.IsShifted ? key.ShiftValue : key.Value;
++        passwordPage.passwordInput.textCurrent += keyboard.IsShifted ? key.ShiftValue : key.Value;  // 0.5.0: a MenuTextInput
+     }
+ 
+     private void OnKeyboardFunctionKeyPressed(KeyboardKeyFunc key)
+@@ -72,7 +72,8 @@ public class PasswordUI : MonoBehaviour
+                 return;
+             
+             case KeyboardKeyFunc.Function.Backspace:
+-                passwordPage.password = passwordPage.password.Remove(Mathf.Max(passwordPage.password.Length - 1, 0));
++                var text = passwordPage.passwordInput.textCurrent;
++                passwordPage.passwordInput.textCurrent = text.Remove(Mathf.Max(text.Length - 1, 0));
+                 break;
+         }
+     }
+diff --git a/Source/UI/XRRayInteractorManager.cs b/Source/UI/XRRayInteractorManager.cs
+index 644b2b7..abd64a3 100644
+--- a/Source/UI/XRRayInteractorManager.cs
++++ b/Source/UI/XRRayInteractorManager.cs
+@@ -91,6 +91,12 @@ public class XRRayInteractorManager : MonoBehaviour
+         return actions.uiPressAction.action.WasPressedThisFrame();
+     }
+ 
++    public bool GetTriggerUp()
++    {
++        var (_, actions) = GetActiveInteractor();
++        return actions.uiPressAction.action.WasReleasedThisFrame();
++    }
++
+     public bool GetTriggerButton()
+     {
+         var (_, actions) = GetActiveInteractor();

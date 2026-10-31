@@ -50,7 +50,7 @@ PATCHES = [
                     return;
                 m_BackgroundBehavior = value;
 """),
-    ("com.unity.ugui/Runtime/UI/Core/Button.cs",
+    ("com.unity.ugui/Runtime/UGUI/UI/Core/Button.cs",
      """        public virtual void OnPointerClick(PointerEventData eventData)
         {
 """,

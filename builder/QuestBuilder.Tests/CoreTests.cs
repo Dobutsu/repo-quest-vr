@@ -117,7 +117,7 @@ public sealed class CoreTests : IDisposable
 
         var kit = Kit.Load(kitDir);
 
-        Assert.Equal("2022.3.62f3", kit.Manifest.Unity.Version);
+        Assert.Equal("6000.3.17f1", kit.Manifest.Unity.Version);
         Assert.Equal("1.2.3", kit.Manifest.Downloads.RepoXR.Version);
         Assert.Contains(kit.Manifest.Downloads.NuGet, p => p.Id == "customdiscoverstatelib" && p.Lib == "lib/netstandard2.1");
         Assert.True(kit.Manifest.Downloads.AssetRipper.Files.ContainsKey("win-x64"));

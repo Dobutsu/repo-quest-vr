@@ -1,0 +1,66 @@
+diff --git a/Source/Rendering/FpsCounter.cs b/Source/Rendering/FpsCounter.cs
+index 4e48d51..65013e1 100644
+--- a/Source/Rendering/FpsCounter.cs
++++ b/Source/Rendering/FpsCounter.cs
+@@ -1,3 +1,4 @@
++using RepoXR.Managers;
+ using UnityEngine;
+ using UnityEngine.UI;
+ 
+@@ -20,6 +21,8 @@ internal class FpsCounter : MonoBehaviour
+     private int frames;
+     private float elapsed, worst;
+     private readonly FrameTiming[] timings = new FrameTiming[1];
++    private Camera? reportedCamera;
++    private bool reportedNoCamera;
+ 
+     public static void Create()
+     {
+@@ -78,8 +81,16 @@ internal class FpsCounter : MonoBehaviour
+             canvas.enabled = show;
+     }
+ 
++    private bool? lastSetting;
++
+     private void Update()
+     {
++        if (lastSetting != Plugin.Config.ShowFPS.Value)
++        {
++            lastSetting = Plugin.Config.ShowFPS.Value;
++            Logger.LogInfo($"[FPS] counter {(lastSetting.Value ? "on" : "off")}");
++        }
++
+         if (!Plugin.Config.ShowFPS.Value)
+         {
+             Show(false);
+@@ -118,9 +129,14 @@ internal class FpsCounter : MonoBehaviour
+         if (!Plugin.Config.ShowFPS.Value)
+             return;
+ 
+-        var camera = Camera.main;
++        // RepoXR's VR camera in a level; the main menu sets up its own, tagged as the main camera
++        var camera = VRSession.Instance is { MainCamera: { } vr } && vr.isActiveAndEnabled ? vr : Camera.main;
+         if (camera == null)
+         {
++            if (reportedCamera != null || !reportedNoCamera)
++                Logger.LogInfo("[FPS] no camera to follow");
++            reportedNoCamera = true;
++            reportedCamera = null;
+             Show(false);
+             return;
+         }
+@@ -132,6 +148,14 @@ internal class FpsCounter : MonoBehaviour
+         if (gameObject.layer != layer)
+             SetLayer(transform, layer);
+         Show(true);
++
++        if (camera != reportedCamera)
++        {
++            reportedCamera = camera;
++            reportedNoCamera = false;
++            Logger.LogInfo($"[FPS] following {camera.name} (layer {LayerMask.LayerToName(layer)}, culling mask {camera.cullingMask:X}, " +
++                           $"stereo {camera.stereoEnabled}), font {(text.font ? text.font.name : "none")}");
++        }
+     }
+ 
+     /// <summary>A layer the camera draws: its own, else UI, else Default</summary>

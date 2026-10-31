@@ -1,0 +1,171 @@
+diff --git a/Source/Patches/UI/UIPatches.cs b/Source/Patches/UI/UIPatches.cs
+index d842d2b..5de8877 100644
+--- a/Source/Patches/UI/UIPatches.cs
++++ b/Source/Patches/UI/UIPatches.cs
+@@ -61,14 +61,13 @@ internal static class UIPatches
+         if (XRRayInteractorManager.Instance is not { } manager)
+             return true;
+ 
+-        var (interactor, _) = manager.GetActiveInteractor();
+-        if (!interactor.TryGetCurrentUIRaycastResult(out var result))
++        if (!manager.TryGetUIHit(out var hitObject, out _))
+         {
+             __result = false;
+             return false;
+         }
+ 
+-        if (result.gameObject.GetComponentInParent<Canvas>() != rectTransform.GetComponentInParent<Canvas>())
++        if (hitObject.GetComponentInParent<Canvas>() != rectTransform.GetComponentInParent<Canvas>())
+         {
+             __result = false;
+             return false;
+diff --git a/Source/UI/XRRayInteractorManager.cs b/Source/UI/XRRayInteractorManager.cs
+index dc813ca..7fdbc96 100644
+--- a/Source/UI/XRRayInteractorManager.cs
++++ b/Source/UI/XRRayInteractorManager.cs
+@@ -149,9 +149,7 @@ public class XRRayInteractorManager : MonoBehaviour
+         if (!actions.uiPressAction.action.WasPressedThisFrame())
+             return;
+ 
+-        var hit = interactor.TryGetCurrentUIRaycastResult(out var result) && result.gameObject
+-            ? result.gameObject.name
+-            : "nothing";
++        var hit = TryGetUIHit(out var hitObject, out _) ? $"{hitObject.name} ({uiHitSource})" : "nothing";
+         var menu = MenuManager.instance;
+         var current = EventSystem.current;
+         Logger.LogInfo($"[UI] event system {(current ? current.name : "none")}, module {(current && current.currentInputModule ? current.currentInputModule.GetType().Name : "none")}, " +
+@@ -162,7 +160,7 @@ public class XRRayInteractorManager : MonoBehaviour
+         }
+         catch (Exception e)
+         {
+-            Logger.LogWarning($"[UI] probe failed: {e.Message}");
++            Logger.LogWarning($"[UI] probe failed: {e}");
+         }
+         Logger.LogInfo($"[UI] trigger ({activeController}): ray on {hit}; menu target {(menu ? menu.currentMenuID : "-")}, " +
+                        $"keyboard navigating {(menu && menu.isKeyboardNavigating)}, page {(menu && menu.currentMenuPage ? menu.currentMenuPage.name : "-")}, " +
+@@ -252,24 +250,118 @@ public class XRRayInteractorManager : MonoBehaviour
+ 
+     public Vector2 GetUIHitPosition(RectTransform? rect)
+     {
+-        var (interactor, _) = GetActiveInteractor();
+-        if (!interactor.TryGetCurrentUIRaycastResult(out var result))
++        if (!TryGetUIHit(out var hitObject, out var worldPosition))
+             return Vector2.one * -1000;
+ 
+         var canvas = rect is null
+-            ? result.gameObject.GetComponentInParent<Canvas>().transform
++            ? hitObject.GetComponentInParent<Canvas>().transform
+             : rect.GetComponentInParent<Canvas>().transform;
+ 
+-        var local = canvas.InverseTransformPoint(result.worldPosition);
++        var local = canvas.InverseTransformPoint(worldPosition);
+         return new Vector2(local.x, local.y);
+     }
+ 
+     public RectTransform GetUIHitRectTransform()
+     {
+-        var (interactor, _) = GetActiveInteractor();
+-        return !interactor.TryGetCurrentUIRaycastResult(out var result)
++        return !TryGetUIHit(out var hitObject, out _)
+             ? HUDCanvas.instance.GetComponent<RectTransform>()
+-            : result.gameObject.GetComponent<RectTransform>();
++            : hitObject.GetComponent<RectTransform>();
++    }
++
++    private int uiHitFrame = -1;
++    private bool uiHitValid;
++    private GameObject uiHitObject;
++    private Vector3 uiHitWorld;
++    private string uiHitSource = "-";
++    private float nextRaycasterRefresh;
++    private TrackedDeviceGraphicRaycaster[] raycasters = [];
++
++    /// <summary>
++    /// The UI under the active pointer: XRI's own result, or (Quest port) the same found by hand. On R.E.P.O. 0.5.0 /
++    /// Unity 6 XRI's UI raycast reports nothing although the trigger, the rays and the input module work, so the
++    /// pointer is intersected with every world-space canvas that has a TrackedDeviceGraphicRaycaster, and the topmost
++    /// raycast target under that point wins. Once per frame; the menus ask for it many times a frame
++    /// </summary>
++    public bool TryGetUIHit(out GameObject hitObject, out Vector3 worldPosition)
++    {
++        if (uiHitFrame != Time.frameCount)
++        {
++            uiHitFrame = Time.frameCount;
++            try
++            {
++                ComputeUIHit();
++            }
++            catch (Exception e)
++            {
++                uiHitValid = false;
++                Logger.LogWarning($"[UI] pointer hit failed: {e}");
++            }
++        }
++
++        hitObject = uiHitObject;
++        worldPosition = uiHitWorld;
++        return uiHitValid;
++    }
++
++    private void ComputeUIHit()
++    {
++        var (interactor, _) = GetActiveInteractor();
++        if (interactor.TryGetCurrentUIRaycastResult(out var result) && result.gameObject)
++        {
++            uiHitValid = true;
++            uiHitObject = result.gameObject;
++            uiHitWorld = result.worldPosition;
++            uiHitSource = "xri";
++            return;
++        }
++
++        uiHitValid = false;
++        uiHitObject = null!;
++        uiHitSource = "none";
++        if (Time.unscaledTime >= nextRaycasterRefresh)
++        {
++            nextRaycasterRefresh = Time.unscaledTime + 1f;
++            raycasters = FindObjectsOfType<TrackedDeviceGraphicRaycaster>();
++        }
++
++        var origin = interactor.rayOriginTransform ? interactor.rayOriginTransform : interactor.transform;
++        var ray = new Ray(origin.position, origin.forward);
++        var best = float.MaxValue;
++        var bestDepth = -1;
++        foreach (var raycaster in raycasters)
++        {
++            if (!raycaster || !raycaster.isActiveAndEnabled)
++                continue;
++            var canvas = raycaster.GetComponent<Canvas>();
++            if (!canvas || canvas.renderMode != RenderMode.WorldSpace)
++                continue;
++            var plane = new Plane(canvas.transform.forward, canvas.transform.position);
++            if (!plane.Raycast(ray, out var distance) && distance >= 0)
++                continue;
++            if (distance < 0 || distance > interactor.maxRaycastDistance || distance > best + 0.001f)
++                continue;
++            var point = ray.GetPoint(distance);
++            var graphics = GraphicRegistry.GetRaycastableGraphicsForCanvas(canvas);
++            for (var i = 0; i < graphics.Count; i++)
++            {
++                var graphic = graphics[i];
++                if (!graphic || !graphic.raycastTarget || !graphic.isActiveAndEnabled || graphic.canvasRenderer.cull ||
++                    graphic.depth < 0)
++                    continue;
++                var local = graphic.rectTransform.InverseTransformPoint(point);
++                if (!graphic.rectTransform.rect.Contains(new Vector2(local.x, local.y)))
++                    continue;
++                if (distance < best - 0.001f || graphic.depth > bestDepth)
++                {
++                    best = distance;
++                    bestDepth = graphic.depth;
++                    uiHitValid = true;
++                    uiHitObject = graphic.gameObject;
++                    uiHitWorld = point;
++                    uiHitSource = "manual";
++                }
++            }
++        }
+     }
+ 
+     public bool GetTriggerDown()

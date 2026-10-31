@@ -1,0 +1,82 @@
+diff --git a/Source/UI/GameFonts.cs b/Source/UI/GameFonts.cs
+index 356cb8a..4b18cfa 100644
+--- a/Source/UI/GameFonts.cs
++++ b/Source/UI/GameFonts.cs
+@@ -13,26 +13,30 @@ namespace RepoXR.UI;
+ /// </summary>
+ internal static class GameFonts
+ {
+-    private static bool done;
++    private static TMP_FontAsset? applied;
++    private static bool fromMenu;
+     private static bool reportedMissing;
+ 
+     public static void FixBundlePrefabs()
+     {
+-        if (done)
++        if (fromMenu)
+             return;
+ 
+-        // The menu's font if there is one, else TMP's default, else any loaded font that works. (1.0.7-qc11 to qc14
++        // The menu's font if there is one, else TMP's default, else any loaded font that works. (1.0.7-qc11 to qc15
+         // also wanted an atlas texture: Unity 6's dynamic fonts have none until they render a glyph, so no font ever
+         // qualified, the bundle's texts stayed broken, and a level whose RepoXR prefabs show text threw on every
+-        // instantiation: no VR camera setup, no HUD, no rays)
+-        var reference = Object.FindObjectsOfType<MenuButton>(true)
+-                            .Select(b => b.buttonText ? b.buttonText.font : null)
+-                            .FirstOrDefault(Usable) ??
+-                        (Usable(TMP_Settings.defaultFontAsset) ? TMP_Settings.defaultFontAsset : null) ??
+-                        Resources.FindObjectsOfTypeAll<TMP_FontAsset>().FirstOrDefault(Usable);
++        // instantiation.) A stand-in applied at a scene load, before the menu exists, is replaced by the menu's font
++        // once there is one (1.0.7-qc16 kept LiberationSans for good)
++        var menuFont = Object.FindObjectsOfType<MenuButton>(true)
++            .Select(b => b.buttonText ? b.buttonText.font : null)
++            .FirstOrDefault(Usable);
++        var reference = menuFont ??
++                        (applied ? null :
++                            (Usable(TMP_Settings.defaultFontAsset) ? TMP_Settings.defaultFontAsset : null) ??
++                            Resources.FindObjectsOfTypeAll<TMP_FontAsset>().FirstOrDefault(Usable));
+         if (!reference)
+         {
+-            if (!reportedMissing)
++            if (!applied && !reportedMissing)
+             {
+                 reportedMissing = true;
+                 Logger.LogWarning("[Fonts] no usable font yet; loaded: " + string.Join(", ",
+@@ -42,7 +46,6 @@ internal static class GameFonts
+             return;
+         }
+ 
+-        done = true;
+         var fixedTexts = 0;
+         foreach (var prefab in new[]
+                  {
+@@ -52,13 +55,16 @@ internal static class GameFonts
+                      AssetCollection.RuntimeSetting, AssetCollection.BoolSetting, AssetCollection.SliderSetting,
+                      AssetCollection.VRSettingsButton, AssetCollection.VRRig, AssetCollection.VRTumble
+                  })
+-            fixedTexts += Fix(prefab, reference);
++            fixedTexts += Fix(prefab, reference, applied);
+ 
+-        Logger.LogInfo($"[Fonts] {fixedTexts} texts in RepoXR's prefabs given the game's font {reference.name}");
++        applied = reference;
++        fromMenu = menuFont;
++        Logger.LogInfo($"[Fonts] {fixedTexts} texts in RepoXR's prefabs given the font {reference.name}" +
++                       (fromMenu ? " (the game's menu font)" : " (a stand-in until the menu's font is loaded)"));
+     }
+ 
+     /// <summary>Gives every text under <paramref name="root"/> without a usable font the reference font</summary>
+-    public static int Fix(GameObject? root, TMP_FontAsset reference)
++    public static int Fix(GameObject? root, TMP_FontAsset reference, TMP_FontAsset? standIn = null)
+     {
+         if (!root)
+             return 0;
+@@ -66,7 +72,7 @@ internal static class GameFonts
+         var count = 0;
+         foreach (var text in root!.GetComponentsInChildren<TMP_Text>(true))
+         {
+-            if (Usable(text.font) && text.fontSharedMaterial)
++            if (Usable(text.font) && text.fontSharedMaterial && (!standIn || text.font != standIn))
+                 continue;
+ 
+             text.font = reference;

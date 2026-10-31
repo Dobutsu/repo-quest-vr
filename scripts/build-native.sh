@@ -5,7 +5,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-unity="${UNITY:-/Applications/Unity/Hub/Editor/2022.3.62f3}"
+unity="${UNITY:-"$(python3 "$root/scripts/lib/paths.py" unity-editor)"}"
 ndk="$unity/PlaybackEngines/AndroidPlayer/NDK"
 clang="$(ls "$ndk"/toolchains/llvm/prebuilt/*/bin/aarch64-linux-android29-clang++ | head -1)"
 strip="$(dirname "$clang")/llvm-strip"

@@ -16,7 +16,7 @@ Inside RepoQuestBuilder.exe
 The license texts are in the kit the builder unpacks into its working folder (kit\<version>\licenses).
 
 Downloaded by the builder from their publishers (not included; their own licenses apply)
-- Unity Hub and Unity 2022.3.62f3 with Android Build Support - Unity's terms: https://unity.com/legal
+- Unity Hub and Unity 6000.3.17f1 with Android Build Support - Unity's terms: https://unity.com/legal
 - Android SDK and NDK (via Unity Hub) - https://developer.android.com/studio/terms
 - AssetRipper 2.0.0 (GPL-3.0) - https://github.com/AssetRipper/AssetRipper
 - uv and a Python 3.13 build (MIT/Apache-2.0; PSF license) - https://github.com/astral-sh/uv

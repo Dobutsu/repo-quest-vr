@@ -33,7 +33,7 @@ public static class ReportBuilder
             summary.AppendLine($"Game: {game.Path}, {game.Version() ?? "?"}, Steam build {game.SteamBuildId() ?? "?"}, " +
                                $"Assembly-CSharp {game.AssemblyHash()}");
         }
-        var unity = UnityInstall.Find("2022.3.62f3");
+        var unity = UnityInstall.Find("6000.3.17f1");
         summary.AppendLine($"Unity: {unity?.Root ?? "not found"}{(unity is { HasAndroid: true } ? " (Android)" : "")}");
         summary.AppendLine($"Unity Hub: {UnityHub.Executable() ?? "not found"}");
         if (File.Exists(workspace.StatePath))

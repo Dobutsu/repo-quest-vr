@@ -1,0 +1,115 @@
+diff --git a/Source/UI/GameFonts.cs b/Source/UI/GameFonts.cs
+index 4b18cfa..2b50129 100644
+--- a/Source/UI/GameFonts.cs
++++ b/Source/UI/GameFonts.cs
+@@ -41,7 +41,7 @@ internal static class GameFonts
+                 reportedMissing = true;
+                 Logger.LogWarning("[Fonts] no usable font yet; loaded: " + string.Join(", ",
+                     Resources.FindObjectsOfTypeAll<TMP_FontAsset>().Select(f =>
+-                        $"{f.name} (material {(f.material ? f.material.name : "none")}, atlases {f.atlasTextures?.Length ?? 0})")));
++                        $"{f.name} (material {(TmpAsset.GetMaterial(f) is { } m ? m.name : "none")}, atlases {f.atlasTextures?.Length ?? 0})")));
+             }
+             return;
+         }
+@@ -76,7 +76,7 @@ internal static class GameFonts
+                 continue;
+ 
+             text.font = reference;
+-            text.fontSharedMaterial = reference.material;
++            text.fontSharedMaterial = TmpAsset.GetMaterial(reference);
+             count++;
+         }
+ 
+@@ -88,7 +88,7 @@ internal static class GameFonts
+         try
+         {
+             // What TMP's MaterialReference needs: the bundle's fonts arrive without a working material
+-            return font && font!.material && font.material.shader;
++            return font && TmpAsset.GetMaterial(font!) is { } material && material.shader;
+         }
+         catch
+         {
+diff --git a/Source/Utils.cs b/Source/Utils.cs
+index a5c1f7d..6ce27b7 100644
+--- a/Source/Utils.cs
++++ b/Source/Utils.cs
+@@ -108,7 +108,7 @@ internal static class Utils
+         var glyphs = asset.spriteGlyphTable;
+         var sheet = asset.spriteSheet;
+         Logger.LogInfo($"[UI] Sprite asset {asset.name}: {characters?.Count ?? -1} characters, {glyphs?.Count ?? -1} glyphs, " +
+-                       $"sheet {(sheet ? $"{sheet.width}x{sheet.height}" : "none")}, material {(asset.material ? asset.material.name : "none")}");
++                       $"sheet {(sheet ? $"{sheet.width}x{sheet.height}" : "none")}, material {(TmpAsset.GetMaterial(asset) is { } m ? m.name : "none")}");
+ 
+         if (characters is { Count: > 0 } && sheet && (glyphs == null || glyphs.Count < characters.Count))
+         {
+@@ -137,25 +137,25 @@ internal static class Utils
+         // The material (and the asset's hash code) were serialized as "material"/"hashCode" too, Unity 6's TextMeshPro
+         // reads m_Material/m_HashCode: without a material no sprite is drawn. The game's own sprite material (EmojiOne,
+         // TextMeshPro/Sprite) is copied onto RepoXR's sheet
+-        if (!asset.material && sheet)
++        if (!TmpAsset.GetMaterial(asset) && sheet)
+         {
+-            var template = TMPro.TMP_Settings.defaultSpriteAsset ? TMPro.TMP_Settings.defaultSpriteAsset.material : null;
++            var template = TMPro.TMP_Settings.defaultSpriteAsset ? TmpAsset.GetMaterial(TMPro.TMP_Settings.defaultSpriteAsset) : null;
+             var shader = template ? template!.shader : Shader.Find("TextMeshPro/Sprite");
+             if (shader)
+             {
+                 var material = template ? new Material(template) : new Material(shader);
+                 material.name = asset.name + " Material";
+                 material.mainTexture = sheet;
+-                asset.material = material;
+-                asset.materialHashCode = TMPro.TMP_TextUtilities.GetSimpleHashCode(material.name);
++                TmpAsset.Set(asset, "material", material);
++                TmpAsset.Set(asset, "materialHashCode", TMPro.TMP_TextUtilities.GetSimpleHashCode(material.name));
+             }
+         }
+ 
+-        if (asset.hashCode == 0)
+-            asset.hashCode = TMPro.TMP_TextUtilities.GetSimpleHashCode(asset.name);
++        if (TmpAsset.Get(asset, "hashCode") is 0)
++            TmpAsset.Set(asset, "hashCode", TMPro.TMP_TextUtilities.GetSimpleHashCode(asset.name));
+ 
+-        Logger.LogInfo($"[UI] Sprite asset {asset.name}: material {(asset.material ? $"{asset.material.name} ({asset.material.shader.name})" : "none")}, " +
+-                       $"hash {asset.hashCode}");
++        Logger.LogInfo($"[UI] Sprite asset {asset.name}: material {(TmpAsset.GetMaterial(asset) is { } used ? $"{used.name} ({used.shader.name})" : "none")}, " +
++                       $"hash {TmpAsset.Get(asset, "hashCode")}");
+ 
+         asset.UpdateLookupTables();
+         Logger.LogInfo($"[UI] Sprite asset {asset.name}: 'leftStick' → {asset.GetSpriteIndexFromName("leftStick")}, " +
+@@ -368,4 +368,34 @@ public static class HashExtensions
+ 
+         return hash;
+     }
+-}
+\ No newline at end of file
++}
++/// <summary>
++/// TMP_Asset's material and hash codes, by name. RepoXR is compiled against the game's TextMeshPro, where they are
++/// fields; the Quest build compiles the game with Unity 6's uGUI 2.0, where they are properties, and IL2CPP rejects
++/// the field references ("Unresolved field reference: TMP_Asset::material")
++/// </summary>
++internal static class TmpAsset
++{
++    private const BindingFlags Flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
++
++    public static Material? GetMaterial(TMPro.TMP_Asset asset) => Get(asset, "material") as Material;
++
++    public static object? Get(TMPro.TMP_Asset asset, string name)
++    {
++        var type = asset.GetType();
++        if (AccessTools.Property(type, name) is { CanRead: true } property)
++            return property.GetValue(asset);
++        return (AccessTools.Field(type, name) ?? AccessTools.Field(type, "m_" + char.ToUpper(name[0]) + name[1..]))
++            ?.GetValue(asset);
++    }
++
++    public static void Set(TMPro.TMP_Asset asset, string name, object value)
++    {
++        var type = asset.GetType();
++        if (AccessTools.Property(type, name) is { CanWrite: true } property)
++            property.SetValue(asset, value);
++        else
++            (AccessTools.Field(type, name) ?? AccessTools.Field(type, "m_" + char.ToUpper(name[0]) + name[1..]))
++                ?.SetValue(asset, value);
++    }
++}

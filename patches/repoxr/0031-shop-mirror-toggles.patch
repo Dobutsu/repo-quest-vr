@@ -1,0 +1,339 @@
+diff --git a/Source/Config.cs b/Source/Config.cs
+index c0271a0..e021062 100644
+--- a/Source/Config.cs
++++ b/Source/Config.cs
+@@ -173,6 +173,11 @@ public class Config(string assemblyPath, ConfigFile file)
+     public ConfigEntry<bool> ShowFPS { get; } = file.Create("Rendering", nameof(ShowFPS), false,
+         "Shows the frame rate low in the left of your view: frames per second, the average frame time and the slowest frame of the last half second (and the CPU and GPU times when the headset reports them). Quest 3 runs the game at 72 FPS: green at 68 and above, yellow from 50, red below.");
+ 
++    // Quest port: Patches/Rendering/MirrorPatches.cs
++    [ConfigDescriptor(customName: "Shop Mirror")]
++    public ConfigEntry<bool> ShopMirror { get; } = file.Create("Rendering", nameof(ShopMirror), true,
++        "Shows the mirror next to the cosmetic machine in the shop. It renders the scene once more for each eye; turn it off for frame rate. With single-pass rendering it stays hidden: one reflection cannot be right for both eyes.");
++
+     [ConfigDescriptor]
+     public ConfigEntry<bool> Vignette { get; } = file.Create("Rendering", nameof(Vignette), true,
+         "Enables the vignette shader used in certain scenarios and levels in the game.");
+diff --git a/Source/Patches/Rendering/MirrorPatches.cs b/Source/Patches/Rendering/MirrorPatches.cs
+new file mode 100644
+index 0000000..8d9569d
+--- /dev/null
++++ b/Source/Patches/Rendering/MirrorPatches.cs
+@@ -0,0 +1,255 @@
++using System;
++using System.Collections.Generic;
++using System.Reflection.Emit;
++using HarmonyLib;
++using UnityEngine;
++using UnityEngine.XR;
++
++using static HarmonyLib.AccessTools;
++
++namespace RepoXR.Patches.Rendering;
++
++/// <summary>
++/// R.E.P.O. 0.5.0's shop mirror (MirrorReflection, next to the cosmetic machine) renders one reflection per frame from
++/// the camera's position with a symmetric frustum, and its shader samples it at the (flipped) screen position. In a
++/// headset each eye has its own position and frustum: the reflection was a mess. In multi-pass rendering the mirror is
++/// now rendered for each eye just before that eye renders, from the eye's reflected position with the eye's own
++/// (mirrored) projection. In single-pass rendering both eyes share one reflection texture, which cannot be right for
++/// either of them: the mirror is hidden there, which also saves rendering the scene again (the Quest's default).
++/// VR Settings → Rendering → Shop Mirror (on by default) hides it too
++/// </summary>
++[RepoXRPatch]
++internal static class MirrorPatches
++{
++    private static readonly HashSet<MirrorReflection> mirrors = [];
++    private static Camera.StereoscopicEye? currentEye;
++    private static bool subscribed;
++    private static readonly HashSet<Camera.MonoOrStereoscopicEye> loggedEyes = [];
++    private static bool loggedError;
++
++    // Switches for testing the per-eye reflection (the internal test build has keys for them)
++    internal static bool PerEye = true;
++    internal static bool FlipSkew = true;
++    internal static bool SwapEyes;
++    internal static bool FromDisplay = true;
++    internal static bool InPreCull;
++    private static readonly List<XRDisplaySubsystem> displays = [];
++    internal static Action<MirrorReflection, Camera.StereoscopicEye, Vector3, Matrix4x4>? AfterEyeRender;
++
++    private static bool SinglePass => Plugin.Config.SinglePassRendering.Value;
++    private static bool Shown => Plugin.Config.ShopMirror.Value && !SinglePass;
++
++    [HarmonyPatch(typeof(MirrorReflection), nameof(MirrorReflection.OnEnable))]
++    [HarmonyPostfix]
++    private static void OnMirrorEnable(MirrorReflection __instance)
++    {
++        mirrors.Add(__instance);
++        if (!subscribed)
++        {
++            Camera.onPreRender += OnCameraPreRender;
++            Camera.onPreCull += OnCameraPreCull;
++            Plugin.Config.ShopMirror.SettingChanged += (_, _) => ShowOrHideAll();
++            subscribed = true;
++        }
++
++        ShowOrHide(__instance);
++        if (!Shown)
++            Logger.LogInfo($"[Mirror] {__instance.name}: hidden ({(SinglePass ? "single-pass rendering shares one reflection between both eyes" : "VR Settings → Rendering → Shop Mirror is off")})");
++    }
++
++    private static void ShowOrHideAll()
++    {
++        foreach (var mirror in mirrors)
++            if (mirror)
++                ShowOrHide(mirror);
++    }
++
++    /// <summary>
++    /// A hidden mirror's renderer is off; the game renders no reflection for a disabled renderer (ShouldRender)
++    /// </summary>
++    private static void ShowOrHide(MirrorReflection mirror)
++    {
++        var renderer = mirror.mirrorRenderer ? mirror.mirrorRenderer : mirror.GetComponent<Renderer>();
++        if (renderer)
++            renderer.enabled = Shown;
++    }
++
++    [HarmonyPatch(typeof(MirrorReflection), nameof(MirrorReflection.OnDisable))]
++    [HarmonyPostfix]
++    private static void OnMirrorDisable(MirrorReflection __instance) => mirrors.Remove(__instance);
++
++    /// <summary>
++    /// The game's own render (once, in the camera's pre-cull) is skipped for a headset camera
++    /// </summary>
++    [HarmonyPatch(typeof(MirrorReflection), nameof(MirrorReflection.CameraPreCull))]
++    [HarmonyPrefix]
++    private static bool SkipStereoPreCull(Camera __0) => !(PerEye && __0 && __0.stereoEnabled);
++
++    /// <summary>
++    /// Each eye renders its own reflection: no "rendered this frame already" throttle for them
++    /// </summary>
++    [HarmonyPatch(typeof(MirrorReflection), nameof(MirrorReflection.RenderThrottled))]
++    [HarmonyPrefix]
++    private static bool NoThrottlePerEye(MirrorReflection __instance, ref bool __result)
++    {
++        if (currentEye == null)
++            return true;
++
++        __result = __instance.distanceFadeCurrent >= 1;
++        return false;
++    }
++
++    private static void OnCameraPreCull(Camera camera)
++    {
++        if (InPreCull)
++            RenderForCamera(camera);
++    }
++
++    private static void OnCameraPreRender(Camera camera)
++    {
++        if (!InPreCull)
++            RenderForCamera(camera);
++    }
++
++    private static void RenderForCamera(Camera camera)
++    {
++        if (!PerEye || !camera || !camera.stereoEnabled || mirrors.Count == 0 || !Shown)
++            return;
++
++        var active = camera.stereoActiveEye;
++        if (active == Camera.MonoOrStereoscopicEye.Mono)
++            return;
++
++        if (loggedEyes.Add(active))
++            Logger.LogInfo($"[Mirror] rendering the reflection for the {active} eye ({camera.name}, frame {Time.frameCount})");
++
++        currentEye = (active == Camera.MonoOrStereoscopicEye.Left) != SwapEyes ? Camera.StereoscopicEye.Left : Camera.StereoscopicEye.Right;
++        try
++        {
++            foreach (var mirror in mirrors)
++            {
++                if (!mirror || !mirror.ShouldRender(camera))
++                    continue;
++
++                MirrorReflection.insideRendering = true;
++                try
++                {
++                    mirror.RenderReflection(camera);
++                }
++                catch (Exception e)
++                {
++                    if (!loggedError)
++                    {
++                        loggedError = true;
++                        Logger.LogWarning($"[Mirror] per-eye reflection failed: {e}");
++                    }
++                }
++                finally
++                {
++                    MirrorReflection.insideRendering = false;
++                }
++            }
++        }
++        finally
++        {
++            currentEye = null;
++        }
++    }
++
++    /// <summary>
++    /// Just before the reflection camera renders, its pose and projection are made the current eye's
++    /// </summary>
++    [HarmonyPatch(typeof(MirrorReflection), nameof(MirrorReflection.RenderReflection))]
++    [HarmonyTranspiler]
++    private static IEnumerable<CodeInstruction> RenderForEyePatch(IEnumerable<CodeInstruction> instructions)
++    {
++        return new CodeMatcher(instructions)
++            .MatchForward(false, new CodeMatch(OpCodes.Callvirt, Method(typeof(Camera), nameof(Camera.Render))))
++            .ThrowIfInvalid("MirrorReflection.RenderReflection: Camera.Render not found")
++            .InsertAndAdvance(new CodeInstruction(OpCodes.Ldarg_0), new CodeInstruction(OpCodes.Ldarg_1))
++            .SetInstruction(new CodeInstruction(OpCodes.Call,
++                ((Action<Camera, MirrorReflection, Camera>)RenderForEye).Method))
++            .InstructionEnumeration();
++    }
++
++    /// <summary>
++    /// The view and projection the XR display renders this eye with (in multi-pass, render pass 0 is the left eye and
++    /// pass 1 the right): the camera's stereo matrices can differ from them
++    /// </summary>
++    internal static bool EyeFromDisplay(Camera camera, Camera.StereoscopicEye eye, out Matrix4x4 view, out Matrix4x4 projection)
++    {
++        view = projection = Matrix4x4.identity;
++        if (displays.Count == 0)
++            SubsystemManager.GetSubsystems(displays);
++
++        foreach (var display in displays)
++        {
++            if (display is not { running: true } || display.GetRenderPassCount() < 2)
++                continue;
++
++            display.GetRenderPass((int)eye, out var pass);
++            if (pass.GetRenderParameterCount() < 1)
++                continue;
++
++            pass.GetRenderParameter(camera, 0, out var parameter);
++            view = parameter.view;
++            projection = parameter.projection;
++            return true;
++        }
++
++        return false;
++    }
++
++    private static void RenderForEye(Camera reflection, MirrorReflection mirror, Camera source)
++    {
++        // The game's reflection camera is an ordinary camera, and with XR on it rendered as a stereo camera: the XR
++        // eye matrices replaced its reflected view and projection. It renders into its texture as a mono camera
++        if (reflection.stereoTargetEye != StereoTargetEyeMask.None)
++        {
++            reflection.stereoTargetEye = StereoTargetEyeMask.None;
++            Logger.LogInfo($"[Mirror] {reflection.name}: rendering mono (it was a stereo camera)");
++        }
++
++        if (currentEye is { } eye && source)
++        {
++            if (!FromDisplay || !EyeFromDisplay(source, eye, out var view, out var projection))
++            {
++                view = source.GetStereoViewMatrix(eye);
++                projection = source.GetStereoProjectionMatrix(eye);
++            }
++            var eyeToWorld = view.inverse;
++            var eyePosition = eyeToWorld.MultiplyPoint(Vector3.zero);
++            var eyeForward = -(Vector3)eyeToWorld.GetColumn(2);
++            var eyeUp = (Vector3)eyeToWorld.GetColumn(1);
++
++            var normal = mirror.GetSurfaceNormal();
++            var position = mirror.transform.position;
++            var distance = -Vector3.Dot(normal, position) - mirror.clipPlaneOffset;
++            var reflect = MirrorReflection.PlaneReflectionMatrix(new Vector4(normal.x, normal.y, normal.z, distance));
++
++            // As the game does: the camera at the reflected eye, turned (not mirrored); the shader flips the image
++            reflection.transform.SetPositionAndRotation(reflect.MultiplyPoint(eyePosition),
++                Quaternion.LookRotation(Vector3.Reflect(eyeForward, normal), Vector3.Reflect(eyeUp, normal)));
++            reflection.ResetWorldToCameraMatrix();
++            var worldToCamera = reflection.worldToCameraMatrix;
++
++            // The flipped image also flips the eye's off-centre frustum
++            if (FlipSkew)
++                projection.m02 = -projection.m02;
++            reflection.projectionMatrix = projection;
++            if (mirror.clipBehindSurface)
++            {
++                var clip = mirror.CameraSpacePlane(worldToCamera, position, normal, 1);
++                clip.w = Mathf.Min(clip.w, -reflection.nearClipPlane);
++                reflection.projectionMatrix = reflection.CalculateObliqueMatrix(clip);
++            }
++
++            reflection.cullingMatrix = reflection.projectionMatrix * worldToCamera;
++            reflection.Render();
++            AfterEyeRender?.Invoke(mirror, eye, eyePosition, projection);
++            return;
++        }
++
++        reflection.Render();
++    }
++}
+diff --git a/Source/Patches/UI/MenuTwoOptionsPatches.cs b/Source/Patches/UI/MenuTwoOptionsPatches.cs
+index 12f7442..a1a4106 100644
+--- a/Source/Patches/UI/MenuTwoOptionsPatches.cs
++++ b/Source/Patches/UI/MenuTwoOptionsPatches.cs
+@@ -70,6 +70,57 @@ internal static class MenuTwoOptionsPatches
+                 ? __instance.option2Button.buttonText
+                 : __instance.option2Button.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
+     }
++
++    /// <summary>
++    /// 0.5.0 only calls a toggle's own fetch event when the new customFetch is set; RepoXR's toggles (0.4.4 prefabs)
++    /// have the event (their setting's current value) but not the flag, so the game read one of its own settings
++    /// instead and the box showed the wrong option. The flag is set for toggles with custom events and a fetch event
++    /// </summary>
++    [HarmonyPatch(typeof(MenuTwoOptions), nameof(MenuTwoOptions.StartFetch))]
++    [HarmonyPrefix]
++    private static void FetchThroughEvent(MenuTwoOptions __instance)
++    {
++        if (__instance.customEvents && !__instance.customFetch && __instance.fetchSetting != null &&
++            __instance.fetchSetting.GetPersistentEventCount() > 0)
++            __instance.customFetch = true;
++    }
++
++    /// <summary>
++    /// 0.5.0 puts the selection box at x 143.5 or 218.5, the places of the options on the game's own toggles. RepoXR's
++    /// toggles are laid out differently (two 74 px buttons from x 0): the box sat half outside on the right, or
++    /// entirely outside. Without the game's option buttons (option1Button/option2Button), the box goes to the centre
++    /// of the toggle's own first or second button
++    /// </summary>
++    [HarmonyPatch(typeof(MenuTwoOptions), nameof(MenuTwoOptions.OptionBoxX))]
++    [HarmonyPrefix]
++    private static bool BoxOnOwnButtons(MenuTwoOptions __instance, bool __0, ref float __result)
++    {
++        if ((__instance.option1Button && __instance.option2Button) || !__instance.optionsBox)
++            return true;
++
++        UnityEngine.UI.Button? first = null, second = null;
++        foreach (Transform child in __instance.transform)
++        {
++            if (!child.gameObject.activeSelf || child.GetComponent<UnityEngine.UI.Button>() is not { } button)
++                continue;
++
++            if (!first)
++                first = button;
++            else
++            {
++                second = button;
++                break;
++            }
++        }
++
++        if (!first || !second)
++            return true;
++
++        var rect = (RectTransform)(__0 ? first! : second!).transform;
++        var space = __instance.optionsBox.parent;
++        __result = space.InverseTransformPoint(rect.TransformPoint(rect.rect.center)).x;
++        return false;
++    }
+ }
+ 
+ /// <summary>

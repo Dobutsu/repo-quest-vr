@@ -20,24 +20,31 @@ namespace RepoQuest
     /// draw calls, batches and SetPass calls, the busiest threads (PerfThreads: user and kernel time, core, policy) and
     /// the Vulkan image copies and command pool resets (PerfVk: on Pico 4 Ultra the driver allocates and frees GPU memory
     /// in the kernel for each copy).
-    /// In every level but the menus, after SettleSeconds, an A/B test of PhaseSeconds each (DefaultPhases; a file
-    /// files/perf-phases with one phase name a line replaces the list): as is, as is while scripts/pico-perf3.sh
-    /// profiles over adb, image copies skipped (PerfVk), Camera Overlay off, as is again; one summary line per phase.
-    /// Also: image copies done as blits, Camera Top without its depth texture, Camera Top off, every eye camera but the
+    /// A second line per second: render passes, blits, GPU memory allocations, submits, fence waits, pipelines created
+    /// (PerfVk.TakeMore), frames over 25/50/100 ms.
+    /// An A/B test, one summary line per phase, after the place has settled: in the shop the whole list (ShopPhases,
+    /// 10 s each), in the arena a short one (ArenaPhases, 8 s each: the round may end first, then the summary has what
+    /// was measured); none elsewhere. A file files/perf-phases-shop or perf-phases-arena with one phase name a line
+    /// replaces a list; files/perf-phases gives the first other level of a launch a list too.
+    /// "as is (profiling)" is where scripts/pico-perf8.sh profiles over adb. To get there without playing a run, the game
+    /// goes straight to the places of files/perf-levels (one a line: "shop", "arena" or a level's name such as "shop
+    /// harbor"; "off" for none; without the file DefaultLevels): each level change but to the menus goes to the first
+    /// one not reached yet, through RunManager's debugLevel (what the game's own "/level" command sets). Before and after a test, a census of the
+    /// place: lights, renderers, visible shaders, canvases, rigidbodies, animators.
+    /// Also: lights (pixel lights 0, real-time lights off), far clip 50%, grabbable items hidden, world-space UI off,
+    /// every other mesh hidden, LOD bias 30%, textures at half resolution, physics at half rate, animators off, audio
+    /// paused; image copies done as blits, Camera Top without its depth texture, Camera Top off, every eye camera but the
     /// first off, HDR off on every camera, eye texture at LowScale. (On Pico 4 Ultra the copy was RepoXR's focus
     /// sphere's GrabPass, rendered by Camera Overlay every frame: patches/repoxr/0008.)
     /// Also available: render-texture cameras, shadows, particles, skinned meshes, video players, post-processing, Lamp
     /// Lighting, ShaderWarmup's scan off, all of those; main and render threads on the fastest cores, 72 Hz, CPU and GPU
     /// level hints through PerfXr, the render thread without its real-time priority (none changed Pico 4 Ultra's 13 FPS;
-    /// the level hints and SCHED_FIFO cannot be put back, so they go last).
+    /// the level hints and SCHED_FIFO cannot be put back, so they go last, and later places' logs say they were left).
     /// </summary>
     public class PerfLog : MonoBehaviour
     {
-        private const float SettleSeconds = 15f;
-        private const float PhaseSeconds = 12f;
         private const float LowScale = 0.6f;
         private const string Profiling = "as is (profiling)";
-        private const float ProfilingSeconds = 30f;
         private const string Normal = "render thread normal priority";
         private const string FastCores = "main and render threads on fast cores";
         private const string Rate72 = "72 Hz";
@@ -50,9 +57,45 @@ namespace RepoQuest
         private const string TopNoDepth = "Camera Top without depth texture";
         private const string TopOff = "Camera Top off";
         private const string OverlayOff = "Camera Overlay off";
+        private const string RtCameras = "render-texture cameras off";
+        private const string Shadows = "shadows off";
+        private const string Particles = "particles hidden";
+        private const string Skinned = "skinned meshes hidden";
+        private const string Videos = "video players paused";
+        private const string PostProcessing = "post-processing off";
+        private const string Lamps = "lamp lighting off";
+        private const string Scan = "warmup scan paused";
+        private static readonly string LowEyes = $"eye texture {LowScale:0%}";
+        private const string PixelLights = "pixel lights 0";
+        private const string LightsOff = "real-time lights off";
+        private const string FarClip = "far clip 50%";
+        private const string Items = "items hidden";
+        private const string WorldUi = "world-space UI off";
+        private const string HalfMeshes = "every other mesh hidden";
+        private const string Lod = "LOD bias 30%";
+        private const string Mips = "textures at half resolution";
+        private const string Physics = "physics at half rate";
+        private const string Animators = "animators off";
+        private const string Audio = "audio paused";
+        private const string AllOff = "all of the above";
 
-        private static readonly string[] DefaultPhases =
-            { "as is", Profiling, NoCopies, OverlayOff, "as is again" };
+        private enum Place { None, Shop, Arena, Level }
+
+        // On Pico 4 Ultra the shop and the arena lag. The likeliest first (players may leave the shop early), then the
+        // earlier builds' tests, then what cannot be put back
+        private static readonly string[] ShopPhases =
+        {
+            "as is", Profiling, NoCopies, LowEyes, PixelLights, LightsOff, Items, FarClip, WorldUi, HalfMeshes, Particles,
+            Shadows, Skinned, OverlayOff, Physics, Animators, Audio, Lod, Mips, AllOff, Blits, TopNoDepth, TopOff, Overlays,
+            HdrOff, RtCameras, Videos, PostProcessing, Lamps, Scan, Rate72, FastCores, "as is again", LevelsHigh, LevelsBoost,
+        };
+
+        // The round may be short: the likeliest first; the render thread's priority only here (the last place of a run)
+        private static readonly string[] ArenaPhases =
+        {
+            "as is", Profiling, NoCopies, LowEyes, PixelLights, Items, FarClip, Particles, Skinned, OverlayOff, Physics,
+            AllOff, "as is again", LevelsBoost, Normal,
+        };
 
         private string path;
         private readonly FrameTiming[] timing = new FrameTiming[1];
@@ -67,16 +110,25 @@ namespace RepoQuest
         private PerfThreads threads;
         private int mainTid;
         private ulong fastCores;
-        private ProfilerRecorder drawCalls, batches, setPass;
+        private ProfilerRecorder drawCalls, batches, setPass, triangles, vertices, gcAlloc;
+        private int over25, over50, over100;
 
         // The A/B test
         private string[] phases = Array.Empty<string>();
         private int phase = -1;
         private float phaseStart;
+        private float phaseSeconds = 12f, profilingSeconds = 30f;
+        private bool levelTested;
+        private string leftOver = "";
         private float originalScale;
         private readonly Dictionary<string, List<(float fps, float main, float render, float gpu)>> perPhase = new();
 
-        private static FieldInfo runInstance, levelCurrent;
+        private static FieldInfo runInstance, levelCurrent, debugLevel, levelShop, levelArena, levelList;
+
+        // Going straight to the places being tested
+        private static readonly string[] DefaultLevels = { "shop", "arena" };
+        private List<string> levelQueue;
+        private UnityEngine.Object forced;
 
         private Canvas canvas;
         private Text hud;
@@ -107,6 +159,11 @@ namespace RepoQuest
             {
                 runInstance = runManager.GetField("instance", BindingFlags.Public | BindingFlags.Static);
                 levelCurrent = runManager.GetField("levelCurrent");
+                const BindingFlags any = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+                debugLevel = runManager.GetField("debugLevel", any);
+                levelShop = runManager.GetField("levelShop", any);
+                levelArena = runManager.GetField("levelArena", any);
+                levelList = runManager.GetField("levels", any);
             }
 
             try
@@ -122,6 +179,9 @@ namespace RepoQuest
             drawCalls = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Draw Calls Count");
             batches = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Batches Count");
             setPass = ProfilerRecorder.StartNew(ProfilerCategory.Render, "SetPass Calls Count");
+            triangles = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Triangles Count");
+            vertices = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Vertices Count");
+            gcAlloc = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame");
 
             Write("");
             Write($"==== launch {Application.version}");
@@ -142,6 +202,9 @@ namespace RepoQuest
             drawCalls.Dispose();
             batches.Dispose();
             setPass.Dispose();
+            triangles.Dispose();
+            vertices.Dispose();
+            gcAlloc.Dispose();
         }
 
         // ---- What the eyes are rendered with
@@ -200,6 +263,7 @@ namespace RepoQuest
                 s += $"\n  camera {camera.name}: {camera.actualRenderingPath}, eye {camera.stereoTargetEye}, " +
                      $"target {(camera.targetTexture ? $"{camera.targetTexture.width}x{camera.targetTexture.height}" : "-")}, " +
                      $"hdr {camera.allowHDR}, pp {(pp == null ? "none" : pp.enabled ? "on" : "off")}, depth {camera.depth}, " +
+                     $"clip {camera.nearClipPlane:0.##}-{camera.farClipPlane:0}, mask {camera.cullingMask:x}, " +
                      $"clear {camera.clearFlags}, msaa {camera.allowMSAA}, cmdbufs {camera.commandBufferCount}, " +
                      $"into rt {camera.forceIntoRenderTexture}, depth tex {camera.depthTextureMode}, " +
                      $"scripts {string.Join("/", camera.GetComponents<MonoBehaviour>().Where(b => b && b.enabled).Select(b => b.GetType().Name))}";
@@ -234,12 +298,131 @@ namespace RepoQuest
             EndTest();
             Write($"---- {what}");
             Write(Rendering());
-            // Not in the menus: scripts/pico-perf3.sh profiles the first test it sees
+            if (leftOver.Length > 0)
+                Write($"  left by earlier tests: {leftOver}");
             var name = Level();
-            phases = name.Length == 0 || name.Contains("Menu") || name.Contains("Splash") ? Array.Empty<string>() : Phases();
+            var place = Kind(name);
+            var settle = 15f;
+            (phaseSeconds, profilingSeconds) = (12f, 30f);
+            switch (place)
+            {
+                case Place.Shop:
+                    phases = Phases("perf-phases-shop", ShopPhases);
+                    (phaseSeconds, profilingSeconds) = (10f, 30f);
+                    break;
+                case Place.Arena:
+                    phases = Phases("perf-phases-arena", ArenaPhases);
+                    (phaseSeconds, profilingSeconds, settle) = (8f, 20f, 5f);
+                    break;
+                case Place.Level when !levelTested:
+                    phases = Phases("perf-phases", Array.Empty<string>());
+                    levelTested = true;
+                    break;
+                default:
+                    phases = Array.Empty<string>();
+                    break;
+            }
+            if (phases.Length > 0)
+                Write($"  {place}: test of {phases.Length} phases in {settle:0} s");
             phase = -1;
-            phaseStart = Time.realtimeSinceStartup + SettleSeconds;
+            phaseStart = Time.realtimeSinceStartup + settle;
             perPhase.Clear();
+        }
+
+        private static Place Kind(string name) =>
+            name.Length == 0 || name.Contains("Menu") || name.Contains("Splash") ? Place.None :
+            name.Contains("Shop") ? Place.Shop :
+            name.Contains("Arena") ? Place.Arena : Place.Level;
+
+        /// <summary>What the place holds that costs frames, from the scene itself</summary>
+        private string Census()
+        {
+            var eye = Camera.main;
+            var at = eye ? eye.transform.position : Vector3.zero;
+            var lights = FindObjectsByType<Light>(FindObjectsSortMode.None).Where(l => l.isActiveAndEnabled).ToList();
+            var local = lights.Where(l => l.type != LightType.Directional).ToList();
+            var renderers = FindObjectsByType<Renderer>(FindObjectsSortMode.None)
+                .Where(r => r.enabled && r.gameObject.activeInHierarchy).ToList();
+            var visible = renderers.Where(r => r.isVisible).ToList();
+            var bodies = FindObjectsByType<Rigidbody>(FindObjectsSortMode.None);
+            var grab = Type.GetType("PhysGrabObject, REPO.Game") ?? AppDomain.CurrentDomain.GetAssemblies()
+                .Select(a => a.GetType("PhysGrabObject")).FirstOrDefault(t => t != null);
+            var shaders = visible.Select(r => r.sharedMaterial ? r.sharedMaterial.shader.name : "-")
+                .GroupBy(n => n).OrderByDescending(g => g.Count()).Take(10).Select(g => $"{g.Key} {g.Count()}");
+            return $"scene: lights {lights.Count} (directional {lights.Count - local.Count}, point {local.Count(l => l.type == LightType.Point)}, " +
+                   $"spot {local.Count(l => l.type == LightType.Spot)}, within 15 m {local.Count(l => (l.transform.position - at).sqrMagnitude < 225f)}, " +
+                   $"shadowed {lights.Count(l => l.shadows != LightShadows.None)}, forced pixel {lights.Count(l => l.renderMode == LightRenderMode.ForcePixel)}), " +
+                   $"renderers {renderers.Count}, visible {visible.Count} (mesh {visible.Count(r => r is MeshRenderer)}, " +
+                   $"skinned {visible.Count(r => r is SkinnedMeshRenderer)}, particles {visible.Count(r => r is ParticleSystemRenderer)}, " +
+                   $"lines/trails {visible.Count(r => r is LineRenderer or TrailRenderer)}, sprites {visible.Count(r => r is SpriteRenderer)}, " +
+                   $"shadow casters {visible.Count(r => r.shadowCastingMode != UnityEngine.Rendering.ShadowCastingMode.Off)}, " +
+                   $"materials {visible.Sum(r => r.sharedMaterials.Length)}), " +
+                   $"canvases world {FindObjectsByType<Canvas>(FindObjectsSortMode.None).Count(c => c.isActiveAndEnabled && c.renderMode == RenderMode.WorldSpace)}, " +
+                   $"grabbable {(grab != null ? FindObjectsByType(grab, FindObjectsSortMode.None).Length.ToString() : "?")}, " +
+                   $"rigidbodies {bodies.Length} awake {bodies.Count(b => !b.IsSleeping() && !b.isKinematic)}, " +
+                   $"animators {FindObjectsByType<Animator>(FindObjectsSortMode.None).Count(a => a.isActiveAndEnabled)}, " +
+                   $"audio playing {FindObjectsByType<AudioSource>(FindObjectsSortMode.None).Count(a => a.isPlaying)}, " +
+                   $"fog {(RenderSettings.fog ? $"{RenderSettings.fogMode} {RenderSettings.fogDensity:0.###} {RenderSettings.fogStartDistance:0}-{RenderSettings.fogEndDistance:0}" : "off")}, " +
+                   $"lod bias {QualitySettings.lodBias:0.##}, fixed dt {Time.fixedDeltaTime * 1000:0.#} ms" +
+                   $"\n  visible shaders: {string.Join(", ", shaders)}";
+        }
+
+        private void ForceLevel(string current)
+        {
+            if (runInstance?.GetValue(null) is not UnityEngine.Object run || !run || debugLevel == null)
+                return;
+            levelQueue ??= LevelQueue();
+            if (forced && forced.name == current)
+            {
+                Write($"  forced level {current} reached");
+                levelQueue.RemoveAt(0);
+                forced = null;
+                debugLevel.SetValue(run, null);
+            }
+            while (!forced && levelQueue.Count > 0)
+            {
+                forced = FindLevel(run, levelQueue[0]);
+                if (forced)
+                {
+                    debugLevel.SetValue(run, forced);
+                    Write($"  the next level change goes to {forced.name}");
+                }
+                else
+                {
+                    Write($"  level '{levelQueue[0]}' not found");
+                    levelQueue.RemoveAt(0);
+                }
+            }
+        }
+
+        private static List<string> LevelQueue()
+        {
+            try
+            {
+                var file = Path.Combine(Application.persistentDataPath, "perf-levels");
+                if (File.Exists(file))
+                    return File.ReadAllLines(file).Select(l => l.Trim().ToLowerInvariant())
+                        .Where(l => l.Length > 0 && l != "off").ToList();
+            }
+            catch (IOException) { }
+            return DefaultLevels.ToList();
+        }
+
+        private static IEnumerable<UnityEngine.Object> Levels(FieldInfo field, object run) =>
+            (field?.GetValue(run) as System.Collections.IEnumerable)?.OfType<UnityEngine.Object>().Where(l => l) ??
+            Enumerable.Empty<UnityEngine.Object>();
+
+        /// <summary>"shop": any shop; "arena": the one-player arena (the game's first); else a level by name</summary>
+        private static UnityEngine.Object FindLevel(object run, string what)
+        {
+            var shops = Levels(levelShop, run).ToList();
+            var arenas = Levels(levelArena, run).ToList();
+            if (what == "shop" && shops.Count > 0)
+                return shops[UnityEngine.Random.Range(0, shops.Count)];
+            if (what == "arena")
+                return arenas.FirstOrDefault();
+            return Levels(levelList, run).Concat(arenas).Concat(shops)
+                .FirstOrDefault(l => l.name.ToLowerInvariant().Replace("level - ", "") == what);
         }
 
         // ---- Measuring
@@ -250,6 +433,12 @@ namespace RepoQuest
             frames++;
             frameSeconds += dt;
             worstFrame = Mathf.Max(worstFrame, dt);
+            if (dt > 0.025f)
+                over25++;
+            if (dt > 0.05f)
+                over50++;
+            if (dt > 0.1f)
+                over100++;
             FrameTimingManager.CaptureFrameTimings();
             if (FrameTimingManager.GetLatestTimings(1, timing) > 0)
             {
@@ -269,6 +458,7 @@ namespace RepoQuest
                 level = name;
                 Changed($"level {(name.Length > 0 ? name : "(none)")}");
             }
+            Run("forced level", () => ForceLevel(name));
 
             var fps = frames / Mathf.Max(frameSeconds, 0.001f);
             var gcs = GC.CollectionCount(0);
@@ -278,8 +468,11 @@ namespace RepoQuest
             Write($"{fps,5:0.0} fps, worst {worstFrame * 1000:0} ms | main {Median(main),5:0.0} render {Median(render),5:0.0} " +
                   $"gpu {Median(gpu),5:0.0} ms | scan {scan:0.00} ms | gc {gcs - gcCount} | {Thermal()}" +
                   $"{(Application.isFocused ? "" : " | unfocused")}{tag}");
-            Write($"  draws {Count(drawCalls)}, batches {Count(batches)}, setpass {Count(setPass)} | {threads.Summary(5)}");
+            Write($"  draws {Count(drawCalls)}, batches {Count(batches)}, setpass {Count(setPass)}, tris {Count(triangles)}, " +
+                  $"verts {Count(vertices)}, gc alloc {Count(gcAlloc)} B | frames >25 ms {over25}, >50 {over50}, >100 {over100} | " +
+                  $"{threads.Summary(5)}");
             Write($"  {PerfVk.Take(4)}");
+            Write($"  {PerfVk.TakeMore(3)}");
             if (phase >= 0 && phase < phases.Length && Application.isFocused)
             {
                 if (!perPhase.TryGetValue(phases[phase], out var list))
@@ -288,6 +481,7 @@ namespace RepoQuest
             }
 
             gcCount = gcs;
+            over25 = over50 = over100 = 0;
             frames = 0;
             frameSeconds = worstFrame = 0;
             main.Clear();
@@ -333,27 +527,70 @@ namespace RepoQuest
         private readonly List<Camera> hdrCameras = new();
         private Camera topCamera;
         private DepthTextureMode topDepthMode;
+        private int originalPixelLights, originalMips;
+        private float originalLod, originalFixed;
+        private readonly List<(Camera camera, float far)> farClips = new();
 
         private void CreateToggles()
         {
-            toggles["render-texture cameras off"] = (
+            toggles[RtCameras] = (
                 () => Disable(Camera.allCameras.Where(c => c.targetTexture != null && c.enabled)),
                 Reenable);
-            toggles["shadows off"] = (
+            toggles[Shadows] = (
                 () => { originalShadows = QualitySettings.shadows; QualitySettings.shadows = ShadowQuality.Disable; },
                 () => QualitySettings.shadows = originalShadows);
-            toggles["particles hidden"] = (() => Hide(FindObjectsByType<ParticleSystemRenderer>(FindObjectsSortMode.None)), Unhide);
-            toggles["skinned meshes hidden"] = (() => Hide(FindObjectsByType<SkinnedMeshRenderer>(FindObjectsSortMode.None)), Unhide);
-            toggles["video players paused"] = (PauseVideos, ResumeVideos);
-            toggles["post-processing off"] = (
+            toggles[Particles] = (() => Hide(FindObjectsByType<ParticleSystemRenderer>(FindObjectsSortMode.None)), Unhide);
+            toggles[Skinned] = (() => Hide(FindObjectsByType<SkinnedMeshRenderer>(FindObjectsSortMode.None)), Unhide);
+            toggles[Videos] = (PauseVideos, ResumeVideos);
+            toggles[PostProcessing] = (
                 () => Disable(Camera.allCameras.Select(c => c.GetComponent("PostProcessLayer") as Behaviour)
                     .Where(b => b != null && b.enabled)),
                 Reenable);
-            toggles["lamp lighting off"] = (() => SetLampLighting(false), () => SetLampLighting(true));
-            toggles["warmup scan paused"] = (() => ShaderWarmup.ScanPaused = true, () => ShaderWarmup.ScanPaused = false);
-            toggles[$"eye texture {LowScale:0%}"] = (
+            toggles[Lamps] = (() => SetLampLighting(false), () => SetLampLighting(true));
+            toggles[Scan] = (() => ShaderWarmup.ScanPaused = true, () => ShaderWarmup.ScanPaused = false);
+            toggles[LowEyes] = (
                 () => { originalScale = XRSettings.eyeTextureResolutionScale; XRSettings.eyeTextureResolutionScale = originalScale * LowScale; },
                 () => XRSettings.eyeTextureResolutionScale = originalScale);
+            toggles[PixelLights] = (
+                () => { originalPixelLights = QualitySettings.pixelLightCount; QualitySettings.pixelLightCount = 0; },
+                () => QualitySettings.pixelLightCount = originalPixelLights);
+            toggles[LightsOff] = (() => Disable(FindObjectsByType<Light>(FindObjectsSortMode.None).Where(l => l.enabled)), Reenable);
+            toggles[FarClip] = (
+                () =>
+                {
+                    foreach (var camera in Camera.allCameras.Where(c => c.targetTexture == null && c.stereoTargetEye != StereoTargetEyeMask.None))
+                    {
+                        farClips.Add((camera, camera.farClipPlane));
+                        camera.farClipPlane *= 0.5f;
+                    }
+                    Write($"  far clip: {string.Join(", ", farClips.Select(c => $"{c.camera.name} {c.far:0} -> {c.camera.farClipPlane:0}"))}");
+                },
+                () =>
+                {
+                    foreach (var (camera, far) in farClips.Where(c => c.camera))
+                        camera.farClipPlane = far;
+                    farClips.Clear();
+                });
+            toggles[Items] = (() => Hide(GrabbableRenderers()), Unhide);
+            toggles[WorldUi] = (
+                () => Disable(FindObjectsByType<Canvas>(FindObjectsSortMode.None)
+                    .Where(c => c.enabled && c.renderMode == RenderMode.WorldSpace && c != canvas)),
+                Reenable);
+            toggles[HalfMeshes] = (
+                () => Hide(FindObjectsByType<MeshRenderer>(FindObjectsSortMode.InstanceID)
+                    .Where(r => r.enabled && r.gameObject.activeInHierarchy).Where((_, i) => i % 2 == 0)),
+                Unhide);
+            toggles[Lod] = (
+                () => { originalLod = QualitySettings.lodBias; QualitySettings.lodBias = originalLod * 0.3f; },
+                () => QualitySettings.lodBias = originalLod);
+            toggles[Mips] = (
+                () => { originalMips = QualitySettings.globalTextureMipmapLimit; QualitySettings.globalTextureMipmapLimit = originalMips + 1; },
+                () => QualitySettings.globalTextureMipmapLimit = originalMips);
+            toggles[Physics] = (
+                () => { originalFixed = Time.fixedDeltaTime; Time.fixedDeltaTime = originalFixed * 2f; },
+                () => Time.fixedDeltaTime = originalFixed);
+            toggles[Animators] = (() => Disable(FindObjectsByType<Animator>(FindObjectsSortMode.None).Where(a => a.enabled)), Reenable);
+            toggles[Audio] = (() => AudioListener.pause = true, () => AudioListener.pause = false);
             allOffNames = toggles.Keys.ToList();
 
             toggles[Normal] = (RenderThreadNormal, RestoreSchedulers);
@@ -369,8 +606,20 @@ namespace RepoQuest
                     if (originalRate > 0)
                         Write($"  refresh rate back to {originalRate:0.#}: {PerfXr.RequestRefreshRate(originalRate)}");
                 });
-            toggles[LevelsHigh] = (() => Write($"  levels SUSTAINED_HIGH: {PerfXr.SetLevels(PerfXr.SustainedHigh)}"), () => { });
-            toggles[LevelsBoost] = (() => Write($"  levels BOOST: {PerfXr.SetLevels(PerfXr.Boost)}"), () => { });
+            toggles[LevelsHigh] = (
+                () =>
+                {
+                    Write($"  levels SUSTAINED_HIGH: {PerfXr.SetLevels(PerfXr.SustainedHigh)}");
+                    leftOver = "CPU and GPU levels SUSTAINED_HIGH";
+                },
+                () => { });
+            toggles[LevelsBoost] = (
+                () =>
+                {
+                    Write($"  levels BOOST: {PerfXr.SetLevels(PerfXr.Boost)}");
+                    leftOver = "CPU and GPU levels BOOST";
+                },
+                () => { });
             toggles[NoCopies] = (() => PerfVk.SetMode(PerfVk.SkipCopies), () => PerfVk.SetMode(PerfVk.Copy));
             toggles[Blits] = (() => PerfVk.SetMode(PerfVk.BlitCopies), () => PerfVk.SetMode(PerfVk.Copy));
             toggles[HdrOff] = (
@@ -415,11 +664,11 @@ namespace RepoQuest
                 Reenable);
         }
 
-        private string[] Phases()
+        private static string[] Phases(string name, string[] defaults)
         {
             try
             {
-                var file = Path.Combine(Application.persistentDataPath, "perf-phases");
+                var file = Path.Combine(Application.persistentDataPath, name);
                 if (File.Exists(file))
                 {
                     var listed = File.ReadAllLines(file).Select(l => l.Trim()).Where(l => l.Length > 0).ToArray();
@@ -428,10 +677,8 @@ namespace RepoQuest
                 }
             }
             catch (IOException) { }
-            return DefaultPhases;
+            return defaults;
         }
-
-        private const string AllOff = "all of the above";
 
         private void Apply(string what)
         {
@@ -497,6 +744,20 @@ namespace RepoQuest
             hidden.Clear();
         }
 
+        /// <summary>Everything a player can pick up: valuables, the shop's goods, weapons</summary>
+        private IEnumerable<Renderer> GrabbableRenderers()
+        {
+            var grab = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("PhysGrabObject")).FirstOrDefault(t => t != null);
+            if (grab == null)
+            {
+                Write("  PhysGrabObject not found");
+                return Array.Empty<Renderer>();
+            }
+            var objects = FindObjectsByType(grab, FindObjectsSortMode.None).OfType<Component>().ToList();
+            Write($"  grabbable objects {objects.Count}");
+            return objects.SelectMany(o => o.GetComponentsInChildren<Renderer>());
+        }
+
         private void PauseVideos()
         {
             var all = FindObjectsByType<UnityEngine.Video.VideoPlayer>(FindObjectsSortMode.None);
@@ -537,7 +798,10 @@ namespace RepoQuest
             }
             var done = PerfThreads.SetNormalScheduler(tid, policy, out var error);
             if (done)
+            {
                 schedulers.Add((tid, policy, priority));
+                leftOver += (leftOver.Length > 0 ? ", " : "") + "render thread maybe OTHER";
+            }
             Write($"  {Describe(tid)}: policy {policy}/{priority} -> OTHER: {(done ? "done" : error)}");
         }
 
@@ -609,7 +873,7 @@ namespace RepoQuest
             if (phase >= 0)
                 Undo(phases[phase]);
             phase++;
-            phaseStart = now + (phase < phases.Length && phases[phase] == Profiling ? ProfilingSeconds : PhaseSeconds);
+            phaseStart = now + (phase < phases.Length && phases[phase] == Profiling ? profilingSeconds : phaseSeconds);
             if (phase >= phases.Length)
             {
                 Summary();
@@ -617,9 +881,12 @@ namespace RepoQuest
                 return;
             }
             Write($"test: {phases[phase]}");
-            // Render textures and camera state once the level has rendered a while
+            // Render textures, camera state and what is in the place once it has rendered a while
             if (phase == 0)
+            {
                 Write(Rendering());
+                Run("census", () => Write(Census()));
+            }
             Apply(phases[phase]);
         }
 
@@ -628,7 +895,8 @@ namespace RepoQuest
             if (phase >= 0 && phase < phases.Length)
             {
                 Undo(phases[phase]);
-                Write("test interrupted");
+                Write($"test interrupted at {phase + 1}/{phases.Length}");
+                Summary();
             }
             phases = Array.Empty<string>();
             phase = -1;
@@ -636,6 +904,9 @@ namespace RepoQuest
 
         private void Summary()
         {
+            Run("census", () => Write(Census()));
+            if (leftOver.Length > 0)
+                Write($"summary after: {leftOver}");
             foreach (var (what, list) in perPhase)
             {
                 // The first second of a phase still carries the one before

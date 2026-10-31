@@ -13,6 +13,10 @@ namespace RepoQuest
     /// later and keeps the features it finds), that asks the runtime for two extensions no feature of ours enables:
     /// XR_EXT_performance_settings, CPU and GPU level hints (Pico's runtime has it, and nothing sets the levels: Pico logs
     /// cpuLevel 0 gpuLevel 0), and XR_FB_display_refresh_rate (72 Hz instead of 90). Status says what came of it.
+    /// Added on every Quest start, not only for PerfLog, and puts CPU and GPU at SUSTAINED_HIGH as soon
+    /// as the session begins. The game is CPU-bound on the Quest (about 18 ms CPU against 12 ms GPU per frame at 72 Hz);
+    /// the runtime otherwise lets the clocks drop between busy frames and the next heavy frame misses its deadline.
+    /// /sdcard/Android/data/io.repoxr.quest/files/perf-levels-off (an empty file) leaves the levels to the runtime.
     /// </summary>
     public class PerfXr : OpenXRFeature
     {
@@ -50,7 +54,7 @@ namespace RepoQuest
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Install()
         {
-            if (!PerfLog.Wanted())
+            if (Application.platform != RuntimePlatform.Android)
                 return;
             try
             {
@@ -110,6 +114,32 @@ namespace RepoQuest
         }
 
         protected override void OnSessionCreate(ulong xrSession) => session = xrSession;
+
+        /// <summary>SUSTAINED_HIGH for CPU and GPU from the start of every session</summary>
+        protected override void OnSessionBegin(ulong xrSession)
+        {
+            session = xrSession;
+            if (LevelsOff())
+            {
+                Status += ", levels left to the runtime (perf-levels-off)";
+                return;
+            }
+            var result = SetLevels(SustainedHigh);
+            Status += $", levels SUSTAINED_HIGH: {result}";
+            Debug.Log($"[RepoQuest] PerfXr: {Status}");
+        }
+
+        private static bool LevelsOff()
+        {
+            try
+            {
+                return System.IO.File.Exists(System.IO.Path.Combine(Application.persistentDataPath, "perf-levels-off"));
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
 
         protected override void OnSessionDestroy(ulong xrSession) => session = 0;
 

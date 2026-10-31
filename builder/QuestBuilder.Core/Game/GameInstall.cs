@@ -16,7 +16,9 @@ public sealed class GameInstall
     public string Data => System.IO.Path.Combine(Path, "REPO_Data");
     public string Managed => System.IO.Path.Combine(Data, "Managed");
     public string AssemblyCSharp => System.IO.Path.Combine(Managed, "Assembly-CSharp.dll");
-    public string AddressablesCatalog => System.IO.Path.Combine(Data, "StreamingAssets", "aa", "catalog.json");
+    /// <summary>The Addressables build folder: its settings.json names the catalog (catalog.bin since v0.5.0; Steam leaves the
+    /// old catalog.json next to it)</summary>
+    public string AddressablesFolder => System.IO.Path.Combine(Data, "StreamingAssets", "aa");
 
     public static bool IsValid(string? path) =>
         !string.IsNullOrEmpty(path) && File.Exists(System.IO.Path.Combine(path, "REPO_Data", "Managed", "Assembly-CSharp.dll"));

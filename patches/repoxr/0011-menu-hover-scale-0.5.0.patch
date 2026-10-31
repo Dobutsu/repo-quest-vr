@@ -1,0 +1,112 @@
+diff --git a/Source/Patches/UI/UIPatches.cs b/Source/Patches/UI/UIPatches.cs
+index f7de0d5..d842d2b 100644
+--- a/Source/Patches/UI/UIPatches.cs
++++ b/Source/Patches/UI/UIPatches.cs
+@@ -135,6 +135,51 @@ internal static class UIPatches
+             __instance.isKeyboardNavigating = false;
+     }
+ 
++    /// <summary>
++    /// R.E.P.O. 0.5.0 sizes the hover area as rect size × lossyScale (screen pixels on its screen-space canvas). The
++    /// VR pointer and the element positions are in the menu page's local units, and the world-space menu canvas is
++    /// scaled to 0.03: the hover area shrank to a speck in each button's corner and nothing could be pointed at.
++    /// Scale relative to the menu page instead, which is 1 for the page's own elements
++    /// </summary>
++    [HarmonyPatch(typeof(SemiFunc), nameof(SemiFunc.UIMouseHover))]
++    [HarmonyTranspiler]
++    private static IEnumerable<CodeInstruction> UIPointerHoverScalePatch(IEnumerable<CodeInstruction> instructions)
++    {
++        var lossyScale = PropertyGetter(typeof(Transform), nameof(Transform.lossyScale));
++        var replaced = 0;
++        foreach (var instruction in instructions)
++        {
++            if ((instruction.opcode == OpCodes.Callvirt || instruction.opcode == OpCodes.Call) &&
++                Equals(instruction.operand, lossyScale))
++            {
++                instruction.opcode = OpCodes.Call;
++                instruction.operand = ((Func<Transform, Vector3>)ScaleInMenuPage).Method;
++                replaced++;
++            }
++
++            yield return instruction;
++        }
++
++        if (replaced == 0)
++            throw new InvalidOperationException("SemiFunc.UIMouseHover: no Transform.lossyScale to replace");
++    }
++
++    private static Vector3 ScaleInMenuPage(Transform transform)
++    {
++        var scale = transform.lossyScale;
++        if (XRRayInteractorManager.Instance is null)
++            return scale;
++
++        var page = transform.GetComponentInParent<MenuPage>();
++        if (!page)
++            return scale;
++
++        var reference = page.transform.lossyScale;
++        return new Vector3(reference.x != 0 ? scale.x / reference.x : scale.x,
++            reference.y != 0 ? scale.y / reference.y : scale.y,
++            reference.z != 0 ? scale.z / reference.z : scale.z);
++    }
++
+     /// <summary>
+     /// Properly set the mouse hold position
+     /// </summary>
+diff --git a/Source/UI/XRRayInteractorManager.cs b/Source/UI/XRRayInteractorManager.cs
+index 1625fca..447961f 100644
+--- a/Source/UI/XRRayInteractorManager.cs
++++ b/Source/UI/XRRayInteractorManager.cs
+@@ -1,4 +1,5 @@
+ ﻿using System;
++using System.Linq;
+ using RepoXR.Assets;
+ using RepoXR.Input;
+ using UnityEngine;
+@@ -33,9 +34,45 @@ public class XRRayInteractorManager : MonoBehaviour
+         UpdateActiveController(ActiveController.Right);
+     }
+ 
++    private float nextInputReport;
++    private int inputReports;
++
++    // Quest port: what the Input System sees, a few times after the menu opens (devices, the UI press bindings and
++    // their values, the hand pose), to tell missing devices from unbound actions from a missed click
++    private void ReportInput()
++    {
++        var devices = string.Join(", ", InputSystem.devices.Select(d => $"{d.layout}{(d.enabled ? "" : " (disabled)")}"));
++        Logger.LogInfo($"[UI] input devices: {devices}");
++        foreach (var (hand, controller) in new[] { ("Left", leftActions), ("Right", rightActions) })
++        {
++            var press = controller.uiPressAction.action;
++            var position = controller.positionAction.action;
++            Logger.LogInfo(press == null
++                ? $"[UI] {hand} UI Press: no action"
++                : $"[UI] {hand} UI Press: enabled {press.enabled}, map {press.actionMap?.name} enabled {press.actionMap?.enabled}, " +
++                  $"bindings [{string.Join("; ", press.bindings.Select(b => b.effectivePath))}], " +
++                  $"controls [{string.Join("; ", press.controls.Select(c => c.path))}], pressed {press.IsPressed()}, " +
++                  $"position {(position == null ? "none" : $"{position.enabled} {position.controls.Count} controls {position.ReadValue<Vector3>()}")}");
++        }
++    }
++
+     // Quest port: one log line per trigger press while a menu is up, to see why a click does or does not land
+     private void Update()
+     {
++        if (inputReports < 6 && Time.unscaledTime >= nextInputReport)
++        {
++            nextInputReport = Time.unscaledTime + 5f;
++            inputReports++;
++            try
++            {
++                ReportInput();
++            }
++            catch (Exception e)
++            {
++                Logger.LogWarning($"[UI] input report failed: {e.Message}");
++            }
++        }
++
+         var (interactor, actions) = GetActiveInteractor();
+         if (!actions.uiPressAction.action.WasPressedThisFrame())
+             return;

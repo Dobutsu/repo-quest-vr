@@ -70,7 +70,7 @@ namespace RepoXR.Standalone
         }
 
         /// <summary>
-        /// MetaManager.Start on Quest: the cloud first, then the game's own Start (load the file, debug unlocks, icons)
+        /// MetaManager.Start on Quest: the cloud first, then the game's own Start (load the file, debug unlocks)
         /// </summary>
         public static IEnumerator StartAfterSync(MetaManager meta)
         {
@@ -89,7 +89,6 @@ namespace RepoXR.Standalone
                 if (DebugComputerCheck.instance.CosmeticReset)
                     meta.Reset();
             }
-            meta.StartCoroutine(meta.GenerateIcons());
 
             if (instance)
             {

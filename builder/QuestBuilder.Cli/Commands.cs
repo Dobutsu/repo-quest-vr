@@ -97,7 +97,7 @@ internal static class Commands
     {
         foreach (var candidate in GameLocator.Candidates())
             Console.WriteLine($"{(GameInstall.IsValid(candidate) ? "game  " : "      ")} {candidate}");
-        var unity = UnityInstall.Find("2022.3.62f3");
+        var unity = UnityInstall.Find("6000.3.17f1");
         Console.WriteLine($"unity  {unity?.Root ?? "(not found)"}{(unity is { HasAndroid: true } ? " +android" : "")}");
         Console.WriteLine($"hub    {UnityHub.Executable() ?? "(not found)"}");
         return 0;

@@ -81,6 +81,7 @@ namespace RepoXR.Standalone
                 "LOG IN", "BACK");
             while (intro.Answer == 0)
                 yield return null;
+            Debug.Log($"[RepoXR.Standalone] Steam login: popup answer {intro.Answer}");
             if (intro.Answer != 1)
                 yield break;
             yield return MenuSettled();
@@ -97,6 +98,7 @@ namespace RepoXR.Standalone
                 yield return WaitForAnswer(page);
                 if (page.Answer != 1)
                 {
+                    Debug.Log($"[RepoXR.Standalone] Steam login: account page answer {page.Answer}, open {page.IsOpen}");
                     page.Close();
                     yield break;
                 }

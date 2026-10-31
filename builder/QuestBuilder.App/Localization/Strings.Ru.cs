@@ -278,7 +278,7 @@ internal static partial class Strings
             "Сборщик не смог встроить VR-мод на этом компьютере — дело не в версии игры. Соберите отчёт и отправьте " +
             "его нам.",
         ["err.unity-missing"] =
-            "Unity не установлена. Установите в Unity Hub версию 2022.3.62f3 с модулем Android Build Support (SDK, NDK " +
+            "Unity не установлена. Установите в Unity Hub версию 6000.3.17f1 с модулем Android Build Support (SDK, NDK " +
             "и OpenJDK) и запустите сборку снова.",
         ["err.unity-license"] =
             "Unity отказалась работать без лицензии. Войдите в Unity Hub, добавьте бесплатную лицензию Personal и " +
@@ -293,7 +293,7 @@ internal static partial class Strings
             "Не хватает места для Unity (около 20 ГБ) ни на системном диске, ни на диске с рабочей папкой. " +
             "Освободите место и попробуйте снова.",
         ["err.unity-android"] =
-            "У Unity не хватает модулей для Android. В Unity Hub откройте Installs → Unity 2022.3.62f3 → Add modules " +
+            "У Unity не хватает модулей для Android. В Unity Hub откройте Installs → Unity 6000.3.17f1 → Add modules " +
             "и добавьте Android Build Support вместе с OpenJDK и Android SDK & NDK Tools.",
         ["err.unity-compile"] =
             "Код проекта не скомпилировался. Это ошибка сборщика, а не ваша: соберите отчёт и отправьте его нам.",

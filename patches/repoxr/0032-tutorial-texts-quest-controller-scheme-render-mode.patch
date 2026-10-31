@@ -1,0 +1,291 @@
+diff --git a/Source/Config.cs b/Source/Config.cs
+index e021062..67b9101 100644
+--- a/Source/Config.cs
++++ b/Source/Config.cs
+@@ -205,9 +205,10 @@ public class Config(string assemblyPath, ConfigFile file)
+         new ConfigDescription("The amount of smoothing that is applied to the custom camera.",
+             new AcceptableValueRange<float>(0, 1)));
+ 
+-    // [ConfigDescriptor(customName: "Render Mode", trueText: "Single Pass", falseText: "Multipass")]
++    // Quest port: shown on the Quest (single-pass is its default; multi-pass shows the shop mirror, at a frame rate cost)
++    [ConfigDescriptor(customName: "Render Mode", trueText: "Single Pass", falseText: "Multipass"), QuestOnly]
+     public ConfigEntry<bool> SinglePassRendering { get; } = file.Create("Rendering", nameof(SinglePassRendering), Plugin.IsQuest,
+-        "Whether to render both eyes in a single pass (multiview) instead of one pass per eye. On Quest this roughly halves the rendering work (measured 54 -> 71 FPS on Manor) and post-processing is fixed for it; turn it off if something only shows in one eye.");
++        "Whether to render both eyes in a single pass (multiview) instead of one pass per eye. On Quest this roughly halves the rendering work (measured 54 -> 71 FPS on Manor) and post-processing is fixed for it; turn it off if something only shows in one eye. Multipass also shows the shop mirror. Restart the game after changing it.");
+ 
+     // Internal configuration
+ 
+diff --git a/Source/Input/RebindManager.cs b/Source/Input/RebindManager.cs
+index 729aaf8..39aeef6 100644
+--- a/Source/Input/RebindManager.cs
++++ b/Source/Input/RebindManager.cs
+@@ -138,7 +138,7 @@ public class RebindManager : MonoBehaviour
+             return;
+         
+         // Don't allow rebinding until a controller scheme is known
+-        if (string.IsNullOrEmpty(playerInput.currentControlScheme))
++        if (string.IsNullOrEmpty(VRInputSystem.Instance.CurrentControlScheme))
+             return;
+ 
+         if (currentOperation != null)
+diff --git a/Source/Input/VRInputSystem.cs b/Source/Input/VRInputSystem.cs
+index 8b8f9fb..4a4b885 100644
+--- a/Source/Input/VRInputSystem.cs
++++ b/Source/Input/VRInputSystem.cs
+@@ -18,7 +18,14 @@ public class VRInputSystem : MonoBehaviour
+     private PlayerInput playerInput;
+ 
+     public InputActionAsset Actions => playerInput.actions;
+-    public string CurrentControlScheme => playerInput.currentControlScheme;
++    /// <summary>
++    /// The control scheme of the paired controllers. On the Quest, where PlayerInput can end up pairing no controller
++    /// at all (Quest 3 Touch Plus through the XR input subsystem: "Invalid user"), the Meta Quest scheme: every binding
++    /// is on generic XR controllers and in every scheme, so its bindings are the ones in use
++    /// </summary>
++    public string CurrentControlScheme =>
++        !string.IsNullOrEmpty(playerInput.currentControlScheme) ? playerInput.currentControlScheme
++        : Plugin.IsQuest && playerInput.actions.FindControlSchemeIndex("Meta Quest") >= 0 ? "Meta Quest" : "";
+ 
+     private Dictionary<string, bool> inputToggle = [];
+ 
+@@ -27,6 +34,7 @@ public class VRInputSystem : MonoBehaviour
+         _instance = this;
+ 
+         ApplyPortDefaults(AssetCollection.VRInputs);
++        AcceptAnyXRControllers(AssetCollection.VRInputs);
+ 
+         playerInput = gameObject.AddComponent<PlayerInput>();
+         playerInput.actions = AssetCollection.VRInputs;
+@@ -50,6 +58,58 @@ public class VRInputSystem : MonoBehaviour
+             JsonConvert.DeserializeObject<Dictionary<string, bool>>(Plugin.Config.InputToggleBindings.Value) ?? [];
+     }
+ 
++    private float schemeCheckAt = 5;
++
++    /// <summary>
++    /// If the controllers still match no control scheme a few seconds in, say which ones they are
++    /// </summary>
++    private void Update()
++    {
++        if (schemeCheckAt < 0 || Time.unscaledTime < schemeCheckAt)
++            return;
++
++        schemeCheckAt = -1;
++        if (!string.IsNullOrEmpty(playerInput.currentControlScheme))
++            return;
++
++        var layouts = new List<string>();
++        foreach (var device in InputSystem.devices)
++            if (device is UnityEngine.InputSystem.XR.XRController)
++                layouts.Add(device.layout);
++        Logger.LogWarning($"No control scheme matches the controllers ({string.Join(", ", layouts)}): the controls page cannot rebind");
++    }
++
++    /// <summary>
++    /// RepoXR's control schemes name the controller layouts they need (Oculus Touch, Quest Pro, Index, ...). On its own
++    /// runtime a Quest 3 reports its Touch Plus controllers through the XR input subsystem
++    /// (XRInputV1::Oculus::MetaQuestTouchPlusControllerOpenXR), which no scheme names: input worked (the bindings are on
++    /// generic XR controllers), but there was no control scheme, the controls page said "DISCONNECTED" and allowed no
++    /// rebinding. On the Quest the "Meta Quest" scheme also takes any pair of XR controllers
++    /// </summary>
++    private static void AcceptAnyXRControllers(InputActionAsset actions)
++    {
++        if (!Plugin.IsQuest)
++            return;
++
++        var index = actions.FindControlSchemeIndex("Meta Quest");
++        if (index < 0)
++            return;
++
++        var scheme = actions.controlSchemes[index];
++        foreach (var requirement in scheme.deviceRequirements)
++            if (requirement.controlPath.StartsWith("<XRController>"))
++                return;
++
++        var requirements = new List<InputControlScheme.DeviceRequirement>(scheme.deviceRequirements)
++        {
++            new() { controlPath = "<XRController>{LeftHand}", isOR = true },
++            new() { controlPath = "<XRController>{RightHand}" }
++        };
++
++        actions.RemoveControlScheme(scheme.name);
++        actions.AddControlScheme(new InputControlScheme(scheme.name, requirements, scheme.bindingGroup));
++    }
++
+     private const string MenuButton = "<XRController>{LeftHand}/{MenuButton}";
+ 
+     /// <summary>
+diff --git a/Source/Patches/InputPatches.cs b/Source/Patches/InputPatches.cs
+index 40adeb3..c927ac4 100644
+--- a/Source/Patches/InputPatches.cs
++++ b/Source/Patches/InputPatches.cs
+@@ -454,8 +454,8 @@ internal static class InputPatches
+         }
+ 
+         // 0.5.0 keeps its tags ([move], [grab], ...) in InputGlyphs.tagDictionary (a tag can stand for several keys);
+-        // InputManager.tagDictionary is still there but nothing fills it, and with it every tag stayed as it was:
+-        // "Use [move] to move" in the tutorial, the chat prompt, the skip texts
++        // InputManager.tagDictionary is still there, but the game no longer fills it, and with only that every game tag
++        // stayed as it was: "Use [move] to move" in the tutorial, the chat prompt, the skip texts
+         var _text = __0;
+         if (InputGlyphs.tagDictionary is { Count: > 0 } glyphTags)
+         {
+@@ -464,10 +464,14 @@ internal static class InputPatches
+                     _text = _text.Replace(tag, string.Join("/", keys.Select(key =>
+                         __instance.InputDisplayGet(key, KeyType.InputKey, MovementDirection.Up)).Distinct()));
+         }
+-        else
++
++        // RepoXR's own tags ([MapGrabLeft], [MapGrabRight], ...: OnInputManagerStart) stay in InputManager.tagDictionary
++        if (__instance.tagDictionary != null)
+             _text = __instance.tagDictionary.Aggregate(_text,
+-                (current, keyValuePair) => current.Replace(keyValuePair.Key,
+-                    __instance.InputDisplayGet(keyValuePair.Value, KeyType.InputKey, MovementDirection.Up)));
++                (current, keyValuePair) => current.Contains(keyValuePair.Key)
++                    ? current.Replace(keyValuePair.Key,
++                        __instance.InputDisplayGet(keyValuePair.Value, KeyType.InputKey, MovementDirection.Up))
++                    : current);
+ 
+         __result = _text;
+ 
+diff --git a/Source/Patches/Rendering/MirrorPatches.cs b/Source/Patches/Rendering/MirrorPatches.cs
+index 8d9569d..6f3e413 100644
+--- a/Source/Patches/Rendering/MirrorPatches.cs
++++ b/Source/Patches/Rendering/MirrorPatches.cs
+@@ -36,7 +36,8 @@ internal static class MirrorPatches
+     private static readonly List<XRDisplaySubsystem> displays = [];
+     internal static Action<MirrorReflection, Camera.StereoscopicEye, Vector3, Matrix4x4>? AfterEyeRender;
+ 
+-    private static bool SinglePass => Plugin.Config.SinglePassRendering.Value;
++    // The render mode the game started with (changing it takes a restart)
++    private static readonly bool SinglePass = Plugin.Config.SinglePassRendering.Value;
+     private static bool Shown => Plugin.Config.ShopMirror.Value && !SinglePass;
+ 
+     [HarmonyPatch(typeof(MirrorReflection), nameof(MirrorReflection.OnEnable))]
+diff --git a/Source/Patches/UI/TutorialPatches.cs b/Source/Patches/UI/TutorialPatches.cs
+index e425bd0..e0a75db 100644
+--- a/Source/Patches/UI/TutorialPatches.cs
++++ b/Source/Patches/UI/TutorialPatches.cs
+@@ -91,28 +91,82 @@ internal static class TutorialPatches
+     [HarmonyPostfix]
+     private static void OnTutorialDirectorCreate(TutorialDirector __instance)
+     {
+-        // Replace some tutorial text with VR equivalents
+-        var inventoryFill = __instance.tutorialPages[10];
+-        var inventoryEmpty = __instance.tutorialPages[11];
+-        var map = __instance.tutorialPages[12];
+-        var expressions = __instance.tutorialPages[25];
+-
+-        // Without RepoXR's translations (PC on 0.5.0, see AssetCollection.LoadAssets) the game's texts stay
+-        if (!AssetCollection.TranslationsLoaded)
++        // RepoXR's VR texts exist in English only: in any other language the game's own (translated) texts stay, which
++        // also show the VR controller icons
++        var locale = UnityEngine.Localization.Settings.LocalizationSettings.SelectedLocale;
++        if (locale && !locale.Identifier.Code.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+             return;
+ 
+-        inventoryFill.localizedText = Utils.L("TUTORIAL.INVENTORY_FILL.TEXT") ?? inventoryFill.localizedText;
+-        inventoryFill.localizedDummyText = Utils.L("TUTORIAL.INVENTORY_FILL.DUMMY_TEXT") ?? inventoryFill.localizedDummyText;
++        // Replace some tutorial text with VR equivalents (the pages are checked: their indices are those of 0.4.4)
++        var inventoryFill = Page(__instance, 10, "inventory");
++        var inventoryEmpty = Page(__instance, 11, "inventory");
++        var map = Page(__instance, 12, "map");
++        var expressions = Page(__instance, 25, "express");
+ 
+-        inventoryEmpty.localizedText = Utils.L("TUTORIAL.INVENTORY_EMPTY.TEXT") ?? inventoryEmpty.localizedText;
+-        inventoryEmpty.localizedDummyText = Utils.L("TUTORIAL.INVENTORY_EMPTY.DUMMY_TEXT") ?? inventoryEmpty.localizedDummyText;
++        Replace(inventoryFill, "TUTORIAL.INVENTORY_FILL.TEXT", "TUTORIAL.INVENTORY_FILL.DUMMY_TEXT");
++        Replace(inventoryEmpty, "TUTORIAL.INVENTORY_EMPTY.TEXT", "TUTORIAL.INVENTORY_EMPTY.DUMMY_TEXT");
++        Replace(map, "TUTORIAL.MAP.TEXT", "TUTORIAL.MAP.DUMMY_TEXT");
++        Replace(expressions, "TUTORIAL.EXPRESSIONS.TEXT", null);
++    }
++
++    private static TutorialDirector.TutorialPage? Page(TutorialDirector director, int index, string word)
++    {
++        if (index >= director.tutorialPages.Count)
++            return null;
++
++        var page = director.tutorialPages[index];
++        var text = (page.localizedText ? page.localizedText.GetLocalizedString(null) : null) ?? page.text ?? "";
++        if (text.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0 ||
++            (page.text ?? "").IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0 ||
++            (page.pageName ?? "").IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0)
++            return page;
++
++        Logger.LogWarning($"[Tutorial] page {index} ('{page.pageName}') is not about '{word}' any more: its text stays");
++        return null;
++    }
++
++    private static void Replace(TutorialDirector.TutorialPage? page, string textKey, string? dummyKey)
++    {
++        if (page == null)
++            return;
+ 
+-        map.localizedText = Utils.L("TUTORIAL.MAP.TEXT") ?? map.localizedText;
+-        map.localizedDummyText = Utils.L("TUTORIAL.MAP.DUMMY_TEXT") ?? map.localizedDummyText;
++        // Through RepoXR's translations when they load (the Quest); on PC 0.5.0's Addressables cannot read RepoXR's
++        // JSON catalog (see AssetCollection.LoadAssets), and the same English texts are built in
++        if (AssetCollection.TranslationsLoaded)
++        {
++            page.localizedText = Utils.L(textKey) ?? page.localizedText;
++            if (dummyKey != null)
++                page.localizedDummyText = Utils.L(dummyKey) ?? page.localizedDummyText;
++            return;
++        }
+ 
+-        expressions.localizedText = Utils.L("TUTORIAL.EXPRESSIONS.TEXT") ?? expressions.localizedText;
++        if (BuiltInTexts.TryGetValue(textKey, out var text))
++        {
++            page.localizedText = null!;
++            page.text = text;
++        }
++
++        if (dummyKey != null && BuiltInTexts.TryGetValue(dummyKey, out var dummy))
++        {
++            page.localizedDummyText = null!;
++            page.dummyText = dummy;
++        }
+     }
+ 
++    /// <summary>
++    /// RepoXR's English VR tutorial texts (its string table "HUD RepoXR", en-US)
++    /// </summary>
++    private static readonly Dictionary<string, string> BuiltInTexts = new()
++    {
++        ["TUTORIAL.INVENTORY_FILL.TEXT"] = "Grab an Item and deposit it in one of the slots in front of you to put it in your inventory.",
++        ["TUTORIAL.INVENTORY_FILL.DUMMY_TEXT"] = "Grab ([grab]) an item, hold it and deposit it in one of the three slots in front of you. Fill all spots in your inventory to complete the progress bar!",
++        ["TUTORIAL.INVENTORY_EMPTY.TEXT"] = "Use [grab] with your right hand to take an item out of your inventory.",
++        ["TUTORIAL.INVENTORY_EMPTY.DUMMY_TEXT"] = "Use [grab] while holding your right hand over an item in your inventory, and empty all spots to fill the progress bar!",
++        ["TUTORIAL.MAP.TEXT"] = "Use [MapGrabLeft] or [MapGrabRight] to grab and view the map. The map is <b><u>important</b></u> for navigation.",
++        ["TUTORIAL.MAP.DUMMY_TEXT"] = "Use your left ([MapGrabLeft]) or right ([MapGrabRight]) hand and press the respective button to pick up and view the map until you have filled the progress bar!",
++        ["TUTORIAL.EXPRESSIONS.TEXT"] = "Press and hold the [chat] button open the expressions wheel. You can even mix!"
++    };
++
+     /// <summary>
+     /// Use a less impactful force rotate to look at the truck screen
+     /// </summary>
+diff --git a/Source/UI/Controls/ControlOption.cs b/Source/UI/Controls/ControlOption.cs
+index 5d9041a..ff4a9ef 100644
+--- a/Source/UI/Controls/ControlOption.cs
++++ b/Source/UI/Controls/ControlOption.cs
+@@ -33,7 +33,7 @@ public class ControlOption : MonoBehaviour
+     public void DeleteBinding()
+     {
+         // Don't allow to unbind while no controller scheme is known
+-        if (string.IsNullOrEmpty(playerInput.currentControlScheme))
++        if (string.IsNullOrEmpty(VRInputSystem.Instance.CurrentControlScheme))
+             return;
+ 
+         action.ApplyBindingOverride(bindingIndex, "");
+@@ -71,9 +71,9 @@ public class ControlOption : MonoBehaviour
+ 
+         bindingIndex = Mathf.Max(control.bindingIndex, 0) +
+                        Mathf.Max(
+-                           control.currentInput.action.GetBindingIndex(playerInput.currentControlScheme), 0);
++                           control.currentInput.action.GetBindingIndex(VRInputSystem.Instance.CurrentControlScheme), 0);
+         
+-        if (string.IsNullOrEmpty(playerInput.currentControlScheme))
++        if (string.IsNullOrEmpty(VRInputSystem.Instance.CurrentControlScheme))
+         {
+             controlText.text = "<sprite=37> DISCONNECTED";
+ 

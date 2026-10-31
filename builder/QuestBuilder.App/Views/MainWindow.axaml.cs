@@ -145,7 +145,7 @@ public partial class MainWindow : Window, IWindowServices
             {
                 ("consent", Dialogs.Consent([
                     new ConsentItem("unity-hub", null, 200L << 20, "https://unity.com/legal/terms-of-service"),
-                    new ConsentItem("unity-editor", "2022.3.62f3", 6L << 30, "https://unity.com/legal/terms-of-service"),
+                    new ConsentItem("unity-editor", "6000.3.17f1", 6L << 30, "https://unity.com/legal/terms-of-service"),
                     new ConsentItem("android", null, 0, "https://developer.android.com/studio/terms"),
                     new ConsentItem("assetripper", "2.0.0", 45L << 20, "https://github.com/AssetRipper/AssetRipper/blob/master/License.md"),
                     new ConsentItem("python", "3.13", 150L << 20, "https://docs.python.org/3/license.html"),
@@ -153,10 +153,10 @@ public partial class MainWindow : Window, IWindowServices
                 ])),
                 ("notice", Dialogs.OnlineNotice()),
                 ("defender", Dialogs.Defender(@"D:\RepoQuest")),
-                ("uninstall", Dialogs.Uninstall(@"D:\RepoQuest", defenderExclusion: true, "2022.3.62f3")),
+                ("uninstall", Dialogs.Uninstall(@"D:\RepoQuest", defenderExclusion: true, "6000.3.17f1")),
                 ("license", Dialogs.License(afterFailure: true, OpenHub)),
                 ("untested", Dialogs.Untested("v0.4.5.0")),
-                ("error-hub", Dialogs.Error(new BuildException("Unity Hub did not install Unity 2022.3.62f3",
+                ("error-hub", Dialogs.Error(new BuildException("Unity Hub did not install Unity 6000.3.17f1",
                     "[hub] Error: install failed (exit code 1)") { Code = "unity-install-failed" }, () => { }, () => { })),
                 ("error-unexpected", Dialogs.Error(new InvalidOperationException("Something odd"), () => { }, null)),
                 ("install-none", Dialogs.InstallHelp(unauthorized: false)),

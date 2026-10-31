@@ -156,10 +156,51 @@ namespace Steamworks
         }
     }
 
+    public enum GamepadTextInputMode
+    {
+        Normal = 0,
+        Password = 1,
+    }
+
+    public enum GamepadTextInputLineMode
+    {
+        SingleLine = 0,
+        MultipleLines = 1,
+    }
+
     public static class SteamUtils
     {
         public static bool IsOverlayEnabled => false;
         public static DateTime SteamServerTime => DateTime.UtcNow;
+
+        /// <summary>
+        /// Steam's on-screen keyboard for gamepads (v0.5.0's text fields). There is none on Quest: RepoXR's keyboard types
+        /// into the fields instead, so it never opens and never closes
+        /// </summary>
+#pragma warning disable CS0067
+        public static event Action<bool> OnGamepadTextInputDismissed;
+#pragma warning restore CS0067
+
+        public static bool ShowGamepadTextInput(GamepadTextInputMode inputMode, GamepadTextInputLineMode lineInputMode,
+            string description, int maxChars, string existingText = "") => false;
+
+        public static string GetEnteredGamepadText() => "";
+    }
+
+    public static class SteamApps
+    {
+        /// <summary>The public branch, as on PC outside a beta (null): our lobbies get BuildBranch "" like theirs</summary>
+        public static string CurrentBetaName => null;
+
+        /// <summary>RepoXR looks for SteamVR this way; no Steam apps on Quest</summary>
+        public static bool IsAppInstalled(AppId appid) => false;
+        public static string AppInstallDir(AppId appid = default) => null;
+    }
+
+    public static class SteamUserStats
+    {
+        /// <summary>Achievements (v0.5.0) are not reported from Quest</summary>
+        public static bool IndicateAchievementProgress(string achName, int curProg, int maxProg) => false;
     }
 
     public static class SteamFriends

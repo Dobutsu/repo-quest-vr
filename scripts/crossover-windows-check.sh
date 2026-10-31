@@ -25,9 +25,13 @@ rm -rf "$tools"
     -p:DebugType=none -p:DebugSymbols=false | { grep -E "error|warning" | grep -v MonoMod || true; }
 
 snapshot() {  # <project> -> "<sha256>  <path>" for every file, Unity's caches left out
+    # Names in NFC: the Mac workspace's volume stores "ö" decomposed (v0.5.0 has such names), the bottle's does not
     (cd "$1" && find . -path ./Library -prune -o -path ./Temp -prune -o -path ./Logs -prune -o -type f -print0 \
-        | sort -z | xargs -0 shasum -a 256)
+        | xargs -0 shasum -a 256) \
+        | python3 -c 'import sys, unicodedata; sys.stdout.writelines(sorted(unicodedata.normalize("NFC", l) for l in sys.stdin))'
 }
+
+unity_editor="$(python3 "$root/scripts/lib/paths.py" unity-editor)"
 
 echo "== Windows (CrossOver)"
 rm -rf "$win_ws"
@@ -38,7 +42,7 @@ cp -R "$tools" "$win_ws/cli"
     --workspace "C:\\RQT" \
     --kit "Z:${root//\//\\}\\work\\kit" \
     --game "C:\\Program Files (x86)\\Steam\\steamapps\\common\\REPO" \
-    --unity "Z:\\Applications\\Unity\\Hub\\Editor\\2022.3.62f3" \
+    --unity "Z:${unity_editor//\//\\}" \
     --apk-name check --only bake,project) | tail -5
 
 echo "== macOS"

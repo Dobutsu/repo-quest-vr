@@ -1,3 +1,4 @@
+﻿using RepoQuest.Builder.Game;
 using System.Text.RegularExpressions;
 
 namespace RepoQuest.Builder.Pipeline;
@@ -77,6 +78,7 @@ public sealed class ProjectStep : BuildStep
         FileOps.WriteText(Path.Combine(project, "ProjectSettings", "ProjectVersion.txt"),
             $"m_EditorVersion: {context.Kit.Manifest.Unity.Version}\n" +
             $"m_EditorVersionWithRevision: {context.Kit.Manifest.Unity.Version} ({context.Kit.Manifest.Unity.Changeset})\n");
+        WriteMissingPlayerSettings(project, game);
         EnableParallelImport(project);
 
         // Package DLLs -> real packages, dummy package shaders -> package shaders
@@ -84,30 +86,35 @@ public sealed class ProjectStep : BuildStep
         // Unity reserves Assembly-CSharp* for its own compiled scripts
         await Script(context, ct, "rename_game_assemblies.py", project);
         // Assembly-CSharp's global `Version` type shadows System.Version inside the Input System package
-        await Script(context, ct, "embed_package.py", project, "com.unity.inputsystem", "1.14.2");
+        await Script(context, ct, "embed_package.py", project, "com.unity.inputsystem", "1.19.0");
         // The Windows Addressables build that came with the export; the Android one is built from restored groups
         FileOps.DeleteDirectory(Path.Combine(project, "Assets", "StreamingAssets", "aa"));
         FileOps.DeleteFile(Path.Combine(project, "Assets", "StreamingAssets", "aa.meta"));
-        await Script(context, ct, "addressables_catalog.py", game.AddressablesCatalog, "--out", workspace.AddressablesEntries);
+        await Script(context, ct, "addressables_catalog.py", game.AddressablesFolder, "--out", workspace.AddressablesEntries);
         // Localization finds tables by their original asset GUIDs; AssetRipper assigned new ones
         await Script(context, ct, "restore_guids.py", project, workspace.AddressablesEntries);
         // Photon instantiates networked objects by Resources path; AssetRipper's sanitized file names break those loads
         await Script(context, ct, "restore_resource_names.py", game.Data, project);
         // AssetRipper merges the source-weight curves of a constraint into one
         await Script(context, ct, "fix_constraint_curves.py", project);
+        // AssetRipper writes WAV headers without sizes, which Unity 6 cannot decode
+        await Script(context, ct, "fix_wav_headers.py", project);
         // AssetRipper's shader placeholders render nothing on Vulkan
         await Script(context, ct, "shader_states.py", game.Data, "--out", workspace.ShaderStates);
         await Script(context, ct, "generate_shaders.py", project, workspace.ShaderStates);
         // The UI render target is RGBA32F, which Adreno cannot blend into
         await Script(context, ct, "fix_render_textures.py", project);
+        // TMP's dynamic fonts render new glyphs into their atlas at runtime; Android's default ASTC compression of the
+        // exported atlases turned those glyphs (Steam names, the news text) into stripes
+        await Script(context, ct, "fix_font_atlases.py", project);
         var editorDir = Path.Combine(project, "Assets", "RepoQuest", "Editor");
         CopyTree(Path.Combine(context.Kit.UnityTools, "Editor"), editorDir);
 
         // make-quest-vr.sh: XR packages, package sources with RepoXR's package patches and Post Processing's fixes
         await Script(context, ct, "xr_packages.py", project);
-        await Script(context, ct, "embed_package.py", project, "com.unity.inputsystem", "1.14.2");
-        await Script(context, ct, "embed_package.py", project, "com.unity.ugui", "1.0.0", "--builtin", unity.Root);
-        await Script(context, ct, "embed_package.py", project, "com.unity.postprocessing", "3.5.0");
+        await Script(context, ct, "embed_package.py", project, "com.unity.inputsystem", "1.19.0");
+        await Script(context, ct, "embed_package.py", project, "com.unity.ugui", "2.0.0", "--builtin", unity.Root);
+        await Script(context, ct, "embed_package.py", project, "com.unity.postprocessing", "3.5.4");
         await Script(context, ct, "patch_packages.py", project);
 
         await ApplyQuestRuntimeAsync(context, bepInExCore, ct);
@@ -147,6 +154,36 @@ public sealed class ProjectStep : BuildStep
         // An interrupted earlier run may have left the Library waiting here as well
         if (Directory.Exists(workspace.LibraryKeep))
             Directory.Move(workspace.LibraryKeep, workspace.Library);
+    }
+
+    /// <summary>
+    /// AssetRipper 2.0.0 cannot read the PlayerSettings of Unity 6000.3.17 (four bytes more than it expects) and exports
+    /// no ProjectSettings.asset. Unity fills in what a file leaves out with its defaults, so it gets the game's own
+    /// values where they matter: names, Gamma (the game's lighting is tuned for it) and both input handlers. The rest is
+    /// QuestBuild.ConfigurePlayer's. serializedVersion 26 is 2022.3's, which Unity 6 upgrades as it does any project.
+    /// </summary>
+    private static void WriteMissingPlayerSettings(string project, GameInstall game)
+    {
+        var settings = Path.Combine(project, "ProjectSettings", "ProjectSettings.asset");
+        if (File.Exists(settings))
+            return;
+        var names = File.ReadAllLines(Path.Combine(game.Data, "app.info"));
+        FileOps.WriteText(settings, $"""
+            %YAML 1.1
+            %TAG !u! tag:unity3d.com,2011:
+            --- !u!129 &1
+            PlayerSettings:
+              m_ObjectHideFlags: 0
+              serializedVersion: 26
+              companyName: {names[0]}
+              productName: {names[1]}
+              m_StereoRenderingPath: 0
+              m_ActiveColorSpace: 0
+              allowUnsafeCode: 1
+              apiCompatibilityLevel: 3
+              activeInputHandler: 2
+
+            """);
     }
 
     /// <summary>

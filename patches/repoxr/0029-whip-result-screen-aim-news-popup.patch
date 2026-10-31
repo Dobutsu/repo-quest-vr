@@ -1,0 +1,657 @@
+diff --git a/Source/Assets/AssetCollection.cs b/Source/Assets/AssetCollection.cs
+index ca9138b..66f0613 100644
+--- a/Source/Assets/AssetCollection.cs
++++ b/Source/Assets/AssetCollection.cs
+@@ -82,9 +82,14 @@ internal static class AssetCollection
+             return false;
+         }
+ 
+-        // Load translations
+-        Addressables.LoadContentCatalogAsync(Path.Combine(AddressablesPath, "catalog_0.1.json"), true)
+-            .WaitForCompletion();
++        // Load translations. R.E.P.O. 0.5.0's Addressables 2 reads JSON catalogs only when built with
++        // ENABLE_JSON_CATALOG: the Quest build is, the PC game is not ("Expecting to load catalogs in binary format").
++        // Without the catalog RepoXR's own translations (the VR tutorial texts) are missing and the game's stay
++        var catalog = Addressables.LoadContentCatalogAsync(Path.Combine(AddressablesPath, "catalog_0.1.json"), true);
++        catalog.WaitForCompletion();
++        TranslationsLoaded = catalog.Status == AsyncOperationStatus.Succeeded;
++        if (!TranslationsLoaded)
++            Logger.LogWarning("RepoXR's translations could not be loaded (catalog_0.1.json); the game's own tutorial texts stay");
+ 
+         OpenXRFeatures = assetBundle.LoadAsset<OpenXRFeaturePack>("OpenXRFeatures");
+ 
+@@ -138,6 +143,8 @@ internal static class AssetCollection
+         return true;
+     }
+ 
++    public static bool TranslationsLoaded { get; private set; }
++
+     public static AsyncOperationHandle<LocalizedAsset> GetLocalizedAsset(string name)
+     {
+         return Addressables.LoadAssetAsync<LocalizedAsset>($"LocalizedAsset XR - {name}");
+diff --git a/Source/Config.cs b/Source/Config.cs
+index 3240055..c0271a0 100644
+--- a/Source/Config.cs
++++ b/Source/Config.cs
+@@ -36,7 +36,7 @@ public class Config(string assemblyPath, ConfigFile file)
+         "When enabled, lowers the severity of force-look events (like the ceiling eye), which can be helpful for people with motion sickness");
+ 
+     [ConfigDescriptor(customName: "Head Bob", stepSize: 5f, suffix: "%")]
+-    public ConfigEntry<int> HeadBob { get; } = file.Create("Gameplay", nameof(HeadBob), 0,
++    public ConfigEntry<int> HeadBob { get; } = file.Create("Gameplay", nameof(HeadBob), Plugin.IsQuest ? 0 : 25,
+         new ConfigDescription(
+             "How much the camera bobs and sways while walking, relative to the game's own camera bob. Lower it if walking makes you feel sick, 0% turns it off.",
+             new AcceptableValueRange<int>(0, 100)));
+@@ -113,6 +113,18 @@ public class Config(string assemblyPath, ConfigFile file)
+     public ConfigEntry<bool> VehicleHeadForward { get; } = file.Create("Input", nameof(VehicleHeadForward), false,
+         "When enabled, will make the scooters go forward based on head rotation instead of hand rotation.");
+ 
++    [ConfigDescriptor(customName: "Whip Sideways Sensitivity", pointerSize: 0.05f, stepSize: 0.1f)]
++    public ConfigEntry<float> WhipSidewaysSensitivity { get; } = file.Create("Input", nameof(WhipSidewaysSensitivity),
++        0.5f, new ConfigDescription(
++            "How much a sideways swing of the hand counts for the whip's gestures (R.E.P.O. 0.5.0 made them for a mouse). Lower: the fling needs a wider, faster swing.",
++            new AcceptableValueRange<float>(0.1f, 1.5f)));
++
++    [ConfigDescriptor(customName: "Whip Crack Sensitivity", pointerSize: 0.05f, stepSize: 0.1f)]
++    public ConfigEntry<float> WhipCrackSensitivity { get; } = file.Create("Input", nameof(WhipCrackSensitivity),
++        1f, new ConfigDescription(
++            "How much an up and down swing of the hand counts for the whip's gestures. Lower: the crack needs a wider, faster swing.",
++            new AcceptableValueRange<float>(0.1f, 1.5f)));
++
+     // Rendering configuration
+ 
+     [ConfigDescriptor(stepSize: 5f, suffix: "%")]
+@@ -121,39 +133,39 @@ public class Config(string assemblyPath, ConfigFile file)
+             "This setting configures the resolution scale of the game, lower values are more performant, but will make the game look worse.",
+             new AcceptableValueRange<int>(5, 200)));
+ 
+-    [ConfigDescriptor(customName: "Pixel Lights", stepSize: 1f)]
++    [ConfigDescriptor(customName: "Pixel Lights", stepSize: 1f), QuestOnly]
+     public ConfigEntry<int> PixelLightCount { get; } = file.Create("Rendering", nameof(PixelLightCount), 1,
+         new ConfigDescription(
+             "How many lights can light an object at full quality. Too few and lights compete (a surface darkens when the flashlight comes near); more costs performance. The PC game uses 12.",
+             new AcceptableValueRange<int>(1, 12)));
+ 
+-    [ConfigDescriptor(customName: "Lamp Lighting")]
++    [ConfigDescriptor(customName: "Lamp Lighting"), QuestOnly]
+     public ConfigEntry<bool> LampLighting { get; } = file.Create("Rendering", nameof(LampLighting), true,
+         "Light the lamps nearest to you per pixel, all in one pass, instead of Unity lighting each object with a few of them in extra passes: no seams between objects and less work for the headset, but lamps cast no shadows. Flashlights are unchanged.");
+ 
+     [ConfigDescriptor(customName: "Other Flashlight Shadows")]
+-    public ConfigEntry<bool> OtherFlashlightShadows { get; } = file.Create("Rendering", nameof(OtherFlashlightShadows), false,
++    public ConfigEntry<bool> OtherFlashlightShadows { get; } = file.Create("Rendering", nameof(OtherFlashlightShadows), !Plugin.IsQuest,
+         "Whether other players' flashlights cast shadows. Each one renders the scene again into its own shadow map: with a full lobby this cost 7-10 ms of GPU time per frame on Quest. Their light stays either way.");
+ 
+     // Quest port: unity-tools/Runtime/LevelCulling.cs reads these three; hiding is rendering only
+-    [ConfigDescriptor(customName: "Level Culling")]
++    [ConfigDescriptor(customName: "Level Culling"), QuestOnly]
+     public ConfigEntry<bool> LevelCulling { get; } = file.Create("Rendering", nameof(LevelCulling), true,
+         "Do not draw the parts of the level that are too far to matter: small objects beyond the distance below, and everything the fog hides completely. Only drawing changes: objects keep working, and multiplayer is not affected. Saves CPU time on Quest.");
+ 
+-    [ConfigDescriptor(customName: "Small Object Distance", stepSize: 5f, suffix: " m")]
++    [ConfigDescriptor(customName: "Small Object Distance", stepSize: 5f, suffix: " m"), QuestOnly]
+     public ConfigEntry<int> CullSmallDistance { get; } = file.Create("Rendering", nameof(CullSmallDistance), 20,
+         new ConfigDescription(
+             "With Level Culling on: props, valuables and items smaller than 1.5 m are not drawn beyond this distance.",
+             new AcceptableValueRange<int>(10, 60)));
+ 
+-    [ConfigDescriptor(customName: "Room Distance", stepSize: 5f, suffix: " m")]
++    [ConfigDescriptor(customName: "Room Distance", stepSize: 5f, suffix: " m"), QuestOnly]
+     public ConfigEntry<int> CullFarDistance { get; } = file.Create("Rendering", nameof(CullFarDistance), 0,
+         new ConfigDescription(
+             "With Level Culling on: nothing is drawn beyond this distance. 0 m: as far as the fog lets you see (no visible difference). Lower values hide far rooms for more performance.",
+             new AcceptableValueRange<int>(0, 100)));
+ 
+     [ConfigDescriptor(customName: "Post Processing")]
+-    public ConfigEntry<bool> PostProcessing { get; } = file.Create("Rendering", nameof(PostProcessing), false,
++    public ConfigEntry<bool> PostProcessing { get; } = file.Create("Rendering", nameof(PostProcessing), !Plugin.IsQuest,
+         "The game's post-processing: color grading, vignette, grain and the other screen effects. Off gives a brighter image and saves about 5 ms of GPU time per frame on Quest.");
+ 
+     // Quest port: Rendering/FpsCounter.cs
+@@ -189,7 +201,7 @@ public class Config(string assemblyPath, ConfigFile file)
+             new AcceptableValueRange<float>(0, 1)));
+ 
+     // [ConfigDescriptor(customName: "Render Mode", trueText: "Single Pass", falseText: "Multipass")]
+-    public ConfigEntry<bool> SinglePassRendering { get; } = file.Create("Rendering", nameof(SinglePassRendering), true,
++    public ConfigEntry<bool> SinglePassRendering { get; } = file.Create("Rendering", nameof(SinglePassRendering), Plugin.IsQuest,
+         "Whether to render both eyes in a single pass (multiview) instead of one pass per eye. On Quest this roughly halves the rendering work (measured 54 -> 71 FPS on Manor) and post-processing is fixed for it; turn it off if something only shows in one eye.");
+ 
+     // Internal configuration
+@@ -211,11 +223,17 @@ public class Config(string assemblyPath, ConfigFile file)
+     /// </summary>
+     public void SetupGlobalCallbacks()
+     {
+-        QualitySettings.pixelLightCount = PixelLightCount.Value;
+-        PixelLightCount.SettingChanged += (_, _) => QualitySettings.pixelLightCount = PixelLightCount.Value;
++        // Pixel Lights and Lamp Lighting are the Quest build's: on PC the game's own quality settings decide, and the
++        // lamps need the Quest build's shaders (without them they would go dark)
++        if (Plugin.IsQuest)
++        {
++            QualitySettings.pixelLightCount = PixelLightCount.Value;
++            PixelLightCount.SettingChanged += (_, _) => QualitySettings.pixelLightCount = PixelLightCount.Value;
++        }
+         PostProcessing.SettingChanged += (_, _) => Rendering.PostProcessingSetting.Update();
+         OtherFlashlightShadows.SettingChanged += (_, _) => Rendering.FlashlightShadows.Update();
+-        Rendering.LampLighting.Create();
++        if (Plugin.IsQuest)
++            Rendering.LampLighting.Create();
+         Rendering.FpsCounter.Create();
+ 
+         CameraResolution.SettingChanged += (_, _) =>
+@@ -276,6 +294,12 @@ internal class AcceptableValueEnum<T>() : AcceptableValueBase(typeof(T))
+     public override string ToDescriptionString() => $"# Acceptable values: {string.Join(", ", names)}";
+ }
+ 
++/// <summary>
++/// A setting only the standalone Quest build uses: not shown in the VR settings on PC
++/// </summary>
++[AttributeUsage(AttributeTargets.Property)]
++public class QuestOnlyAttribute : Attribute;
++
+ [AttributeUsage(AttributeTargets.Property)]
+ public class ConfigDescriptorAttribute(
+     string? customName = null,
+diff --git a/Source/Input/VRInputSystem.cs b/Source/Input/VRInputSystem.cs
+index 98a8bf7..8b8f9fb 100644
+--- a/Source/Input/VRInputSystem.cs
++++ b/Source/Input/VRInputSystem.cs
+@@ -59,6 +59,10 @@ public class VRInputSystem : MonoBehaviour
+     /// </summary>
+     private static void ApplyPortDefaults(InputActionAsset actions)
+     {
++        // On PC RepoXR's own bindings stay: not every controller has a left menu button
++        if (!Plugin.IsQuest)
++            return;
++
+         try
+         {
+             ChangeFirstBinding(actions.FindAction("Menu"), MenuButton);
+@@ -76,6 +80,9 @@ public class VRInputSystem : MonoBehaviour
+     /// </summary>
+     private static void ApplyPortLeftHandedDefaults(InputActionAsset actions)
+     {
++        if (!Plugin.IsQuest)
++            return;
++
+         try
+         {
+             actions.FindAction("Menu")?.ApplyBindingOverride(0, MenuButton);
+diff --git a/Source/Patches/InputPatches.cs b/Source/Patches/InputPatches.cs
+index 7d89818..2f22674 100644
+--- a/Source/Patches/InputPatches.cs
++++ b/Source/Patches/InputPatches.cs
+@@ -74,6 +74,18 @@ internal static class InputPatches
+         }
+     }
+ 
++    /// <summary>
++    /// R.E.P.O. 0.5.0: the gamepad's grab cursor drift (PhysGrabber.GamepadGrabTargetGet). In VR the grab point
++    /// follows the hand, so there is no drift
++    /// </summary>
++    [HarmonyPatch(typeof(InputManager), nameof(InputManager.GrabCursorDriftGet))]
++    [HarmonyPrefix]
++    private static bool NoGrabCursorDrift(ref int __result)
++    {
++        __result = 0;
++        return false;
++    }
++
+     private static InputActionAsset cachedActions;
+     private static readonly Dictionary<InputKey, InputAction> VRActions = new();
+ 
+@@ -98,6 +110,8 @@ internal static class InputPatches
+         {
+             // Holding on to a vehicle (scooter, snow bike) is the grab beam
+             InputKey.VehicleGrab => "Grab",
++            // 0.5.0 renamed InputKey.Confirm (sending a chat message) to ChatConfirm; the VR action is still "Confirm"
++            InputKey.ChatConfirm => "Confirm",
+             _ => key.ToString(),
+         };
+ 
+diff --git a/Source/Patches/Item/ItemMeleeWhipPatches.cs b/Source/Patches/Item/ItemMeleeWhipPatches.cs
+new file mode 100644
+index 0000000..2bc345e
+--- /dev/null
++++ b/Source/Patches/Item/ItemMeleeWhipPatches.cs
+@@ -0,0 +1,132 @@
++﻿using System.Collections.Generic;
++using System.Reflection.Emit;
++using HarmonyLib;
++using RepoXR.Managers;
++using UnityEngine;
++
++using static HarmonyLib.AccessTools;
++
++namespace RepoXR.Patches.Item;
++
++/// <summary>
++/// R.E.P.O. 0.5.0's whip cracks and flings by gestures: ItemMeleeWhip.InputTick reads the look delta
++/// (InputManager.GrabCursorLookGet: the mouse, or the gamepad's right stick) and the aim frame of the camera
++/// (forward/right/up), and its gestures look for a backswing and a return of that aim. In VR the look delta is always
++/// zero, so the whip could only be dangled. Here, while the whip reads its input, the aim frame is the hand and the
++/// look delta is how far the hand turned this frame, in the units the game expects (degrees / (180 * deltaTime)):
++/// a quick flick of the controller back and forward cracks, a sweep to the side flings
++/// </summary>
++[RepoXRPatch]
++internal static class ItemMeleeWhipPatches
++{
++    private static bool readingWhipInput;
++    private static Quaternion previousHand;
++    private static int previousFrame = -10;
++
++    [HarmonyPatch(typeof(ItemMeleeWhip), nameof(ItemMeleeWhip.InputTick))]
++    [HarmonyPrefix]
++    private static void BeforeInputTick() => readingWhipInput = true;
++
++    [HarmonyPatch(typeof(ItemMeleeWhip), nameof(ItemMeleeWhip.InputTick))]
++    [HarmonyFinalizer]
++    private static void AfterInputTick() => readingWhipInput = false;
++
++    /// <summary>
++    /// The whip's aim frame: the hand instead of the camera (GetOverrideTransform, and the CameraAim fallback)
++    /// </summary>
++    [HarmonyPatch(typeof(ItemMeleeWhip), nameof(ItemMeleeWhip.InputTick))]
++    [HarmonyTranspiler]
++    private static IEnumerable<CodeInstruction> AimFromHandPatch(IEnumerable<CodeInstruction> instructions)
++    {
++        return new CodeMatcher(instructions)
++            .MatchForward(false,
++                new CodeMatch(OpCodes.Callvirt,
++                    Method(typeof(PlayerLocalCamera), nameof(PlayerLocalCamera.GetOverrideTransform))))
++            .ThrowIfInvalid("ItemMeleeWhip.InputTick: GetOverrideTransform not found")
++            .Set(OpCodes.Call, PlayerLocalCameraExtensions.GetHandOverrideTransformMethod)
++            .MatchForward(false,
++                new CodeMatch(OpCodes.Ldsfld, Field(typeof(CameraAim), nameof(CameraAim.Instance))),
++                new CodeMatch(OpCodes.Callvirt, PropertyGetter(typeof(Component), nameof(Component.transform))))
++            .ThrowIfInvalid("ItemMeleeWhip.InputTick: CameraAim.Instance.transform not found")
++            .Advance(1)
++            .Set(OpCodes.Call, ((System.Func<CameraAim, Transform>)AimTransform).Method)
++            .InstructionEnumeration();
++    }
++
++    private static Transform? aimFrame;
++
++    /// <summary>
++    /// The whip's aim frame in VR: at the hand, pointing where the hand points, but upright (no wrist roll), like the
++    /// mouse-driven camera the gestures were made for
++    /// </summary>
++    private static Transform AimTransform(CameraAim cameraAim)
++    {
++        if (VRSession.Instance is not { } session)
++            return cameraAim.transform;
++
++        if (!aimFrame)
++        {
++            aimFrame = new GameObject("RepoXR Whip Aim") { hideFlags = HideFlags.HideAndDontSave }.transform;
++            Object.DontDestroyOnLoad(aimFrame.gameObject);
++        }
++
++        var hand = session.Player.MainHand;
++        var space = session.MainCamera.transform.parent;
++        var up = space ? space.up : Vector3.up;
++        aimFrame!.SetPositionAndRotation(hand.position,
++            Mathf.Abs(Vector3.Dot(hand.forward, up)) < 0.99f ? Quaternion.LookRotation(hand.forward, up) : hand.rotation);
++
++        return aimFrame;
++    }
++
++    /// <summary>
++    /// The look delta while the whip reads its input: how fast the hand turns, split like a mouse into turning around
++    /// the vertical (x) and tipping up or down around the head's horizontal right (y). Measured in the space the hands
++    /// are tracked in, so turning with the stick does not count; an angular velocity rather than angles, so a swing
++    /// from over the shoulder (the hand pointing straight up and past it) does not flip
++    /// </summary>
++    [HarmonyPatch(typeof(InputManager), nameof(InputManager.GrabCursorLookGet))]
++    [HarmonyPostfix]
++    private static void HandLookDelta(bool __0, ref Vector2 __result)
++    {
++        if (!readingWhipInput || VRSession.Instance is not { } session)
++            return;
++
++        var hand = session.Player.MainHand;
++        var camera = session.MainCamera.transform;
++        var space = camera.parent;
++        var rotation = space ? Quaternion.Inverse(space.rotation) * hand.rotation : hand.rotation;
++
++        var dt = Time.deltaTime;
++        var consecutive = Time.frameCount - previousFrame == 1;
++        var delta = rotation * Quaternion.Inverse(previousHand);
++        previousHand = rotation;
++        previousFrame = Time.frameCount;
++
++        if (!consecutive || dt <= 0)
++        {
++            __result = Vector2.zero;
++            return;
++        }
++
++        delta.ToAngleAxis(out var angle, out var axis);
++        if (angle > 180)
++            angle -= 360;
++        if (!float.IsFinite(axis.x) || !float.IsFinite(angle))
++        {
++            __result = Vector2.zero;
++            return;
++        }
++
++        // Degrees turned this frame around each axis of the tracking space
++        var turn = axis * angle;
++        var headRight = Quaternion.Euler(0, (space ? camera.localEulerAngles : camera.eulerAngles).y, 0) * Vector3.right;
++        // A hand moves much faster than a mouse is pushed; the sideways part (the fling) went off too easily
++        var yaw = Vector3.Dot(turn, Vector3.up) * Plugin.Config.WhipSidewaysSensitivity.Value;
++        var pitch = Vector3.Dot(turn, headRight) * Plugin.Config.WhipCrackSensitivity.Value;
++
++        // Mouse: x turns right, y looks up (a negative pitch around the right axis)
++        var value = new Vector2(yaw, -pitch) / (180 * dt);
++        __result = __0 ? Vector2.ClampMagnitude(value, 1) : value;
++    }
++}
+diff --git a/Source/Patches/UI/FlatScalePatches.cs b/Source/Patches/UI/FlatScalePatches.cs
+new file mode 100644
+index 0000000..c900633
+--- /dev/null
++++ b/Source/Patches/UI/FlatScalePatches.cs
+@@ -0,0 +1,56 @@
++using System.Collections.Generic;
++using System.Linq;
++using System.Reflection;
++using System.Reflection.Emit;
++using HarmonyLib;
++using UnityEngine;
++
++using static HarmonyLib.AccessTools;
++
++namespace RepoXR.Patches.UI;
++
++/// <summary>
++/// R.E.P.O. 0.5.0 animates a few menu popups with <c>transform.localScale = Vector2.Lerp(...)</c>: the Vector2 turns
++/// into a Vector3 with z = 0. Flat, on a screen-space canvas, that is harmless. On RepoXR's world-space canvases
++/// TextMeshPro's SDF shader takes the text's normal through that scale for its perspective filter, divides by the zero
++/// and every letter came out as a solid bar (the main menu's news popup, the cosmetics popup). The scale keeps z = 1
++/// </summary>
++[RepoXRPatch]
++internal static class FlatScalePatches
++{
++    private static readonly MethodInfo Vector2ToVector3 =
++        Method(typeof(Vector2), "op_Implicit", [typeof(Vector2)]);
++
++    private static readonly MethodInfo SetLocalScale =
++        PropertySetter(typeof(Transform), nameof(Transform.localScale));
++
++    private static IEnumerable<MethodBase> TargetMethods() =>
++    [
++        Method(typeof(MenuPageMain), nameof(MenuPageMain.RunMarketingPopupCurves)),
++        Method(typeof(MenuElementCosmeticButtonPopup), "Update"),
++        Method(typeof(CosmeticTokenUIElementDestroy), "Update")
++    ];
++
++    private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
++    {
++        var code = instructions.ToList();
++        var replaced = 0;
++
++        for (var i = 0; i < code.Count - 1; i++)
++        {
++            if (!code[i].Calls(Vector2ToVector3) || !code[i + 1].Calls(SetLocalScale))
++                continue;
++
++            code[i] = new CodeInstruction(OpCodes.Call, ((System.Func<Vector2, Vector3>)Scale).Method)
++                .WithLabels(code[i].labels).WithBlocks(code[i].blocks);
++            replaced++;
++        }
++
++        if (replaced == 0)
++            Logger.LogWarning($"[UI] {original.DeclaringType?.Name}.{original.Name}: no Vector2 scale found");
++
++        return code;
++    }
++
++    private static Vector3 Scale(Vector2 scale) => new(scale.x, scale.y, 1);
++}
+diff --git a/Source/Patches/UI/MarketingPopupPatches.cs b/Source/Patches/UI/MarketingPopupPatches.cs
+new file mode 100644
+index 0000000..ad6e886
+--- /dev/null
++++ b/Source/Patches/UI/MarketingPopupPatches.cs
+@@ -0,0 +1,37 @@
++using HarmonyLib;
++using TMPro;
++
++namespace RepoXR.Patches.UI;
++
++/// <summary>
++/// The main menu's news popup (bottom right) grows from nothing (MenuPageMain.RunMarketingPopupCurves) right after its
++/// texts are set, so TextMeshPro builds their meshes while the popup is still tiny. In VR its words were drawn as solid
++/// bars; once the popup has finished growing its two texts are built again, at their real size
++/// </summary>
++[RepoXRPatch]
++internal static class MarketingPopupPatches
++{
++    private static MenuPageMain? rebuiltFor;
++
++    [HarmonyPatch(typeof(MenuPageMain), nameof(MenuPageMain.UpdateMarketingMessage))]
++    [HarmonyPostfix]
++    private static void OnNewMessage() => rebuiltFor = null;
++
++    [HarmonyPatch(typeof(MenuPageMain), nameof(MenuPageMain.RunMarketingPopupCurves))]
++    [HarmonyPostfix]
++    private static void RebuildWhenGrown(MenuPageMain __instance)
++    {
++        if (rebuiltFor == __instance || __instance.marketingPopupScaleLerp < 1)
++            return;
++
++        rebuiltFor = __instance;
++        Rebuild(__instance.marketingTitleText);
++        Rebuild(__instance.marketingMessageText);
++    }
++
++    private static void Rebuild(TMP_Text? text)
++    {
++        if (text)
++            text!.ForceMeshUpdate(true, true);
++    }
++}
+diff --git a/Source/Patches/UI/MoonUIPatches.cs b/Source/Patches/UI/MoonUIPatches.cs
+index eaf9a65..ebdf522 100644
+--- a/Source/Patches/UI/MoonUIPatches.cs
++++ b/Source/Patches/UI/MoonUIPatches.cs
+@@ -65,7 +65,7 @@ internal static class MoonUIPatches
+         if (_state == MoonUI.State.None)
+             FadeOverlay.Instance.Image.color = Color.clear;
+         // Reset the position and rotation of the canvas when we're about to show the UI
+-        else if (_state == MoonUI.State.Show)
++        else if (_state == MoonUI.State.Show && RepoXR.UI.LoadingUI.instance)
+             RepoXR.UI.LoadingUI.instance.ResetPosition();
+     }
+ 
+diff --git a/Source/Patches/UI/ResultScreenPatches.cs b/Source/Patches/UI/ResultScreenPatches.cs
+index e17eb9d..2c0eab4 100644
+--- a/Source/Patches/UI/ResultScreenPatches.cs
++++ b/Source/Patches/UI/ResultScreenPatches.cs
+@@ -15,10 +15,22 @@ internal static class ResultScreenPatches
+     {
+         if (!__instance.stateImpulse) return;
+ 
+-        __instance.skipText.spriteAsset = AssetCollection.TMPInputsSpriteAsset;
+-        RepoXR.UI.LoadingUI.instance.ResetPosition();
++        // An exception here skips StateFadeIn on every frame and the game never leaves the result screen (level → shop
++        // on 0.5.0, when the scene handoff had cleared LoadingUI.instance), so nothing here may throw
++        if (__instance.skipText)
++            __instance.skipText.spriteAsset = AssetCollection.TMPInputsSpriteAsset;
++
++        if (RepoXR.UI.LoadingUI.instance)
++            RepoXR.UI.LoadingUI.instance.ResetPosition();
++        else if (!loadingUIMissingLogged)
++        {
++            loadingUIMissingLogged = true;
++            Logger.LogWarning("[Scene] result screen: no VR loading UI to reposition");
++        }
+     }
+ 
++    private static bool loadingUIMissingLogged;
++
+     /// <summary>
+     /// Disable player movement and rotation while the result animation plays (fixes some particle system funkyness)
+     /// </summary>
+@@ -26,7 +38,7 @@ internal static class ResultScreenPatches
+     [HarmonyPostfix]
+     private static void DisableTurningPatch(ResultScreenUI __instance)
+     {
+-        if (__instance.fadeLerp < 1) return;
++        if (__instance.fadeLerp < 1 || !PlayerController.instance) return;
+ 
+         PlayerController.instance.InputDisable(0.1f);
+     }
+diff --git a/Source/Patches/UI/TutorialPatches.cs b/Source/Patches/UI/TutorialPatches.cs
+index c069496..e425bd0 100644
+--- a/Source/Patches/UI/TutorialPatches.cs
++++ b/Source/Patches/UI/TutorialPatches.cs
+@@ -97,16 +97,20 @@ internal static class TutorialPatches
+         var map = __instance.tutorialPages[12];
+         var expressions = __instance.tutorialPages[25];
+ 
+-        inventoryFill.localizedText = Utils.L("TUTORIAL.INVENTORY_FILL.TEXT");
+-        inventoryFill.localizedDummyText = Utils.L("TUTORIAL.INVENTORY_FILL.DUMMY_TEXT");
++        // Without RepoXR's translations (PC on 0.5.0, see AssetCollection.LoadAssets) the game's texts stay
++        if (!AssetCollection.TranslationsLoaded)
++            return;
++
++        inventoryFill.localizedText = Utils.L("TUTORIAL.INVENTORY_FILL.TEXT") ?? inventoryFill.localizedText;
++        inventoryFill.localizedDummyText = Utils.L("TUTORIAL.INVENTORY_FILL.DUMMY_TEXT") ?? inventoryFill.localizedDummyText;
+ 
+-        inventoryEmpty.localizedText = Utils.L("TUTORIAL.INVENTORY_EMPTY.TEXT");
+-        inventoryEmpty.localizedDummyText = Utils.L("TUTORIAL.INVENTORY_EMPTY.DUMMY_TEXT");
++        inventoryEmpty.localizedText = Utils.L("TUTORIAL.INVENTORY_EMPTY.TEXT") ?? inventoryEmpty.localizedText;
++        inventoryEmpty.localizedDummyText = Utils.L("TUTORIAL.INVENTORY_EMPTY.DUMMY_TEXT") ?? inventoryEmpty.localizedDummyText;
+ 
+-        map.localizedText = Utils.L("TUTORIAL.MAP.TEXT");
+-        map.localizedDummyText = Utils.L("TUTORIAL.MAP.DUMMY_TEXT");
++        map.localizedText = Utils.L("TUTORIAL.MAP.TEXT") ?? map.localizedText;
++        map.localizedDummyText = Utils.L("TUTORIAL.MAP.DUMMY_TEXT") ?? map.localizedDummyText;
+ 
+-        expressions.localizedText = Utils.L("TUTORIAL.EXPRESSIONS.TEXT");
++        expressions.localizedText = Utils.L("TUTORIAL.EXPRESSIONS.TEXT") ?? expressions.localizedText;
+     }
+ 
+     /// <summary>
+diff --git a/Source/Player/Camera/VRCameraAim.cs b/Source/Player/Camera/VRCameraAim.cs
+index fb560dc..0609459 100644
+--- a/Source/Player/Camera/VRCameraAim.cs
++++ b/Source/Player/Camera/VRCameraAim.cs
+@@ -249,6 +249,35 @@ internal static class CameraAimPatches
+     [HarmonyPrefix]
+     private static bool DisableCameraAim(CameraAim __instance)
+     {
++        // The game's Update also expires the aim targets it forces on the camera (AimTargetSet: an enemy grabbing
++        // you, a valuable looking at you...). Without that, AimTargetActive stayed true for good once anything set it,
++        // and everything that waits for it to end stayed off; in R.E.P.O. 0.5.0 that includes the whip's crack and
++        // fling gestures (ItemMeleeWhip.GestureCanUse) and the grab cursor look. Only the bookkeeping runs here, the
++        // camera itself still follows the headset
++        var dt = Time.deltaTime;
++
++        if (__instance.AimTargetTimer > 0)
++        {
++            __instance.AimTargetTimer -= dt;
++            __instance.AimTargetLerp = Mathf.Clamp01(__instance.AimTargetLerp + dt * __instance.AimTargetSpeed);
++        }
++        else if (__instance.AimTargetLerp > 0 || __instance.AimTargetActive)
++        {
++            __instance.AimTargetLerp = 0;
++            __instance.AimTargetPriority = 999;
++            __instance.AimTargetActive = false;
++        }
++
++        if (__instance.AimTargetSoftTimer > 0 && __instance.AimTargetTimer <= 0 &&
++            !__instance.AimTargetSoftFollow.HasValue)
++        {
++            __instance.AimTargetSoftTimer -= dt;
++            if (__instance.AimTargetSoftTimer <= 0)
++                __instance.AimTargetSoftClear();
++        }
++
++        __instance.OverrideAimStopTick();
++
+         return false;
+     }
+ 
+diff --git a/Source/Plugin.cs b/Source/Plugin.cs
+index a3a5181..e168add 100644
+--- a/Source/Plugin.cs
++++ b/Source/Plugin.cs
+@@ -22,7 +22,13 @@ public class Plugin : BaseUnityPlugin
+     public const string PLUGIN_NAME = "RepoXR";
+     public const string PLUGIN_VERSION = "1.2.3";
+ 
+-    public const string SUPPORTED_GAME_VERSION = "v0.4.4";
++    public const string SUPPORTED_GAME_VERSION = "v0.5.0";
++
++    /// <summary>
++    /// The standalone Quest build (repo-quest-vr): some features need its shaders and build tools (lamp lighting, level
++    /// culling) or suit the headset's performance (defaults). On PC the upstream defaults apply and those are hidden
++    /// </summary>
++    public static bool IsQuest => Application.platform == RuntimePlatform.Android;
+ 
+     public new static Config Config { get; private set; } = null!;
+     public static Flags Flags { get; private set; } = 0;
+@@ -47,7 +53,7 @@ public class Plugin : BaseUnityPlugin
+             LoadDebugSymbols();
+ #endif
+ 
+-        Logger.LogInfo($"Starting {PLUGIN_NAME} v{PLUGIN_VERSION} ({GetCommitHash()})");
++        Logger.LogInfo($"Starting {PLUGIN_NAME} v{PLUGIN_VERSION} ({GetCommitHash()}), unofficial port to R.E.P.O. {SUPPORTED_GAME_VERSION}");
+ 
+         // Allow disabling VR via config and command line
+         var disableVr = Config.DisableVR.Value ||
+diff --git a/Source/UI/LoadingUI.cs b/Source/UI/LoadingUI.cs
+index b17558b..a855bac 100644
+--- a/Source/UI/LoadingUI.cs
++++ b/Source/UI/LoadingUI.cs
+@@ -22,7 +22,10 @@ public class LoadingUI : MonoBehaviour
+ 
+     private void OnDestroy()
+     {
+-        instance = null!;
++        // R.E.P.O. 0.5.0's scene handoff: the next scene's loading UI wakes up before the old one is destroyed, and
++        // the old one used to clear the new one's instance (the result screen then threw on every frame and hung)
++        if (instance == this)
++            instance = null!;
+     }
+ 
+     private IEnumerator Start()
+diff --git a/Source/UI/Menu/SettingsCategoryPage.cs b/Source/UI/Menu/SettingsCategoryPage.cs
+index 1ad8f56..ac5a9ee 100644
+--- a/Source/UI/Menu/SettingsCategoryPage.cs
++++ b/Source/UI/Menu/SettingsCategoryPage.cs
+@@ -41,6 +41,9 @@ public class SettingsCategoryPage : MonoBehaviour
+             if (property.GetCustomAttribute<ConfigDescriptorAttribute>() is not { } descriptor)
+                 continue;
+ 
++            if (!Plugin.IsQuest && property.GetCustomAttribute<QuestOnlyAttribute>() != null)
++                continue;
++
+             var setting = (val.SettingType == typeof(bool)
+                 ? Instantiate(AssetCollection.BoolSetting, scrollerTransform)
+                 : Instantiate(AssetCollection.SliderSetting, scrollerTransform)).GetComponent<SettingOption>();
+diff --git a/Source/Utils.cs b/Source/Utils.cs
+index 743e252..196b169 100644
+--- a/Source/Utils.cs
++++ b/Source/Utils.cs
+@@ -181,7 +181,17 @@ internal static class Utils
+     /// <summary>
+     /// Resolve a translation key to it's localized value
+     /// </summary>
+-    public static LocalizedAsset L(string name) => AssetCollection.GetLocalizedAsset(name).WaitForCompletion();
++    public static LocalizedAsset? L(string name)
++    {
++        if (!AssetCollection.TranslationsLoaded)
++            return null;
++
++        var handle = AssetCollection.GetLocalizedAsset(name);
++        handle.WaitForCompletion();
++        return handle.Status == UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Succeeded
++            ? handle.Result
++            : null;
++    }
+ 
+     public class WaitUntilTimeout(Func<bool> predicate, float timeout) : CustomYieldInstruction
+     {

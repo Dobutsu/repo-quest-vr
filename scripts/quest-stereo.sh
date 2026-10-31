@@ -5,7 +5,8 @@
 #   scripts/quest-stereo.sh multiview | multipass | status
 set -euo pipefail
 
-adb="/Applications/Unity/Hub/Editor/2022.3.62f3/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb"
+root="$(cd "$(dirname "$0")/.." && pwd)"
+adb="$(python3 "$root/scripts/lib/paths.py" unity-editor)/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb"
 cfg="/sdcard/Android/data/io.repoxr.quest/files/RepoXR/config/io.daxcess.repoxr.cfg"
 
 case "${1:-status}" in

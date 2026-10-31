@@ -5,7 +5,8 @@
 #   scripts/quest-join.sh --list                     friends playing R.E.P.O. and their lobbies
 set -euo pipefail
 
-adb="/Applications/Unity/Hub/Editor/2022.3.62f3/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb"
+root="$(cd "$(dirname "$0")/.." && pwd)"
+adb="$(python3 "$root/scripts/lib/paths.py" unity-editor)/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb"
 files="/sdcard/Android/data/io.repoxr.quest/files"
 [ $# -ge 1 ] || { echo "usage: $0 <friend name or SteamID> | --list" >&2; exit 64; }
 

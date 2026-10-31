@@ -1,0 +1,286 @@
+diff --git a/Source/Assets/AssetCollection.cs b/Source/Assets/AssetCollection.cs
+index 66f0613..6d70afe 100644
+--- a/Source/Assets/AssetCollection.cs
++++ b/Source/Assets/AssetCollection.cs
+@@ -121,6 +121,7 @@ internal static class AssetCollection
+         VideoOverlay = assetBundle.LoadAsset<Material>("Video Overlay");
+         
+         TMPInputsSpriteAsset = assetBundle.LoadAsset<TMP_SpriteAsset>("TMPInputsSpriteAsset");
++        Utils.RepairSpriteAsset(TMPInputsSpriteAsset);
+ 
+         Logo = assetBundle.LoadAsset<Sprite>("REPOXR_Splash_Logo");
+         
+diff --git a/Source/Patches/InputPatches.cs b/Source/Patches/InputPatches.cs
+index 2f22674..40adeb3 100644
+--- a/Source/Patches/InputPatches.cs
++++ b/Source/Patches/InputPatches.cs
+@@ -444,12 +444,30 @@ internal static class InputPatches
+     {
+         var __instance = InputManager.instance;
+         // Glyph texts refresh before InputManager has started (seen on 0.5.0): let the game handle those
+-        if (__instance == null || __instance.tagDictionary == null)
++        if (__instance == null || (__instance.tagDictionary == null && InputGlyphs.tagDictionary == null))
+             return true;
+ 
+-        var _text = __instance.tagDictionary.Aggregate(__0,
+-            (current, keyValuePair) => current.Replace(keyValuePair.Key,
+-                __instance.InputDisplayGet(keyValuePair.Value, KeyType.InputKey, MovementDirection.Up)));
++        if (string.IsNullOrEmpty(__0))
++        {
++            __result = __0;
++            return false;
++        }
++
++        // 0.5.0 keeps its tags ([move], [grab], ...) in InputGlyphs.tagDictionary (a tag can stand for several keys);
++        // InputManager.tagDictionary is still there but nothing fills it, and with it every tag stayed as it was:
++        // "Use [move] to move" in the tutorial, the chat prompt, the skip texts
++        var _text = __0;
++        if (InputGlyphs.tagDictionary is { Count: > 0 } glyphTags)
++        {
++            foreach (var (tag, keys) in glyphTags)
++                if (_text.Contains(tag))
++                    _text = _text.Replace(tag, string.Join("/", keys.Select(key =>
++                        __instance.InputDisplayGet(key, KeyType.InputKey, MovementDirection.Up)).Distinct()));
++        }
++        else
++            _text = __instance.tagDictionary.Aggregate(_text,
++                (current, keyValuePair) => current.Replace(keyValuePair.Key,
++                    __instance.InputDisplayGet(keyValuePair.Value, KeyType.InputKey, MovementDirection.Up)));
+ 
+         __result = _text;
+ 
+diff --git a/Source/Patches/UI/MenuPatches.cs b/Source/Patches/UI/MenuPatches.cs
+index e69f6a4..ceccf69 100644
+--- a/Source/Patches/UI/MenuPatches.cs
++++ b/Source/Patches/UI/MenuPatches.cs
+@@ -53,7 +53,14 @@ internal static class MenuPatches
+         });
+ 
+         // Move back button a bit down
+-        __instance.transform.Find("Menu Button - Back").GetComponent<RectTransform>().anchoredPosition =
++        var back = __instance.transform.Find("Menu Button - Back");
++        back.GetComponent<RectTransform>().anchoredPosition =
+             language ? vrRect.anchoredPosition - new Vector2(0, 45) : new Vector2(126, 35);
++
++        // MenuButton.ResizeToText puts a button back where it was when it woke up (originalButtonPosition), and 0.5.0
++        // calls it again when the localized text arrives: Back went back to y 35, right under VR Settings
++        foreach (var moved in new[] { vrButton.transform, back })
++            if (moved && moved.GetComponent<MenuButton>() is { } menuButton)
++                menuButton.originalButtonPosition = moved.localPosition;
+     }
+ }
+\ No newline at end of file
+diff --git a/Source/Patches/UI/MenuTwoOptionsPatches.cs b/Source/Patches/UI/MenuTwoOptionsPatches.cs
+new file mode 100644
+index 0000000..12f7442
+--- /dev/null
++++ b/Source/Patches/UI/MenuTwoOptionsPatches.cs
+@@ -0,0 +1,89 @@
++using System.Collections.Generic;
++using System.Reflection;
++using System.Reflection.Emit;
++using HarmonyLib;
++using UnityEngine;
++
++using static HarmonyLib.AccessTools;
++
++namespace RepoXR.Patches.UI;
++
++/// <summary>
++/// R.E.P.O. 0.5.0's two-option toggles (MenuTwoOptions: On/Off, Head/Hand...) in a world-space VR menu
++/// </summary>
++[RepoXRPatch]
++internal static class MenuTwoOptionsPatches
++{
++    private static readonly MethodInfo GetPosition = PropertyGetter(typeof(Transform), nameof(Transform.position));
++
++    /// <summary>
++    /// OptionBoxX decides which option is on the left by comparing the two buttons' world x. On a screen-space canvas
++    /// that is the screen's x; RepoXR's menus hang in the world, turned whichever way the player faced, and when the
++    /// canvas faces the other way round the comparison flips: the selection box went to the option that is not set.
++    /// The buttons are compared in their canvas' own space instead
++    /// </summary>
++    [HarmonyPatch(typeof(MenuTwoOptions), nameof(MenuTwoOptions.OptionBoxX))]
++    [HarmonyTranspiler]
++    private static IEnumerable<CodeInstruction> OptionBoxInCanvasSpace(IEnumerable<CodeInstruction> instructions)
++    {
++        var replaced = 0;
++        foreach (var instruction in instructions)
++        {
++            if (instruction.Calls(GetPosition))
++            {
++                replaced++;
++                yield return new CodeInstruction(OpCodes.Call, ((System.Func<Transform, Vector3>)CanvasPosition).Method)
++                    .WithLabels(instruction.labels).WithBlocks(instruction.blocks);
++                continue;
++            }
++
++            yield return instruction;
++        }
++
++        if (replaced != 2)
++            Logger.LogWarning($"[UI] MenuTwoOptions.OptionBoxX: {replaced} positions in canvas space (expected 2)");
++    }
++
++    private static Vector3 CanvasPosition(Transform transform)
++    {
++        var canvas = transform.GetComponentInParent<Canvas>();
++        var root = canvas ? canvas.rootCanvas.transform : null;
++        return root ? root.InverseTransformPoint(transform.position) : transform.position;
++    }
++
++    /// <summary>
++    /// 0.5.0 writes a toggle's two labels through option1TextMesh/option2TextMesh, fields RepoXR's own toggles (built
++    /// for 0.4.4: VR Settings, the VR controls' hold/toggle) do not have: their labels kept the prefab's placeholder
++    /// text. The buttons' own texts are used when those fields are empty
++    /// </summary>
++    [HarmonyPatch(typeof(MenuTwoOptions), nameof(MenuTwoOptions.Start))]
++    [HarmonyPrefix]
++    private static void LabelsFromButtons(MenuTwoOptions __instance)
++    {
++        if (!__instance.option1TextMesh && __instance.option1Button)
++            __instance.option1TextMesh = __instance.option1Button.buttonText
++                ? __instance.option1Button.buttonText
++                : __instance.option1Button.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
++
++        if (!__instance.option2TextMesh && __instance.option2Button)
++            __instance.option2TextMesh = __instance.option2Button.buttonText
++                ? __instance.option2Button.buttonText
++                : __instance.option2Button.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
++    }
++}
++
++/// <summary>
++/// The game's keybind buttons show RepoXR's VR controller icons (InputManager.InputDisplayGet answers with sprite
++/// tags); their texts need RepoXR's sprite asset for them (see <see cref="Utils.EnsureVRSprites"/>)
++/// </summary>
++[RepoXRPatch]
++internal static class KeybindSpritePatches
++{
++    [HarmonyPatch(typeof(MenuKeybind), nameof(MenuKeybind.UpdateBindingDisplay))]
++    [HarmonyPrefix]
++    private static void VRSprites(MenuKeybind __instance)
++    {
++        if (__instance.menuBigButton && __instance.menuBigButton.menuButton)
++            Utils.EnsureVRSprites(__instance.menuBigButton.menuButton.buttonText);
++    }
++}
+diff --git a/Source/UI/Controls/ControlOption.cs b/Source/UI/Controls/ControlOption.cs
+index 0a93874..5d9041a 100644
+--- a/Source/UI/Controls/ControlOption.cs
++++ b/Source/UI/Controls/ControlOption.cs
+@@ -89,6 +89,7 @@ public class ControlOption : MonoBehaviour
+             return;
+         }
+ 
++        Utils.EnsureVRSprites(controlText);
+         controlText.text = Utils.GetControlSpriteString(binding);
+     }
+ 
+diff --git a/Source/Utils.cs b/Source/Utils.cs
+index 196b169..a5c1f7d 100644
+--- a/Source/Utils.cs
++++ b/Source/Utils.cs
+@@ -86,6 +86,102 @@ internal static class Utils
+         return $"""<sprite name="{id}">""";
+     }
+ 
++    /// <summary>
++    /// Makes sure a text can draw <see cref="GetControlSpriteString"/>'s VR controller icons. R.E.P.O. 0.5.0 gives
++    /// its keybind texts its own glyph sprite assets (keyboard, gamepads), which have none of them: the names did not
++    /// resolve and the controls page showed question marks. RepoXR's input sprite asset becomes the text's sprite asset
++    /// when it has none, or a fallback of the one it has
++    /// </summary>
++    /// <summary>
++    /// RepoXR's controller icons (TMPInputsSpriteAsset) were made with the TextMeshPro of Unity 2022, which kept the
++    /// sprites' places on the sheet in m_SpriteGlyphTable. Unity 6's TextMeshPro reads m_GlyphTable, the asset came up
++    /// with no glyphs, its name lookup stayed empty (a sprite is only listed when its glyph is found) and every
++    /// &lt;sprite name=...&gt; was drawn as a "?". The sheet is a plain grid of 100 px cells, glyph 0 at the top left, so
++    /// the glyphs are put back from that when they are missing
++    /// </summary>
++    public static void RepairSpriteAsset(TMPro.TMP_SpriteAsset? asset)
++    {
++        if (!asset)
++            return;
++
++        var characters = asset!.spriteCharacterTable;
++        var glyphs = asset.spriteGlyphTable;
++        var sheet = asset.spriteSheet;
++        Logger.LogInfo($"[UI] Sprite asset {asset.name}: {characters?.Count ?? -1} characters, {glyphs?.Count ?? -1} glyphs, " +
++                       $"sheet {(sheet ? $"{sheet.width}x{sheet.height}" : "none")}, material {(asset.material ? asset.material.name : "none")}");
++
++        if (characters is { Count: > 0 } && sheet && (glyphs == null || glyphs.Count < characters.Count))
++        {
++            const int cell = 100;
++            var columns = Mathf.Max(1, sheet.width / cell);
++            var rows = Mathf.Max(1, sheet.height / cell);
++            var have = new HashSet<uint>((glyphs ?? []).Select(glyph => glyph.index));
++            var table = glyphs ?? [];
++            foreach (var character in characters)
++            {
++                var index = character.glyphIndex;
++                if (!have.Add(index))
++                    continue;
++
++                var rect = new UnityEngine.TextCore.GlyphRect((int)(index % columns) * cell,
++                    (rows - 1 - (int)(index / columns)) * cell, cell, cell);
++                table.Add(new TMPro.TMP_SpriteGlyph(index, new UnityEngine.TextCore.GlyphMetrics(cell, cell, 0, 80, cell), rect, 1,
++                    0));
++            }
++
++            if (glyphs == null)
++                AccessTools.Field(typeof(TMPro.TMP_SpriteAsset), "m_GlyphTable").SetValue(asset, table);
++            Logger.LogInfo($"[UI] Sprite asset {asset.name}: rebuilt {table.Count} glyphs from the {columns}x{rows} sheet");
++        }
++
++        // The material (and the asset's hash code) were serialized as "material"/"hashCode" too, Unity 6's TextMeshPro
++        // reads m_Material/m_HashCode: without a material no sprite is drawn. The game's own sprite material (EmojiOne,
++        // TextMeshPro/Sprite) is copied onto RepoXR's sheet
++        if (!asset.material && sheet)
++        {
++            var template = TMPro.TMP_Settings.defaultSpriteAsset ? TMPro.TMP_Settings.defaultSpriteAsset.material : null;
++            var shader = template ? template!.shader : Shader.Find("TextMeshPro/Sprite");
++            if (shader)
++            {
++                var material = template ? new Material(template) : new Material(shader);
++                material.name = asset.name + " Material";
++                material.mainTexture = sheet;
++                asset.material = material;
++                asset.materialHashCode = TMPro.TMP_TextUtilities.GetSimpleHashCode(material.name);
++            }
++        }
++
++        if (asset.hashCode == 0)
++            asset.hashCode = TMPro.TMP_TextUtilities.GetSimpleHashCode(asset.name);
++
++        Logger.LogInfo($"[UI] Sprite asset {asset.name}: material {(asset.material ? $"{asset.material.name} ({asset.material.shader.name})" : "none")}, " +
++                       $"hash {asset.hashCode}");
++
++        asset.UpdateLookupTables();
++        Logger.LogInfo($"[UI] Sprite asset {asset.name}: 'leftStick' → {asset.GetSpriteIndexFromName("leftStick")}, " +
++                       $"'rightTrigger' → {asset.GetSpriteIndexFromName("rightTrigger")}");
++    }
++
++    public static void EnsureVRSprites(TMPro.TMP_Text? text)
++    {
++        var sprites = Assets.AssetCollection.TMPInputsSpriteAsset;
++        if (!text || !sprites)
++            return;
++
++        if (!text!.spriteAsset)
++        {
++            text.spriteAsset = sprites;
++            return;
++        }
++
++        if (text.spriteAsset == sprites)
++            return;
++
++        text.spriteAsset.fallbackSpriteAssets ??= [];
++        if (!text.spriteAsset.fallbackSpriteAssets.Contains(sprites))
++            text.spriteAsset.fallbackSpriteAssets.Add(sprites);
++    }
++
+     public static bool GetControlHand(string controlPath, out HapticManager.Hand hand)
+     {
+         hand = HapticManager.Hand.Both;

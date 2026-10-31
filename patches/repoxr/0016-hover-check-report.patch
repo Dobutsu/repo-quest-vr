@@ -1,0 +1,24 @@
+diff --git a/Source/UI/XRRayInteractorManager.cs b/Source/UI/XRRayInteractorManager.cs
+index ac1a52c..1e111d3 100644
+--- a/Source/UI/XRRayInteractorManager.cs
++++ b/Source/UI/XRRayInteractorManager.cs
+@@ -159,6 +159,19 @@ public class XRRayInteractorManager : MonoBehaviour
+                 var pointer = GetUIHitPosition(rect);
+                 var canvasLocal = rect.GetComponentInParent<Canvas>().transform.InverseTransformPoint(hitWorld);
+                 var page = rect.GetComponentInParent<MenuPage>();
++                var manager = MenuManager.instance;
++                var hitCanvas = hitObject.GetComponentInParent<Canvas>();
++                var rectCanvas = rect.GetComponentInParent<Canvas>();
++                var selectable = button.menuSelectableElement;
++                var hovered = page && SemiFunc.UIMouseHover(page, rect, button.MenuID, 10, 0, button.menuScrollBox, button.scrollRect);
++                Logger.LogInfo($"[UI] hover check {button.name}: UIMouseHover {hovered}, page interactable {(page ? page.isInteractable : false)}, " +
++                               $"state {(page ? page.currentPageState.ToString() : "-")}, priority {(page ? page.interactionPriority : 0)}, blocked {(page ? page.interactionBlocked : false)}, " +
++                               $"highest open priority {(manager ? manager.HighestOpenPriority() : -1)}, selectable {(selectable ? selectable.IsInteractable() : false)}, " +
++                               $"canvases hit {(hitCanvas ? hitCanvas.name : "-")} / button {(rectCanvas ? rectCanvas.name : "-")}, " +
++                               $"ids {button.MenuID} / current '{(manager ? manager.currentMenuID : "-")}'");
++                if (manager)
++                    Logger.LogInfo("[UI] pages: " + string.Join("; ", manager.allPages.Where(x => x).Select(x =>
++                        $"{x.name} {x.currentPageState} prio {x.interactionPriority}{(x.isInteractable ? " interactable" : "")}{(x.interactionBlocked ? " blocked" : "")}")));
+                 Logger.LogInfo($"[UI] hover {button.name}: element at {pagePos} size {rect.rect.size}, pointer {pointer} " +
+                                $"(canvas-local {canvasLocal}), page {(page ? page.name + " pos " + page.transform.localPosition + " scale " + page.transform.localScale : "none")}, " +
+                                $"menu id {button.menuSelectableElement?.menuID}");

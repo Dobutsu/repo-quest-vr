@@ -32,7 +32,15 @@ unofficial project that DaXcess does not maintain or endorse. The port's own cha
 slider and lighting and performance options, live in [`patches/repoxr`](patches/repoxr). They are free for RepoXR to take
 if any of them are useful.
 
+RepoXR itself is made for R.E.P.O. 0.4. The changes that bring it to **R.E.P.O. 0.5.0** (patches 0009–0032: menus, UI
+input, the scene handoff, grabbing, vehicles, fonts, the shop mirror) come from
+**[crimecock](https://github.com/crimecock)**'s port, [crimecock/repo-quest-vr](https://github.com/crimecock/repo-quest-vr).
+
 ## What works
+
+The current builder (1.1.0) is for **R.E.P.O. 0.5.0** and Unity 6.3. It has been tested in singleplayer on a Quest 3:
+menus, levels, monsters and the shop, 71–73 FPS in most places. Multiplayer with PC players, the Quest 2 and Pico have
+not been tested on 0.5.0 yet; the notes below come from the previous version (builder 1.0.7, R.E.P.O. 0.4).
 
 - **VR on the headset.** RepoXR's full feature set runs at the Quest 3's 72 Hz, using single-pass (multiview)
   rendering and lighting tuned for the mobile GPU. Most levels hold 55–72 FPS. Shops and crowded lobbies dip lower.
@@ -58,7 +66,7 @@ Download **RepoQuestBuilder** for Windows from [Releases](../../releases/latest)
 1. You need Windows 10/11 (64-bit), 16 GB RAM, about 60 GB of free disk space, R.E.P.O. on Steam, a Quest 2, Quest 3 or
    Pico 4 in developer mode with a USB cable, and a free Unity account. Pick the headset in the builder; Quest is the
    default.
-2. The builder finds your game and downloads everything else itself: Unity 2022.3, AssetRipper and Python packages,
+2. The builder finds your game and downloads everything else itself: Unity 6.3, AssetRipper and Python packages,
    each from its original source with a pinned SHA-256. It then builds the APK on your PC.
 3. The first build takes 1–1.5 hours on a fast computer and 3–5 hours on a slower one: Unity compiles the game's
    shaders and data once. Later updates take 20 minutes to an hour.
@@ -82,7 +90,7 @@ your R.E.P.O. (Steam)
   └─ AssetRipper ──────────► Unity project (the game's scenes, prefabs, scripts as DLLs)
   └─ HarmonyBaker ─────────► RepoXR's Harmony patches baked into the game's assemblies (no runtime patching on IL2CPP)
   └─ scripts/ (Python) ────► fixes for the export: shaders rewritten for mobile and multiview, Addressables, halos
-  └─ Unity 2022.3 (IL2CPP, OpenXR, Vulkan) ─► Android APK ─► Quest
+  └─ Unity 6.3 (IL2CPP, OpenXR, Vulkan) ─► Android APK ─► Quest
                                                          └─ ovrport ─► Pico
 ```
 
@@ -111,6 +119,8 @@ modifies. Third-party components and their licenses are listed in [`builder/SOUR
 
 - **[DaXcess](https://github.com/DaXcess)**: [RepoXR](https://github.com/DaXcess/RepoXR) and
   [RepoXR-Unity](https://github.com/DaXcess/RepoXR-Unity), the VR mod this port is built on.
+- **[crimecock](https://github.com/crimecock)**: [repo-quest-vr](https://github.com/crimecock/repo-quest-vr), the
+  RepoXR patches for R.E.P.O. 0.5.0.
 - **semiwork**: [R.E.P.O.](https://store.steampowered.com/app/3241660/REPO/)
 - [SteamKit2](https://github.com/SteamRE/SteamKit), [AssetRipper](https://github.com/AssetRipper/AssetRipper),
   [BepInEx](https://github.com/BepInEx/BepInEx) and [HarmonyX](https://github.com/BepInEx/HarmonyX),
@@ -120,4 +130,4 @@ modifies. Third-party components and their licenses are listed in [`builder/SOUR
 
 **Made with AI.** Most of the code, scripts and documentation here were written by
 [Claude Code](https://claude.com/claude-code), Anthropic's AI coding agent, under Dobutsu's direction. Every build
-was tested by people on a real Quest 3, including multiplayer with friends on PC.
+was tested by people on a real Quest 3; see "What works" for what each version was tested with.

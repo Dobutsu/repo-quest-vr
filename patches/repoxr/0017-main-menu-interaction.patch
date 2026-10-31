@@ -1,0 +1,30 @@
+diff --git a/Source/Patches/UI/UIPatches.cs b/Source/Patches/UI/UIPatches.cs
+index 5de8877..ed06ad3 100644
+--- a/Source/Patches/UI/UIPatches.cs
++++ b/Source/Patches/UI/UIPatches.cs
+@@ -7,6 +7,7 @@ using RepoXR.Player.Camera;
+ using RepoXR.UI;
+ using UnityEngine;
+ using UnityEngine.UI;
++using Object = UnityEngine.Object;
+ 
+ using static HarmonyLib.AccessTools;
+ 
+@@ -39,6 +40,17 @@ internal static class UIPatches
+         __instance.transform.localPosition = Vector3.zero;
+         __instance.waitTimer = 3;
+         __instance.introDone = true;
++
++        // R.E.P.O. 0.5.0: the first main menu blocks interaction and puts its left and right panels in CanvasGroups
++        // that neither take input nor block raycasts, until the intro slides each panel within 300 units of its
++        // place (MenuPageMain.IntroGroupUpdate). Without the intro that never happens: no button could be hovered,
++        // and XRI's UI raycast found nothing (Quest port)
++        if (__instance.introGroupLeft)
++            Object.Destroy(__instance.introGroupLeft);
++        if (__instance.introGroupRight)
++            Object.Destroy(__instance.introGroupRight);
++        if (__instance.menuPage)
++            __instance.menuPage.interactionBlocked = false;
+     }
+ 
+     /// <summary>

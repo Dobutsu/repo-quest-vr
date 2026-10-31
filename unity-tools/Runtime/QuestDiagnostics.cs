@@ -1,9 +1,13 @@
 using System;
 using System.Collections;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.XR;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -20,6 +24,19 @@ namespace RepoQuest
     /// particle systems or switch their GPU instancing, files/players-info lists every player's cosmetics with the
     /// colours their materials actually got, files/shader-gallery (a list of Resources paths, one per line) renders each
     /// of those prefabs into files/gallery/ for comparison with the PC game (ShaderGallery, scripts/shader_gallery.py).
+    /// files/invoke ("Type.Method" per line) calls those parameterless methods on the scene's object of that type, to
+    /// press menu buttons without controllers: MenuPageMain.ButtonEventSinglePlayer, then MenuPageSaves.OnNewGame.
+    /// files/xr-info logs the XR devices, the head pose they report and every TrackedPoseDriver with its bound controls.
+    /// files/renderers-info logs the active particle and mesh renderers' materials: shader, support, keywords, texture.
+    /// files/ui-info logs the event systems with their input modules, the UI raycasters and what each ray interactor
+    /// points at (the menus are clicked through XRI's UI raycast).
+    /// files/inspect ("Type" or "Type@hierarchy/path" per line) dumps the fields and properties of those objects.
+    /// files/command runs a test script without anyone in the headset, one line at a time: "wait 5" (seconds),
+    /// "tp 3 90" (spawn the local player at the 4th level point, sorted by distance from the player, facing yaw 90),
+    /// "at 1.5 0 22 90" (the same at a position), "yaw 180" (face yaw 180 where it stands), "turn 45" (turn by 45),
+    /// anything else goes to the game's debug console
+    /// (DebugCommandHandler: "level sunstone valley resort", "spawn enemy pony", "godmode", "noaggro", "level shop").
+    /// The reports of these requests also go to files/reports/&lt;request&gt;-&lt;time&gt;.txt: logcat cuts a message at 4 KB.
     /// </summary>
     public class QuestDiagnostics : MonoBehaviour
     {
@@ -33,6 +50,13 @@ namespace RepoQuest
         private string particlesInstancingPath;
         private string playersInfoPath;
         private string galleryRequestPath;
+        private string invokePath;
+        private string commandPath;
+        private bool commandRunning;
+        private string xrInfoPath;
+        private string renderersInfoPath;
+        private string uiInfoPath;
+        private string inspectPath;
         private bool galleryRunning;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -54,6 +78,12 @@ namespace RepoQuest
             particlesInstancingPath = Path.Combine(Application.persistentDataPath, "particles-instancing");
             playersInfoPath = Path.Combine(Application.persistentDataPath, "players-info");
             galleryRequestPath = Path.Combine(Application.persistentDataPath, "shader-gallery");
+            invokePath = Path.Combine(Application.persistentDataPath, "invoke");
+            commandPath = Path.Combine(Application.persistentDataPath, "command");
+            xrInfoPath = Path.Combine(Application.persistentDataPath, "xr-info");
+            renderersInfoPath = Path.Combine(Application.persistentDataPath, "renderers-info");
+            uiInfoPath = Path.Combine(Application.persistentDataPath, "ui-info");
+            inspectPath = Path.Combine(Application.persistentDataPath, "inspect");
         }
 
         private static bool Consume(string path)
@@ -199,6 +229,18 @@ namespace RepoQuest
                     ToggleParticles(instancing: true);
                 if (Consume(playersInfoPath))
                     LogPlayersInfo();
+                if (Consume(xrInfoPath))
+                    LogXRInfo();
+                if (Consume(renderersInfoPath))
+                    LogRenderersInfo();
+                if (Consume(uiInfoPath))
+                    LogUIInfo();
+                if (File.Exists(inspectPath))
+                    LogInspect(inspectPath);
+                if (File.Exists(invokePath))
+                    yield return InvokeRequested();
+                if (!commandRunning && File.Exists(commandPath))
+                    StartCoroutine(RunCommands());
                 if (!galleryRunning && File.Exists(galleryRequestPath))
                     StartCoroutine(RunGallery());
                 if (!File.Exists(requestPath))
@@ -214,6 +256,134 @@ namespace RepoQuest
                 {
                     Debug.LogError($"[QuestDiagnostics] snapshot failed: {e}");
                 }
+            }
+        }
+
+        /// <summary>
+        /// files/ui-info: the event systems and their input modules, the UI raycasters, and for each ray interactor
+        /// (found by name, through reflection) its pose, whether UI interaction is on and what its UI raycast hits
+        /// </summary>
+        private static void LogUIInfo()
+        {
+            var log = new StringBuilder("[QuestDiagnostics] ui-info");
+            var current = UnityEngine.EventSystems.EventSystem.current;
+            log.Append($"\n  current {(current ? PathOf(current.transform) : "none")}");
+            foreach (var system in Resources.FindObjectsOfTypeAll<UnityEngine.EventSystems.EventSystem>().Where(e => e.gameObject.scene.IsValid()))
+                log.Append($"\n  event system {PathOf(system.transform)} scene {system.gameObject.scene.name} enabled {system.isActiveAndEnabled} " +
+                           $"modules [{string.Join(", ", system.GetComponents<UnityEngine.EventSystems.BaseInputModule>().Select(m => $"{m.GetType().Name} {(m.isActiveAndEnabled ? "on" : "off")}"))}]");
+            foreach (var raycaster in Resources.FindObjectsOfTypeAll<UnityEngine.EventSystems.BaseRaycaster>().Where(r => r.gameObject.scene.IsValid()))
+                log.Append($"\n  raycaster {PathOf(raycaster.transform)} [{raycaster.GetType().Name}] enabled {raycaster.isActiveAndEnabled}");
+            foreach (var interactor in Resources.FindObjectsOfTypeAll<MonoBehaviour>()
+                         .Where(b => b.gameObject.scene.IsValid() && b.GetType().Name.EndsWith("RayInteractor")))
+            {
+                var type = interactor.GetType();
+                var ui = type.GetProperty("enableUIInteraction")?.GetValue(interactor);
+                var hit = "-";
+                var tryGet = type.GetMethods().FirstOrDefault(m => m.Name == "TryGetCurrentUIRaycastResult" && m.GetParameters().Length == 1);
+                if (tryGet != null)
+                {
+                    var args = new object[1];
+                    hit = (bool)tryGet.Invoke(interactor, args) && args[0] is UnityEngine.EventSystems.RaycastResult result
+                        ? $"{(result.gameObject ? PathOf(result.gameObject.transform) : "?")} at {result.worldPosition}"
+                        : "nothing";
+                }
+                log.Append($"\n  interactor {PathOf(interactor.transform)} [{type.Name}] enabled {interactor.isActiveAndEnabled} ui {ui} " +
+                           $"pos {interactor.transform.position} rot {interactor.transform.eulerAngles} hit {hit}");
+            }
+            Report(log.ToString());
+        }
+
+        /// <summary>files/renderers-info: each distinct material of the visible renderers, with what it renders with</summary>
+        private static void LogRenderersInfo()
+        {
+            var log = new StringBuilder("[QuestDiagnostics] renderers-info");
+            var seen = new System.Collections.Generic.HashSet<Material>();
+            foreach (var renderer in FindObjectsByType<Renderer>(FindObjectsSortMode.None)
+                         .Where(r => r.enabled && r.isVisible && (r is ParticleSystemRenderer || r is MeshRenderer)))
+            foreach (var material in renderer.sharedMaterials.Where(m => m && seen.Add(m)))
+            {
+                var shader = material.shader;
+                var texture = material.HasProperty("_MainTex") ? material.mainTexture : null;
+                log.Append($"\n  {material.name} on {PathOf(renderer.transform)} [{renderer.GetType().Name}]: " +
+                           $"shader {(shader ? $"{shader.name} supported {shader.isSupported} passes {shader.passCount}" : "none")} " +
+                           $"queue {material.renderQueue} keywords [{string.Join(" ", material.shaderKeywords)}] " +
+                           $"texture {(texture ? $"{texture.name} {texture.graphicsFormat} {texture.width}x{texture.height}" : "none")}");
+            }
+            Report(log.ToString());
+        }
+
+        /// <summary>files/xr-info: what head tracking gets from the XR plugin and what the pose drivers make of it</summary>
+        private static void LogXRInfo()
+        {
+            var log = new StringBuilder("[QuestDiagnostics] xr-info");
+            var head = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.Head);
+            head.TryGetFeatureValue(UnityEngine.XR.CommonUsages.centerEyeRotation, out var xrRotation);
+            head.TryGetFeatureValue(UnityEngine.XR.CommonUsages.trackingState, out var xrState);
+            log.Append($"\n  XR: device {UnityEngine.XR.XRSettings.loadedDeviceName}, head {head.name} valid {head.isValid}, " +
+                       $"rotation {xrRotation.eulerAngles}, state {xrState}");
+            foreach (var device in InputSystem.devices)
+            {
+                log.Append($"\n  device {device.name} layout {device.layout} enabled {device.enabled} updated {device.lastUpdateTime:0.00}");
+                if (device is XRHMD hmd)
+                    log.Append($" centerEye {hmd.centerEyeRotation.ReadValue().eulerAngles} state {hmd.trackingState.ReadValue()}");
+            }
+            foreach (var driver in Resources.FindObjectsOfTypeAll<TrackedPoseDriver>().Where(d => d.gameObject.scene.IsValid()))
+            {
+                log.Append($"\n  driver {PathOf(driver.transform)} [{driver.GetType().Name}] enabled {driver.isActiveAndEnabled} " +
+                           $"type {driver.trackingType} update {driver.updateType} ignoreState {driver.ignoreTrackingState} " +
+                           $"local {driver.transform.localEulerAngles}");
+                foreach (var (name, action) in new[] { ("position", driver.positionInput.action),
+                             ("rotation", driver.rotationInput.action), ("state", driver.trackingStateInput.action) })
+                    log.Append($"\n    {name}: " + (action == null ? "none"
+                        : $"{action.name} enabled {action.enabled} bindings [{string.Join(", ", action.bindings.Select(b => b.effectivePath))}] " +
+                          $"controls [{string.Join(", ", action.controls.Select(c => c.path))}] value {action.ReadValueAsObject()}"));
+            }
+            var main = Camera.main;
+            if (main)
+                log.Append($"\n  Camera.main {PathOf(main.transform)} local {main.transform.localEulerAngles} world {main.transform.eulerAngles}");
+            Report(log.ToString());
+        }
+
+        /// <summary>
+        /// files/invoke: one "Type.Method" per line, a frame apart, each logged with its outcome. "Type.Method@path"
+        /// calls it on the component of the active object at that hierarchy path instead of on any object of the type
+        /// </summary>
+        private IEnumerator InvokeRequested()
+        {
+            var calls = File.ReadAllLines(invokePath).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+            File.Delete(invokePath);
+            foreach (var line in calls)
+            {
+                var at = line.IndexOf('@');
+                var call = at < 0 ? line : line.Substring(0, at);
+                var dot = call.LastIndexOf('.');
+                var type = dot > 0
+                    ? AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(call.Substring(0, dot)))
+                        .FirstOrDefault(t => t != null)
+                    : null;
+                var target = type == null ? null
+                    : at < 0 ? FindAnyObjectByType(type)
+                    : GameObject.Find(line.Substring(at + 1))?.GetComponent(type);
+                var method = type?.GetMethod(call.Substring(dot + 1),
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
+                if (target == null || method == null)
+                {
+                    Debug.LogWarning($"[QuestDiagnostics] invoke {call}: " +
+                                     (type == null ? "no such type" : target == null ? "no object" : "no such method"));
+                    continue;
+                }
+
+                try
+                {
+                    method.Invoke(target, null);
+                    Debug.Log($"[QuestDiagnostics] invoked {call}");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[QuestDiagnostics] invoke {call} failed: {e.InnerException ?? e}");
+                }
+
+                yield return null;
             }
         }
 
@@ -281,11 +451,27 @@ namespace RepoQuest
                                       $"shader={(g.materialForRendering ? g.materialForRendering.shader.name : "none")} " +
                                       $"world={rect.position} size={rect.rect.size} layer={g.gameObject.layer}" +
                                       (text != null ? $" text=\"{text.Substring(0, Math.Min(40, text.Length)).Replace("\n", " ")}\"" : ""));
+                    if (g is TMPro.TMP_Text tmp)
+                        report.AppendLine($"      tmp {TextMeshInfo(tmp)}");
                 }
             }
 
             File.WriteAllText(Path.Combine(dir, "report.txt"), report.ToString());
             Debug.Log($"[QuestDiagnostics] snapshot written to {dir}");
+        }
+
+        /// <summary>What decides how a TMP text's SDF is drawn: the scale packed into uv0.w and the material's weights</summary>
+        private static string TextMeshInfo(TMPro.TMP_Text text)
+        {
+            var mesh = text.textInfo?.meshInfo;
+            var uvs = mesh is { Length: > 0 } ? mesh[0].uvs0 : null;
+            var material = text.fontSharedMaterial;
+            string Float(string name) => material && material.HasProperty(name) ? material.GetFloat(name).ToString("0.###") : "-";
+            return $"font={(text.font ? text.font.name : "none")} material={(material ? material.name : "none")} " +
+                   $"atlas={(material && material.mainTexture ? $"{material.mainTexture.name} {material.mainTexture.graphicsFormat}" : "none")} " +
+                   $"size={text.fontSize} lossyScale={text.rectTransform.lossyScale} " +
+                   $"uv0.w={(uvs is { Length: > 0 } ? uvs[0].w.ToString("0.#####") : "-")} " +
+                   $"gradient={Float("_GradientScale")} dilate={Float("_FaceDilate")} weight={Float("_WeightNormal")} ratioA={Float("_ScaleRatioA")}";
         }
 
         private static void SaveRenderTexture(RenderTexture rt, string path)
@@ -305,6 +491,209 @@ namespace RepoQuest
         }
 
         private static void Save(Texture2D tex, string path) => File.WriteAllBytes(path, tex.EncodeToPNG());
+
+        /// <summary>
+        /// files/inspect: for each line, "Type" (every active object of that type, at most 40) or "Type@path" (the
+        /// component on the object at that hierarchy path), each field and property of the object, its own type's and
+        /// its base types' up to MonoBehaviour: plain values as they are, Unity objects by name, collections by count
+        /// </summary>
+        /// <summary>files/command: see the class summary</summary>
+        private IEnumerator RunCommands()
+        {
+            commandRunning = true;
+            var lines = File.ReadAllLines(commandPath).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith("#")).ToList();
+            File.Delete(commandPath);
+            foreach (var line in lines)
+            {
+                var words = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (words[0] == "wait" && words.Length > 1 && float.TryParse(words[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
+                {
+                    yield return new WaitForSecondsRealtime(seconds);
+                    continue;
+                }
+
+                try
+                {
+                    Debug.Log($"[QuestDiagnostics] command {line}: {RunCommand(words, line)}");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[QuestDiagnostics] command {line} failed: {e.InnerException ?? e}");
+                }
+                yield return null;
+
+                // RepoXR's VRPlayer moves the player's rigidbody after the head every physics step, from where the
+                // rigidbody was: a spawn that only moved the transforms was undone now and then. Held for a few steps
+                if (placeTarget is { } target)
+                {
+                    for (var i = 0; i < 10; i++)
+                    {
+                        Place(target);
+                        yield return new WaitForFixedUpdate();
+                    }
+                    placeTarget = null;
+                }
+            }
+            commandRunning = false;
+        }
+
+        private static Vector3? placeTarget;
+
+        private static Type GameType(string name) =>
+            AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(name)).FirstOrDefault(t => t != null);
+
+        private static void Place(Vector3 position)
+        {
+            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+            var controllerType = GameType("PlayerController");
+            var controller = (Component)controllerType?.GetField("instance", all)?.GetValue(null);
+            if (!controller)
+                return;
+            controller.transform.position = position;
+            if (controllerType.GetField("rb", all)?.GetValue(controller) is Rigidbody rb && rb)
+            {
+                rb.position = position;
+                rb.linearVelocity = Vector3.zero;
+            }
+        }
+
+        /// <summary>The VR view's yaw: RepoXR's VRCameraAim, which the player's body follows (the spawn rotation does not stick)</summary>
+        private static string Aim(string method, float degrees)
+        {
+            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+            var aimType = GameType("RepoXR.Player.Camera.VRCameraAim");
+            var aim = aimType?.GetField("instance", all)?.GetValue(null);
+            if (aim == null)
+                return "no VRCameraAim";
+            aimType.GetMethod(method, all, null, new[] { typeof(float) }, null)!.Invoke(aim, new object[] { degrees });
+            return $"{method} {degrees}";
+        }
+
+        private static string RunCommand(string[] words, string line)
+        {
+            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+            float Number(int index) => words.Length > index ? float.Parse(words[index], CultureInfo.InvariantCulture) : 0;
+
+            if (words[0] == "yaw")
+                return Aim("SetAimNow", Number(1));
+            if (words[0] == "turn")
+                return Aim("TurnAimNow", Number(1));
+
+            if (words[0] == "tp" || words[0] == "at")
+            {
+                var avatarType = GameType("PlayerAvatar");
+                var avatar = (Component)avatarType.GetField("instance", all)?.GetValue(null);
+                if (!avatar)
+                    return "no local player";
+                var position = avatar.transform.position;
+                float? yaw = null;
+                if (words[0] == "at")
+                {
+                    position = new Vector3(Number(1), Number(2), Number(3));
+                    if (words.Length > 4)
+                        yaw = Number(4);
+                }
+                else
+                {
+                    var points = FindObjectsByType(GameType("LevelPoint"), FindObjectsInactive.Exclude, FindObjectsSortMode.None)
+                        .Cast<Component>().OrderBy(p => (p.transform.position - position).sqrMagnitude).ToList();
+                    if (points.Count == 0)
+                        return "no level points";
+                    var index = Mathf.Clamp((int)Number(1), 0, points.Count - 1);
+                    position = points[index].transform.position + Vector3.up * 0.2f;
+                    if (words.Length > 2)
+                        yaw = Number(2);
+                }
+                avatarType.GetMethod("Spawn", all, null, new[] { typeof(Vector3), typeof(Quaternion), typeof(bool) }, null)!
+                    .Invoke(avatar, new object[] { position, Quaternion.Euler(0, yaw ?? 0, 0), true });
+                Place(position);
+                placeTarget = position;
+                return $"player at {position}" + (yaw is { } y ? $", {Aim("SetAimNow", y)}" : "");
+            }
+
+            var handlerType = GameType("DebugCommandHandler");
+            var handler = handlerType?.GetField("instance", all)?.GetValue(null) ?? handlerType?.GetProperty("instance", all)?.GetValue(null);
+            if (handler == null)
+                return "no DebugCommandHandler";
+            var execute = handlerType.GetMethod("Execute", all, null, new[] { typeof(string), typeof(bool) }, null);
+            return (bool)execute!.Invoke(handler, new object[] { line, true }) ? "done" : "not run (unknown or not enabled here)";
+        }
+
+        private static void LogInspect(string path)
+        {
+            var lines = File.ReadAllLines(path).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+            File.Delete(path);
+            var log = new StringBuilder("[QuestDiagnostics] inspect");
+            foreach (var line in lines)
+            {
+                var at = line.IndexOf('@');
+                var typeName = at < 0 ? line : line.Substring(0, at);
+                var type = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType(typeName)).FirstOrDefault(t => t != null);
+                if (type == null)
+                {
+                    log.Append($"\n{line}: no such type");
+                    continue;
+                }
+                var targets = at < 0
+                    ? FindObjectsByType(type, FindObjectsInactive.Exclude, FindObjectsSortMode.None).Take(40).ToArray()
+                    : new[] { GameObject.Find(line.Substring(at + 1)) is { } go ? go.GetComponent(type) : null }.Where(c => c != null).ToArray();
+                log.Append($"\n{line}: {targets.Length} object(s)");
+                foreach (var target in targets)
+                {
+                    log.Append($"\n  {(target is Component c ? PathOf(c.transform) : target.name)}");
+                    if (target is Component component)
+                        log.Append($" pos {component.transform.position} local {component.transform.localPosition} " +
+                                   $"rot {component.transform.eulerAngles} lossyScale {component.transform.lossyScale}");
+                    for (var t = type; t != null && t != typeof(MonoBehaviour) && t != typeof(Behaviour) && t != typeof(Component); t = t.BaseType)
+                    {
+                        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+                        foreach (var field in t.GetFields(flags).Where(f => !f.Name.Contains("<")))
+                            log.Append($"\n    {field.Name} = {Describe(() => field.GetValue(target))}");
+                        foreach (var property in t.GetProperties(flags).Where(p => p.CanRead && p.GetIndexParameters().Length == 0))
+                            log.Append($"\n    {property.Name} = {Describe(() => property.GetValue(target))}");
+                    }
+                }
+            }
+            Report(log.ToString());
+        }
+
+        private static string Describe(Func<object> get)
+        {
+            object value;
+            try
+            {
+                value = get();
+            }
+            catch (Exception e)
+            {
+                return $"<{(e.InnerException ?? e).GetType().Name}>";
+            }
+            return value switch
+            {
+                null => "null",
+                UnityEngine.Object o => o ? $"{o.name} [{o.GetType().Name}]" : "null (destroyed)",
+                string s => $"\"{s}\"",
+                System.Collections.ICollection collection => $"{value.GetType().Name} count {collection.Count}",
+                _ => value.ToString()
+            };
+        }
+
+        /// <summary>Logs a request's report and writes it to files/reports/&lt;request&gt;-&lt;time&gt;.txt</summary>
+        private static void Report(string text)
+        {
+            Debug.Log(text);
+            try
+            {
+                var name = text.Split('\n')[0].Replace("[QuestDiagnostics] ", "").Trim();
+                var dir = Path.Combine(Application.persistentDataPath, "reports");
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, $"{Sanitize(name)}-{DateTime.Now:HHmmss}.txt"), text);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[QuestDiagnostics] report not written: {e}");
+            }
+        }
 
         private static string Sanitize(string name) => string.Concat(name.Select(c => char.IsLetterOrDigit(c) ? c : '_'));
 

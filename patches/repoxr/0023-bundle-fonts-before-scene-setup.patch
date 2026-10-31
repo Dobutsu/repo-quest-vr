@@ -1,0 +1,84 @@
+diff --git a/Source/Entrypoint.cs b/Source/Entrypoint.cs
+index 8fbc27f..9ffcfe3 100644
+--- a/Source/Entrypoint.cs
++++ b/Source/Entrypoint.cs
+@@ -20,6 +20,9 @@ internal static class Entrypoint
+     /// </summary>
+     internal static void SetupDefaultSceneVR()
+     {
++        // Quest port: before any of RepoXR's prefabs is instantiated in this scene
++        GameFonts.FixBundlePrefabs();
++
+         // We grab all these references manually as most of the instances aren't set yet
+         // Since most of them run in the "Start" lifetime function
+ 
+@@ -192,6 +195,7 @@ internal static class Entrypoint
+ 
+     private static void OnStartupInGame()
+     {
++        GameFonts.FixBundlePrefabs();
+         GameDirector.instance.gameObject.AddComponent<VRSession>();
+     }
+ }
+diff --git a/Source/UI/GameFonts.cs b/Source/UI/GameFonts.cs
+index 5151928..356cb8a 100644
+--- a/Source/UI/GameFonts.cs
++++ b/Source/UI/GameFonts.cs
+@@ -14,18 +14,31 @@ namespace RepoXR.UI;
+ internal static class GameFonts
+ {
+     private static bool done;
++    private static bool reportedMissing;
+ 
+     public static void FixBundlePrefabs()
+     {
+         if (done)
+             return;
+ 
++        // The menu's font if there is one, else TMP's default, else any loaded font that works. (1.0.7-qc11 to qc14
++        // also wanted an atlas texture: Unity 6's dynamic fonts have none until they render a glyph, so no font ever
++        // qualified, the bundle's texts stayed broken, and a level whose RepoXR prefabs show text threw on every
++        // instantiation: no VR camera setup, no HUD, no rays)
+         var reference = Object.FindObjectsOfType<MenuButton>(true)
+-            .Select(b => b.buttonText ? b.buttonText.font : null)
+-            .FirstOrDefault(Usable);
++                            .Select(b => b.buttonText ? b.buttonText.font : null)
++                            .FirstOrDefault(Usable) ??
++                        (Usable(TMP_Settings.defaultFontAsset) ? TMP_Settings.defaultFontAsset : null) ??
++                        Resources.FindObjectsOfTypeAll<TMP_FontAsset>().FirstOrDefault(Usable);
+         if (!reference)
+         {
+-            Logger.LogWarning("[Fonts] no game menu font found yet");
++            if (!reportedMissing)
++            {
++                reportedMissing = true;
++                Logger.LogWarning("[Fonts] no usable font yet; loaded: " + string.Join(", ",
++                    Resources.FindObjectsOfTypeAll<TMP_FontAsset>().Select(f =>
++                        $"{f.name} (material {(f.material ? f.material.name : "none")}, atlases {f.atlasTextures?.Length ?? 0})")));
++            }
+             return;
+         }
+ 
+@@ -68,7 +81,8 @@ internal static class GameFonts
+     {
+         try
+         {
+-            return font && font!.material && font.atlasTexture;
++            // What TMP's MaterialReference needs: the bundle's fonts arrive without a working material
++            return font && font!.material && font.material.shader;
+         }
+         catch
+         {
+diff --git a/Source/UI/GameHud.cs b/Source/UI/GameHud.cs
+index 01def18..167f509 100644
+--- a/Source/UI/GameHud.cs
++++ b/Source/UI/GameHud.cs
+@@ -41,7 +41,7 @@ public class GameHud : MonoBehaviour
+ 
+     private void LateUpdate()
+     {
+-        if (!camera) // Start has not yet finished
++        if (!camera || !SmoothedCanvas) // Start has not yet finished (or failed: logged once by Unity, not every frame)
+             return;
+ 
+         // Keep the UI upright even during the short post-death "view from above" state

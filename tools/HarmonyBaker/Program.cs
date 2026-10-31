@@ -33,6 +33,7 @@ var index = new AssemblyIndex(searchDirs);
 var debugBuild = opts.TryGetValue("debug-build", out var db) ? bool.Parse(db[0]) : UnityBakeShim.IsDebugCompiled(Path.Combine(gameDir, "Assembly-CSharp.dll"));
 index.InstallResolver((name, path) => UnityBakeShim.Preprocess(name, path, debugBuild));
 BakingPatcher.Install();
+MatcherWatch.Install();
 
 var mod = Assembly.LoadFrom(modPath);
 var selection = new PatchSelection(mod);
@@ -58,6 +59,11 @@ Console.WriteLine($"patch classes applied: {selection.Applied.Count}, skipped: {
 foreach (var (name, error) in selection.Failed)
     Console.WriteLine($"  FAILED {name}: {Flatten(error)}");
 
+var lostAnchors = MatcherWatch.Misses.Where(m => !m.AfterSuccess).ToList();
+Console.WriteLine($"transpiler searches that found nothing: {lostAnchors.Count} (+{MatcherWatch.Misses.Count - lostAnchors.Count} after earlier matches, usually loops)");
+foreach (var m in lostAnchors)
+    Console.WriteLine($"  LOST ANCHOR {m.Transpiler} in {m.Target}: {m.Search}");
+
 foreach (var r in results)
 {
     Console.WriteLine($"{r.Name}: {r.MethodsBaked} methods baked, {r.CallSitesRedirected} call sites redirected, {r.Errors.Count} errors, {r.MissingNetstandardTypes.Count} types missing from netstandard");
@@ -77,6 +83,7 @@ var report = new
     overrides = baker.OverridesApplied,
     nativeHooks = hooks.Hooks.Select(h => new { method = $"{h.Original.DeclaringType!.FullName}::{h.Original.Name}", h.WrapperName }),
     hookErrors = hooks.Errors,
+    lostAnchors = MatcherWatch.Misses,
     assemblies = results,
     methods = BakingPatcher.Instances.Select(p => new
     {

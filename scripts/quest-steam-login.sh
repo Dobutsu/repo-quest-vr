@@ -11,7 +11,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-adb="/Applications/Unity/Hub/Editor/2022.3.62f3/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb"
+adb="$(python3 "$root/scripts/lib/paths.py" unity-editor)/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb"
 target="/sdcard/Android/data/io.repoxr.quest/files/steam-session.json"
 
 if [ "${1:-}" = "--remove" ]; then

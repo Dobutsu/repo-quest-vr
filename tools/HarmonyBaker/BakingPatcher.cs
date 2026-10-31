@@ -34,15 +34,26 @@ internal sealed class BakingPatcher(MethodBase original) : MethodPatcher(origina
     /// <summary>
     /// Engine methods implemented in native code (InternalCall/extern) have no IL to bake into. Harmony still
     /// records their patches; <see cref="NativeHooks"/> turns those into wrappers at every managed call site.
+    /// Managed methods of the engine modules count too: the player is built with the editor's own copies of those
+    /// assemblies, so a body baked into ours never ships (Unity 6 made Camera.set_targetTexture managed: it calls
+    /// set_targetTexture_Injected).
     /// </summary>
     public bool IsNative { get; } =
         (original.MethodImplementationFlags & (MethodImplAttributes.InternalCall | MethodImplAttributes.Native)) != 0 ||
         (original.Attributes & MethodAttributes.PinvokeImpl) != 0 ||
-        (!original.IsAbstract && original.GetMethodBody() is null);
+        (!original.IsAbstract && original.GetMethodBody() is null) ||
+        IsEngineModule(original.Module.Assembly.GetName().Name);
+
+    /// <summary>UnityEngine.dll and the UnityEngine.*Module.dll it forwards to</summary>
+    private static bool IsEngineModule(string? assembly) =>
+        assembly == "UnityEngine" ||
+        (assembly is not null && assembly.StartsWith("UnityEngine.", StringComparison.Ordinal) &&
+         assembly.EndsWith("Module", StringComparison.Ordinal));
 
     public override DynamicMethodDefinition PrepareOriginal()
     {
         Completed = false;
+        MatcherWatch.Current = Original;
         return Latest = IsNative ? null! : new DynamicMethodDefinition(Original);
     }
 

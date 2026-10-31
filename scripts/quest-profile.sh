@@ -9,7 +9,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 seconds="${1:-20}"
 name="${2:-repo-quest-vr}"
-sdk="/Applications/Unity/Hub/Editor/2022.3.62f3/PlaybackEngines/AndroidPlayer"
+sdk="$(python3 "$root/scripts/lib/paths.py" unity-editor)/PlaybackEngines/AndroidPlayer"
 adb="$sdk/SDK/platform-tools/adb"
 simpleperf="$sdk/NDK/simpleperf"
 package="io.repoxr.quest"

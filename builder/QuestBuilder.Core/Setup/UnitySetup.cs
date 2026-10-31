@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 namespace RepoQuest.Builder.Setup;
 
 /// <summary>
-/// Installs Unity Hub and the exact editor the project needs (2022.3.62f3 with Android Build Support, its SDK/NDK and
+/// Installs Unity Hub and the exact editor the project needs (6000.3.17f1 with Android Build Support, its SDK/NDK and
 /// OpenJDK) on Windows, through the Hub's headless command line. The player has accepted the licenses in the builder's
 /// consent dialog before this runs.
 /// </summary>

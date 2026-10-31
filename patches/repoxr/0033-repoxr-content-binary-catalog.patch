@@ -1,0 +1,18 @@
+--- a/Source/Assets/AssetCollection.cs	2026-10-30 23:12:06
++++ b/Source/Assets/AssetCollection.cs	2026-10-30 23:12:06
+@@ -85,11 +85,13 @@
+         // Load translations. R.E.P.O. 0.5.0's Addressables 2 reads JSON catalogs only when built with
+         // ENABLE_JSON_CATALOG: the Quest build is, the PC game is not ("Expecting to load catalogs in binary format").
+         // Without the catalog RepoXR's own translations (the VR tutorial texts) are missing and the game's stay
+-        var catalog = Addressables.LoadContentCatalogAsync(Path.Combine(AddressablesPath, "catalog_0.1.json"), true);
++        // The Quest build's RepoXR content is rebuilt with Unity 6 (Addressables 2): a binary catalog
++        var catalogName = File.Exists(Path.Combine(AddressablesPath, "catalog_0.1.bin")) ? "catalog_0.1.bin" : "catalog_0.1.json";
++        var catalog = Addressables.LoadContentCatalogAsync(Path.Combine(AddressablesPath, catalogName), true);
+         catalog.WaitForCompletion();
+         TranslationsLoaded = catalog.Status == AsyncOperationStatus.Succeeded;
+         if (!TranslationsLoaded)
+-            Logger.LogWarning("RepoXR's translations could not be loaded (catalog_0.1.json); the game's own tutorial texts stay");
++            Logger.LogWarning($"RepoXR's translations could not be loaded ({catalogName}); the game's own tutorial texts stay");
+ 
+         OpenXRFeatures = assetBundle.LoadAsset<OpenXRFeaturePack>("OpenXRFeatures");
+ 

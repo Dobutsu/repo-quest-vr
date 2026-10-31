@@ -44,8 +44,9 @@ namespace RepoXR.Standalone
             var popup = new MenuPopup(1);
             if (MenuManager.instance && MenuManager.instance.currentMenuPage)
             {
+                MenuPagePopUp.instance = null;
                 MenuManager.instance.PagePopUp(header, color, text, button, true);
-                popup.Attach(MenuManager.instance.currentMenuPage);
+                popup.Attach(MenuPagePopUp.instance ? MenuPagePopUp.instance.GetComponent<MenuPage>() : null);
             }
             return popup;
         }
@@ -66,8 +67,14 @@ namespace RepoXR.Standalone
             host.option1Event.AddListener(() => popup.answer = 1);
             host.option2Event = new UnityEvent();
             host.option2Event.AddListener(() => popup.answer = 2);
+            // R.E.P.O. 0.5.0 opens popups on top of the current page without making them current (PageOpen(..., true)):
+            // the popup is the instance its Awake just set. Attached to the current page instead (the main menu), the
+            // popup counted as gone at once and the login ended before LOG IN was pressed (1.0.7-qc12/qc14)
+            MenuPageTwoOptions.instance = null;
             MenuManager.instance.PagePopUpTwoOptions(host, header, null, color, text, null, option1, null, option2, null, true);
-            popup.Attach(MenuManager.instance.currentMenuPage);
+            popup.Attach(MenuPageTwoOptions.instance ? MenuPageTwoOptions.instance.GetComponent<MenuPage>() : null);
+            if (!popup.page)
+                Debug.LogWarning("[RepoXR.Standalone] the game's two-option popup did not open");
             return popup;
         }
 
@@ -89,6 +96,8 @@ namespace RepoXR.Standalone
         {
             if (!IsOpen)
                 return;
+
+            Debug.Log($"[RepoXR.Standalone] text page closed (answer {Answer})");
 
             closedHere = true;
             if (MenuManager.instance)
@@ -114,9 +123,10 @@ namespace RepoXR.Standalone
     }
 
     /// <summary>
-    /// A text entry page, made from the game's "rename save file" page: a header, one text field with RepoXR's VR
-    /// keyboard under the menu, and two buttons. The page's own component (which would rename a save file) and its
-    /// localized texts are removed. <see cref="Show"/> can reuse the page for the next field, so the keyboard stays.
+    /// A text entry page, made from the game's text prompt page (R.E.P.O. 0.5.0: MenuPagePopUpTextInput, which replaced
+    /// the "rename save file" page): a header, one text field with RepoXR's VR keyboard under the menu, and two buttons.
+    /// The page's own component (which would answer the game's prompt) and its localized texts are removed.
+    /// <see cref="Show"/> can reuse the page for the next field, so the keyboard stays.
     /// </summary>
     internal sealed class MenuTextPage : MonoBehaviour
     {
@@ -132,6 +142,7 @@ namespace RepoXR.Standalone
         private bool masked;
         private NonNativeKeyboard keyboard;
         private bool closing;
+        private MenuPage.PageState? reportedState;
 
         /// <summary>0 while typing; 1 confirmed (never with an empty field), 2 back</summary>
         public int Answer { get; private set; }
@@ -145,22 +156,38 @@ namespace RepoXR.Standalone
         {
             if (!MenuManager.instance || !MenuManager.instance.currentMenuPage)
                 return null;
-            var page = MenuManager.instance.PageOpenOnTop(MenuPageIndex.SavesRename);
 
-            // Now, before any Start of the new page runs: the rename logic, and localized texts that would replace ours
-            DestroyImmediate(page.GetComponent<MenuPageSavesRename>());
-            foreach (var localized in page.GetComponentsInChildren<LocalizationChangedEvent>(true))
-                DestroyImmediate(localized);
+            // Opened the way the game opens it (MenuManager.PagePopUpTextInput: a popup added on top of the current
+            // page). Opened as a page of its own (PageOpenOnTop) it never showed on the headset: the login popup closed
+            // and the main menu came back (1.0.7-qc12)
+            MenuPagePopUpTextInput.instance = null;
+            MenuManager.instance.PagePopUpTextInput("", null, Color.white, "", null, confirmText: "OK", defaultText: "",
+                localizedConfirm: null, upperOnly: false, maxLength: 64, allowEmpty: false, confirmEvent: null,
+                cancelEvent: null);
+            var prompt = MenuPagePopUpTextInput.instance;
+            var page = prompt ? prompt.GetComponent<MenuPage>() : null;
+            if (!page)
+            {
+                Debug.LogWarning("[RepoXR.Standalone] the game's text prompt page did not open; no text page for the Steam login");
+                return null;
+            }
 
+            // Now, before any Start of the new page runs: the prompt's logic, and localized texts that would replace ours
             var textPage = page.gameObject.AddComponent<MenuTextPage>();
             textPage.page = page;
-            textPage.input = page.GetComponentInChildren<MenuTextInput>(true);
-            textPage.header = page.transform.Find("Header/Text")?.GetComponent<TextMeshProUGUI>();
-            textPage.confirmButton = page.transform.Find("Menu Element Button Group/Menu Button - Confirm")?.GetComponent<MenuButton>();
-            textPage.backButton = page.transform.Find("Menu Element Button Group/Menu Button - Back")?.GetComponent<MenuButton>();
+            textPage.input = prompt ? prompt.menuTextInput : page.GetComponentInChildren<MenuTextInput>(true);
+            textPage.header = page.menuHeader;
+            textPage.confirmButton = prompt ? prompt.confirmButton : null;
+            textPage.backButton = prompt ? prompt.backButton : null;
+            if (prompt && prompt.bodyTextMesh)
+                prompt.bodyTextMesh.text = "";
+            if (prompt)
+                DestroyImmediate(prompt);
+            foreach (var localized in page.GetComponentsInChildren<LocalizationChangedEvent>(true))
+                DestroyImmediate(localized);
             if (!textPage.input || !textPage.header || !textPage.confirmButton || !textPage.backButton)
             {
-                Debug.LogWarning("[RepoXR.Standalone] the game's rename page changed; no text page for the Steam login");
+                Debug.LogWarning("[RepoXR.Standalone] the game's text prompt page changed; no text page for the Steam login");
                 textPage.Close();
                 return null;
             }
@@ -173,6 +200,9 @@ namespace RepoXR.Standalone
             textPage.header.fontSizeMax = textPage.header.fontSize;
             textPage.header.fontSizeMin = 16f;
             textPage.header.enableAutoSizing = true;
+            var rect = (RectTransform)page.transform;
+            Debug.Log($"[RepoXR.Standalone] text page open: state {page.currentPageState}, at {rect.position} (local {rect.localPosition}), " +
+                      $"under {(page.pageUnderThisPage ? page.pageUnderThisPage.name : "-")}");
             return textPage;
         }
 
@@ -215,6 +245,8 @@ namespace RepoXR.Standalone
             if (!IsOpen)
                 return;
 
+            Debug.Log($"[RepoXR.Standalone] text page closed (answer {Answer})");
+
             closing = true;
             if (input)
                 input.textCurrent = "";
@@ -228,14 +260,16 @@ namespace RepoXR.Standalone
             if (!IsOpen)
                 return;
 
-            // The keys the game's own text pages answer to; not while a popup is on top
-            if (MenuManager.instance.currentMenuPage == page)
+            if (page.currentPageState != reportedState)
             {
-                if (SemiFunc.InputDown(InputKey.Confirm))
-                    Choose(1);
-                else if (SemiFunc.InputDown(InputKey.Back))
-                    Choose(2);
+                reportedState = page.currentPageState;
+                Debug.Log($"[RepoXR.Standalone] text page {reportedState} at {page.transform.position}");
             }
+
+            // Back, as the game's own text pages answer to it. Not UIClick: in VR that is every trigger press, also
+            // the ones on the keyboard's keys, which confirmed the field after its first letter
+            if (page.isInteractable && SemiFunc.InputDown(InputKey.Back))
+                Choose(2);
 
             HookKeyboard();
             ApplyHeader();

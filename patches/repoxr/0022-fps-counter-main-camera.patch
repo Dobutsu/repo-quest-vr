@@ -1,0 +1,18 @@
+diff --git a/Source/Rendering/FpsCounter.cs b/Source/Rendering/FpsCounter.cs
+index 65013e1..4edb722 100644
+--- a/Source/Rendering/FpsCounter.cs
++++ b/Source/Rendering/FpsCounter.cs
+@@ -129,8 +129,11 @@ internal class FpsCounter : MonoBehaviour
+         if (!Plugin.Config.ShowFPS.Value)
+             return;
+ 
+-        // RepoXR's VR camera in a level; the main menu sets up its own, tagged as the main camera
+-        var camera = VRSession.Instance is { MainCamera: { } vr } && vr.isActiveAndEnabled ? vr : Camera.main;
++        // The camera RepoXR renders the headset with, in the levels and the main menu (CameraUtils.MainCamera, which
++        // VRSession and MainMenu take too). Camera.main was null in 1.0.7-qc12's main menu: the counter counted, hidden
++        var camera = CameraUtils.Instance && CameraUtils.Instance.MainCamera && CameraUtils.Instance.MainCamera.isActiveAndEnabled
++            ? CameraUtils.Instance.MainCamera
++            : VRSession.Instance is { MainCamera: { } vr } && vr.isActiveAndEnabled ? vr : Camera.main;
+         if (camera == null)
+         {
+             if (reportedCamera != null || !reportedNoCamera)

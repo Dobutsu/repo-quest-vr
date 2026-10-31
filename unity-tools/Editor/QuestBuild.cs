@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -157,6 +157,54 @@ namespace RepoQuest.Editor
             PlayerSettings.gcIncremental = true;
             // CPU and GPU frame times for PerfLog (Pico logs no VrApi lines); costs next to nothing
             PlayerSettings.enableFrameTimingStats = true;
+
+            RestorePreloadedAssets();
+        }
+
+        /// <summary>
+        /// The game's preloaded assets are lost with its PlayerSettings, which AssetRipper 2.0.0 cannot read (see
+        /// ProjectStep.WriteMissingPlayerSettings): the Input System's project-wide actions and settings and the
+        /// Localization settings. From crimecock's 0.5.0 fork (QuestBuild.RestoreGameSettings)
+        /// </summary>
+        private static void RestorePreloadedAssets()
+        {
+            var preloaded = PlayerSettings.GetPreloadedAssets().Where(a => a != null).ToList();
+            void Preload(UnityEngine.Object asset, string what)
+            {
+                if (asset == null)
+                {
+                    Debug.LogError($"[QuestBuild] {what} not found in the export; not preloaded");
+                    return;
+                }
+                if (!preloaded.Contains(asset))
+                    preloaded.Add(asset);
+                Debug.Log($"[QuestBuild] preloaded: {what} ({AssetDatabase.GetAssetPath(asset)})");
+            }
+
+            var actions = FindAsset("t:InputActionAsset InputSystem_Actions", "InputActionAsset", "InputSystem_Actions");
+            var inputSettings = FindAsset("t:InputSettings", "InputSettings", null);
+            Preload(actions, "Input System project-wide actions");
+            Preload(inputSettings, "Input System settings");
+            Preload(AssetDatabase.LoadMainAssetAtPath("Assets/Localization/Localization Settings.asset"), "Localization settings");
+            PlayerSettings.SetPreloadedAssets(preloaded.ToArray());
+
+            // The Input System also looks for both through these editor config objects
+            if (inputSettings != null)
+                EditorBuildSettings.AddConfigObject("com.unity.input.settings", inputSettings, true);
+            if (actions != null)
+                EditorBuildSettings.AddConfigObject("com.unity.input.settings.actions", actions, true);
+        }
+
+        private static UnityEngine.Object FindAsset(string filter, string typeName, string name)
+        {
+            foreach (var guid in AssetDatabase.FindAssets(filter))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
+                    if (asset != null && asset.GetType().Name == typeName && (name == null || asset.name == name))
+                        return asset;
+            }
+            return null;
         }
 
         private static string ArgumentValue(string name)

@@ -186,6 +186,10 @@ namespace RepoXR.Standalone
             settings.renderMode = Plugin.Config.SinglePassRendering.Value
                 ? OpenXRSettings.RenderMode.SinglePassInstanced
                 : OpenXRSettings.RenderMode.MultiPass;
+            // The APK turns symmetric projection on for multiview (unity-tools/EditorXR/QuestXRSetup.cs); with multi-pass
+            // OpenXR refuses it every frame ("only works with Multiview") and the headset shows black
+            if (!Plugin.Config.SinglePassRendering.Value)
+                settings.symmetricProjection = false;
             settings.depthSubmissionMode = OpenXRSettings.DepthSubmissionMode.None;
 
             // No lambdas here: this body is transplanted into RepoXR, and closures would stay behind in this assembly

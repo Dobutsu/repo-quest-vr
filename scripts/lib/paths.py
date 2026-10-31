@@ -4,7 +4,8 @@ The defaults fit this checkout on the Mac (work/ next to scripts/, Unity under /
 builder (builder/) runs the same scripts from its kit and points them elsewhere with environment variables:
   REPOQUEST_WORK          working folder (default <repo>/work)
   REPOQUEST_GAME          the R.E.P.O. install, the folder with REPO_Data (default <work>/game)
-  REPOQUEST_UNITY_EDITOR  the Unity 2022.3.62f3 install: the folder with Unity.app (macOS) or Editor\\ (Windows)
+  REPOQUEST_UNITY_EDITOR  the Unity install of builder/kit.json: the folder with Unity.app (macOS) or Editor\\ (Windows);
+                          default: where Unity Hub put that version (its default folder or the one set in the Hub)
   REPOQUEST_TOOL          JSON list, the command that runs one of the builder's .NET tools: [<exe>, "--tool"]
 
 Scripts write text with "\\n" line endings on every OS (newline="\\n"; Windows would write "\\r\\n"), and the builder
@@ -19,7 +20,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 WORK = Path(os.environ.get("REPOQUEST_WORK") or ROOT / "work")
 GAME = Path(os.environ.get("REPOQUEST_GAME") or WORK / "game")
-UNITY_EDITOR = Path(os.environ.get("REPOQUEST_UNITY_EDITOR") or "/Applications/Unity/Hub/Editor/2022.3.62f3")
+# This checkout (builder/kit.json) or the builder's kit, where the scripts sit next to kit.json
+_KIT = json.loads(next(p for p in (ROOT / "builder" / "kit.json", ROOT / "kit.json") if p.is_file()).read_text(encoding="utf-8"))
+UNITY_VERSION = _KIT["unity"]["version"]
+UNITY_CHANGESET = _KIT["unity"]["changeset"]
+
+
+def _hub_editor(version: str) -> Path:
+    """The editor folder of this version: the Hub's default folder, or the install folder chosen in the Hub (macOS)"""
+    candidates = [Path("/Applications/Unity/Hub/Editor") / version]
+    secondary = Path.home() / "Library" / "Application Support" / "UnityHub" / "secondaryInstallPath.json"
+    try:
+        custom = json.loads(secondary.read_text(encoding="utf-8"))
+        if custom:
+            candidates.append(Path(custom) / version)
+    except (OSError, ValueError):
+        pass
+    return next((c for c in candidates if (c / "Unity.app").is_dir()), candidates[-1])
+
+
+UNITY_EDITOR = Path(os.environ.get("REPOQUEST_UNITY_EDITOR") or _hub_editor(UNITY_VERSION))
 
 TOOL_PROJECTS = {"assembly-renamer": "AssemblyRenamer"}
 
@@ -50,3 +70,9 @@ def run_tool(name: str, args: list[str]) -> None:
     tool = ROOT / "tools" / project
     subprocess.run([dotnet, "build", "-c", "Release", "-v", "quiet", "-nologo", tool], check=True, capture_output=True)
     subprocess.run([dotnet, tool / "bin" / "Release" / "net8.0" / f"{project}.dll", *args], check=True)
+
+
+if __name__ == "__main__":
+    # For the shell scripts: scripts/lib/paths.py unity-editor
+    import sys
+    print({"unity-editor": UNITY_EDITOR, "unity-version": UNITY_VERSION}[sys.argv[1]])

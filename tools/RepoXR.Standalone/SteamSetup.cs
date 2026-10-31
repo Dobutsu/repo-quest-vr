@@ -31,7 +31,8 @@ namespace RepoXR.Standalone
         /// <summary>The account name last used on this device, offered at the next login</summary>
         internal static string LastAccountName => SessionStore.Load(SessionPath).AccountName;
 
-        /// <summary>Before the first scene: the game's SteamManager calls SteamClient.Init in its Awake</summary>
+        /// <summary>Before the first scene: the game's PlatformManager (since v0.5.0; SteamManager before) calls
+        /// SteamClient.Init in its Awake</summary>
         public static void Install()
         {
             SteamKitBackend.Log = message => Debug.Log(message);
@@ -219,7 +220,9 @@ namespace RepoXR.Standalone
         /// </summary>
         private MenuButton AddSteamButton(MenuPageMain main)
         {
-            var source = main.transform.Find("Buttons/Menu Button - Settings");
+            // v0.5.0 put the buttons under LeftTransform
+            var source = main.transform.Find("LeftTransform/Buttons/Menu Button - Settings") ??
+                         main.transform.Find("Buttons/Menu Button - Settings");
             if (!source)
             {
                 Debug.LogWarning("[RepoXR.Standalone] Steam: no Settings button in the main menu to copy");

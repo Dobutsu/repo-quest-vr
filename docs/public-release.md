@@ -18,7 +18,7 @@ legal advice, only an understanding of the situation as of that date.
 Only the Unity Editor can do all of this. So every player's computer has to run a real build.
 
 **What is realistically achievable** is a one-click builder:
-1. The program installs what is needed: Unity 2022.3 with the Android module through Unity Hub, .NET, Python,
+1. The program installs what is needed: Unity 6.3 (6000.3.17f1) with the Android module through Unity Hub, .NET, Python,
    AssetRipper. The player accepts the Unity license themselves.
 2. The player points it at the REPO folder from Steam and clicks "Build".
 3. They connect the Quest in developer mode and click "Install".

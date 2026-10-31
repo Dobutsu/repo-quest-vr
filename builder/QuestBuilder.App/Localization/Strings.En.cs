@@ -276,7 +276,7 @@ internal static partial class Strings
             "The builder could not build the VR mod into the game on this computer — it is not your game's version. " +
             "Please create a report and send it to us.",
         ["err.unity-missing"] =
-            "Unity is not installed. Install Unity 2022.3.62f3 with Android Build Support (SDK, NDK and OpenJDK) in " +
+            "Unity is not installed. Install Unity 6000.3.17f1 with Android Build Support (SDK, NDK and OpenJDK) in " +
             "Unity Hub, then build again.",
         ["err.unity-license"] =
             "Unity refused to work without a license. Sign in to Unity Hub, add a free Personal license and build again.",
@@ -289,7 +289,7 @@ internal static partial class Strings
             "There is not enough space for Unity (about 20 GB) on the system disk or on the working folder's disk. " +
             "Free up space and try again.",
         ["err.unity-android"] =
-            "Unity is missing its Android modules. In Unity Hub open Installs → Unity 2022.3.62f3 → Add modules and add " +
+            "Unity is missing its Android modules. In Unity Hub open Installs → Unity 6000.3.17f1 → Add modules and add " +
             "Android Build Support with OpenJDK and Android SDK & NDK Tools.",
         ["err.unity-compile"] =
             "The project's code did not compile. That is the builder's fault, not yours: create a report and send it to us.",

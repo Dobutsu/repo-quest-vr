@@ -1,0 +1,66 @@
+diff --git a/Source/Patches/InputPatches.cs b/Source/Patches/InputPatches.cs
+index 4d44eae..f01105b 100644
+--- a/Source/Patches/InputPatches.cs
++++ b/Source/Patches/InputPatches.cs
+@@ -292,6 +292,10 @@ internal static class InputPatches
+     private static bool NoUnderlinePatch(ref string __result, string __0)
+     {
+         var __instance = InputManager.instance;
++        // Glyph texts refresh before InputManager has started (seen on 0.5.0): let the game handle those
++        if (__instance == null || __instance.tagDictionary == null)
++            return true;
++
+         var _text = __instance.tagDictionary.Aggregate(__0,
+             (current, keyValuePair) => current.Replace(keyValuePair.Key,
+                 __instance.InputDisplayGet(keyValuePair.Value, KeyType.InputKey, MovementDirection.Up)));
+diff --git a/Source/Patches/UI/UIPatches.cs b/Source/Patches/UI/UIPatches.cs
+index 1079747..f7de0d5 100644
+--- a/Source/Patches/UI/UIPatches.cs
++++ b/Source/Patches/UI/UIPatches.cs
+@@ -122,6 +122,19 @@ internal static class UIPatches
+         }
+     }
+ 
++    /// <summary>
++    /// R.E.P.O. 0.5.0 (gamepad support) switches its menus to keyboard navigation as soon as a navigate input or a
++    /// keyboard click comes in, and back to the pointer only when the mouse moves. There is no mouse in VR, so the
++    /// menus would stay in navigation mode, where pointing at a button does not select it: keep the pointer mode
++    /// </summary>
++    [HarmonyPatch(typeof(MenuManager), nameof(MenuManager.StateOpen))]
++    [HarmonyPrefix]
++    private static void KeepPointerNavigation(MenuManager __instance)
++    {
++        if (XRRayInteractorManager.Instance is not null)
++            __instance.isKeyboardNavigating = false;
++    }
++
+     /// <summary>
+     /// Properly set the mouse hold position
+     /// </summary>
+diff --git a/Source/UI/XRRayInteractorManager.cs b/Source/UI/XRRayInteractorManager.cs
+index abd64a3..1625fca 100644
+--- a/Source/UI/XRRayInteractorManager.cs
++++ b/Source/UI/XRRayInteractorManager.cs
+@@ -33,6 +33,22 @@ public class XRRayInteractorManager : MonoBehaviour
+         UpdateActiveController(ActiveController.Right);
+     }
+ 
++    // Quest port: one log line per trigger press while a menu is up, to see why a click does or does not land
++    private void Update()
++    {
++        var (interactor, actions) = GetActiveInteractor();
++        if (!actions.uiPressAction.action.WasPressedThisFrame())
++            return;
++
++        var hit = interactor.TryGetCurrentUIRaycastResult(out var result) && result.gameObject
++            ? result.gameObject.name
++            : "nothing";
++        var menu = MenuManager.instance;
++        Logger.LogInfo($"[UI] trigger ({activeController}): ray on {hit}; menu target {(menu ? menu.currentMenuID : "-")}, " +
++                       $"keyboard navigating {(menu && menu.isKeyboardNavigating)}, page {(menu && menu.currentMenuPage ? menu.currentMenuPage.name : "-")}, " +
++                       $"input mode {SemiFunc.InputMode()}, UI click {SemiFunc.InputUIClick()}");
++    }
++
+     private void OnDestroy()
+     {
+         Instance = null;

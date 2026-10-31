@@ -1,0 +1,77 @@
+diff --git a/Source/Entrypoint.cs b/Source/Entrypoint.cs
+index 9ffcfe3..3acd76c 100644
+--- a/Source/Entrypoint.cs
++++ b/Source/Entrypoint.cs
+@@ -6,7 +6,9 @@ using RepoXR.Networking;
+ using RepoXR.Patches;
+ using RepoXR.Player.Camera;
+ using RepoXR.UI;
++using System.Collections.Generic;
+ using UnityEngine;
++using UnityEngine.SceneManagement;
+ using UnityEngine.Rendering.PostProcessing;
+ using UnityEngine.UI;
+ 
+@@ -205,12 +207,45 @@ internal static class UniversalEntrypoint
+ {
+     private static bool hasShownErrorMessage;
+     
+-    public static void OnSceneLoad(string _)
++    public static void OnSceneLoad(Scene scene, LoadSceneMode mode)
+     {
+-        if (Plugin.Flags.HasFlag(Flags.VR))
+-            Entrypoint.SetupDefaultSceneVR();
++        // R.E.P.O. 0.5.0 hands scenes over: the next Main scene loads while the Reload scene is still the active one
++        // (ReloadScene.Handoff*), and the Reload scene is unloaded afterwards. The objects created here at the root
++        // (the VR overlay canvas, the network system...) land in the active scene and went away with it: in the
++        // singleplayer lobby GameHud found no overlay canvas and stopped, the game's HUD canvas stayed a giant screen
++        // around the player (the "mirrored" view), with no pause menu and no pointers. They are moved into the scene
++        // that was loaded
++        var active = SceneManager.GetActiveScene();
++        Logger.LogInfo($"[Scene] {scene.name} loaded ({mode}), active scene {active.name}");
++        var before = active == scene ? null : new HashSet<GameObject>(active.GetRootGameObjects());
++
++        try
++        {
++            if (Plugin.Flags.HasFlag(Flags.VR))
++                Entrypoint.SetupDefaultSceneVR();
++
++            SetupDefaultSceneUniversal();
++        }
++        finally
++        {
++            if (before != null)
++                MoveNewRoots(active, before, scene, mode);
++        }
++    }
++
++    private static void MoveNewRoots(Scene active, HashSet<GameObject> before, Scene scene, LoadSceneMode mode)
++    {
++        var moved = 0;
++        foreach (var root in active.GetRootGameObjects())
++        {
++            if (before.Contains(root))
++                continue;
++
++            SceneManager.MoveGameObjectToScene(root, scene);
++            moved++;
++        }
+ 
+-        SetupDefaultSceneUniversal();
++        Logger.LogInfo($"[Scene] {scene.name} loaded ({mode}) while {active.name} was active: {moved} RepoXR objects moved into it");
+     }
+ 
+     /// <summary>
+diff --git a/Source/Plugin.cs b/Source/Plugin.cs
+index 00be64e..a3a5181 100644
+--- a/Source/Plugin.cs
++++ b/Source/Plugin.cs
+@@ -87,7 +87,7 @@ public class Plugin : BaseUnityPlugin
+         Native.BringGameWindowToFront();
+         Config.SetupGlobalCallbacks();
+ 
+-        SceneManager.sceneLoaded += (scene, _) => UniversalEntrypoint.OnSceneLoad(scene.name);
++        SceneManager.sceneLoaded += (scene, mode) => UniversalEntrypoint.OnSceneLoad(scene, mode);
+     }
+ 
+     public static string GetCommitHash()
