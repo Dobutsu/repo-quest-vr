@@ -14,6 +14,7 @@ namespace RepoQuest.Editor
     /// settings changes schedule a domain reload, and BuildPlayer refuses to run until it has happened.
     ///   1. -executeMethod RepoQuest.Editor.QuestBuild.Prepare [-addressablesEntries &lt;entries.json&gt;]
     ///   2. -executeMethod RepoQuest.Editor.QuestBuild.BuildApk -apkPath &lt;file&gt; [-developmentBuild] [-profiling]
+    ///      [-scriptsOnly]
     ///      [-versionName &lt;x.y.z&gt;] [-versionCode &lt;n&gt;]
     /// The builder's UnityBuildStep (builder/QuestBuilder.Core) runs both.
     /// </summary>
@@ -71,6 +72,9 @@ namespace RepoQuest.Editor
         {
             var apkPath = ArgumentValue("-apkPath") ?? Path.GetFullPath("Builds/repo-quest.apk");
             var development = Environment.GetCommandLineArgs().Contains("-developmentBuild");
+            // Only the code (the baked game and RepoXR DLLs): the scenes, assets and shaders come from the last full build,
+            // about 15 minutes instead of 60-80. Wrong after any change to assets or shaders
+            var scriptsOnly = Environment.GetCommandLineArgs().Contains("-scriptsOnly");
 
             // A release build that simpleperf/Perfetto may sample (profileable from the shell) with IL2CPP symbols next
             // to the APK, so native hotspots have the game's method names; neither changes how fast the build runs
@@ -86,14 +90,14 @@ namespace RepoQuest.Editor
             if (int.TryParse(ArgumentValue("-versionCode"), out var versionCode))
                 PlayerSettings.Android.bundleVersionCode = versionCode;
 
-            if (!AddressablesRestore.BuildContent())
+            if (!scriptsOnly && !AddressablesRestore.BuildContent())
             {
                 EditorApplication.Exit(1);
                 return;
             }
 
             var scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
-            Debug.Log($"[QuestBuild] building {scenes.Length} scenes -> {apkPath} (development: {development})");
+            Debug.Log($"[QuestBuild] building {scenes.Length} scenes -> {apkPath} (development: {development}, scripts only: {scriptsOnly})");
             Directory.CreateDirectory(Path.GetDirectoryName(apkPath)!);
 
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
@@ -102,7 +106,8 @@ namespace RepoQuest.Editor
                 locationPathName = apkPath,
                 target = BuildTarget.Android,
                 targetGroup = BuildTargetGroup.Android,
-                options = development ? BuildOptions.Development : BuildOptions.None,
+                options = (development ? BuildOptions.Development : BuildOptions.None) |
+                          (scriptsOnly ? BuildOptions.BuildScriptsOnly : BuildOptions.None),
             });
 
             var summary = report.summary;

@@ -38,7 +38,7 @@ input, the scene handoff, grabbing, vehicles, fonts, the shop mirror) come from
 
 ## What works
 
-The current builder (1.1.0) is for **R.E.P.O. 0.5.0** and Unity 6.3. It has been tested in singleplayer on a Quest 3:
+The current builder (1.1.1) is for **R.E.P.O. 0.5.0** and Unity 6.3. It has been tested in singleplayer on a Quest 3:
 menus, levels, monsters and the shop, 71–73 FPS in most places. Multiplayer with PC players, the Quest 2 and Pico have
 not been tested on 0.5.0 yet; the notes below come from the previous version (builder 1.0.7, R.E.P.O. 0.4).
 

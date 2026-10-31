@@ -1,0 +1,124 @@
+diff --git a/Source/UI/GameFonts.cs b/Source/UI/GameFonts.cs
+index b9ccf89..1a939ed 100644
+--- a/Source/UI/GameFonts.cs
++++ b/Source/UI/GameFonts.cs
+@@ -1,3 +1,4 @@
++using System.Collections.Generic;
+ using System.Linq;
+ using System.Text.RegularExpressions;
+ using RepoXR.Assets;
+@@ -18,11 +19,31 @@ internal static class GameFonts
+     private static bool fromMenu;
+     private static bool reportedMissing;
+ 
++    private static GameObject[] Prefabs =>
++    [
++        AssetCollection.RebindHeader, AssetCollection.RebindButton, AssetCollection.RebindButtonToggle,
++        AssetCollection.Keyboard, AssetCollection.ExpressionWheel, AssetCollection.ValuableDiscover,
++        AssetCollection.MenuSettings, AssetCollection.MenuSettingsCategory, AssetCollection.MenuShowcase,
++        AssetCollection.RuntimeSetting, AssetCollection.BoolSetting, AssetCollection.SliderSetting,
++        AssetCollection.VRSettingsButton, AssetCollection.VRRig, AssetCollection.VRTumble
++    ];
++
++    /// <summary>
++    /// The bundle's own fonts, taken from its prefabs before anything is replaced: they are in the bundle only as the
++    /// prefabs' dependencies, so AssetBundle.LoadAllAssets does not list them
++    /// </summary>
++    private static HashSet<TMP_FontAsset>? bundleFonts;
++
+     public static void FixBundlePrefabs()
+     {
+         if (fromMenu)
+             return;
+ 
++        bundleFonts ??= new HashSet<TMP_FontAsset>(Prefabs.Where(p => p)
++            .SelectMany(p => p.GetComponentsInChildren<TMP_Text>(true))
++            .Select(t => t.font)
++            .Where(f => f));
++
+         // The menu's font if there is one, else TMP's default, else any loaded font that works. (1.0.7-qc11 to qc15
+         // also wanted an atlas texture: Unity 6's dynamic fonts have none until they render a glyph, so no font ever
+         // qualified, the bundle's texts stayed broken, and a level whose RepoXR prefabs show text threw on every
+@@ -33,8 +54,10 @@ internal static class GameFonts
+             .FirstOrDefault(Usable);
+         var reference = menuFont ??
+                         (applied ? null :
+-                            (Usable(TMP_Settings.defaultFontAsset) ? TMP_Settings.defaultFontAsset : null) ??
+-                            Resources.FindObjectsOfTypeAll<TMP_FontAsset>().FirstOrDefault(Usable));
++                            (Usable(TMP_Settings.defaultFontAsset) && !FromBundle(TMP_Settings.defaultFontAsset)
++                                ? TMP_Settings.defaultFontAsset
++                                : null) ??
++                            Resources.FindObjectsOfTypeAll<TMP_FontAsset>().FirstOrDefault(f => Usable(f) && !FromBundle(f)));
+         if (!reference)
+         {
+             if (!applied && !reportedMissing)
+@@ -48,19 +71,23 @@ internal static class GameFonts
+         }
+ 
+         var fixedTexts = 0;
+-        foreach (var prefab in new[]
+-                 {
+-                     AssetCollection.RebindHeader, AssetCollection.RebindButton, AssetCollection.RebindButtonToggle,
+-                     AssetCollection.Keyboard, AssetCollection.ExpressionWheel, AssetCollection.ValuableDiscover,
+-                     AssetCollection.MenuSettings, AssetCollection.MenuSettingsCategory, AssetCollection.MenuShowcase,
+-                     AssetCollection.RuntimeSetting, AssetCollection.BoolSetting, AssetCollection.SliderSetting,
+-                     AssetCollection.VRSettingsButton, AssetCollection.VRRig, AssetCollection.VRTumble
+-                 })
++        foreach (var prefab in Prefabs)
+             fixedTexts += Fix(prefab, reference, applied);
+ 
++        // Instances made before this one (the Steam login keyboard at startup) would keep the bundle's fonts
++        foreach (var text in Object.FindObjectsOfType<TMP_Text>(true))
++        {
++            if (!FromBundle(text.font))
++                continue;
++
++            Apply(text, reference);
++            fixedTexts++;
++        }
++
+         applied = reference;
+         fromMenu = menuFont;
+         Logger.LogInfo($"[Fonts] {fixedTexts} texts in RepoXR's prefabs given the font {reference.name}" +
++                       $" (the bundle's fonts: {string.Join(", ", bundleFonts!.Select(f => f.name))})" +
+                        (fromMenu ? " (the game's menu font)" : " (a stand-in until the menu's font is loaded)"));
+     }
+ 
+@@ -68,7 +95,8 @@ internal static class GameFonts
+     /// Gives every text under <paramref name="root"/> without a usable font the reference font, and every text with the
+     /// bundle's own copy of it (the bundle's "Teko-VariableFont_wght SDF" next to the game's "... SDF 1"): that copy has
+     /// a material, but under Unity 6 its atlas is empty, and every glyph drew as a solid block (the VR Settings button
+-    /// and the whole VR Settings page)
++    /// and the whole VR Settings page). None of the bundle's fonts renders: its other copies, segoeui and LiberationSans,
++    /// drew the keyboard's keys and the expression wheel's names as white triangles while the stand-in was in place
+     /// </summary>
+     public static int Fix(GameObject? root, TMP_FontAsset reference, TMP_FontAsset? standIn = null)
+     {
+@@ -79,17 +107,24 @@ internal static class GameFonts
+         foreach (var text in root!.GetComponentsInChildren<TMP_Text>(true))
+         {
+             if (Usable(text.font) && text.fontSharedMaterial && (!standIn || text.font != standIn) &&
+-                !CopyOf(text.font, reference))
++                !CopyOf(text.font, reference) && !FromBundle(text.font))
+                 continue;
+ 
+-            text.font = reference;
+-            text.fontSharedMaterial = TmpAsset.GetMaterial(reference);
++            Apply(text, reference);
+             count++;
+         }
+ 
+         return count;
+     }
+ 
++    private static void Apply(TMP_Text text, TMP_FontAsset reference)
++    {
++        text.font = reference;
++        text.fontSharedMaterial = TmpAsset.GetMaterial(reference);
++    }
++
++    private static bool FromBundle(TMP_FontAsset? font) => font && bundleFonts != null && bundleFonts.Contains(font!);
++
+     /// <summary>Another font asset with the reference's name, give or take Unity's " 1" for a duplicate</summary>
+     private static bool CopyOf(TMP_FontAsset? font, TMP_FontAsset reference) =>
+         font && font != reference && BaseName(font!.name) == BaseName(reference.name);
