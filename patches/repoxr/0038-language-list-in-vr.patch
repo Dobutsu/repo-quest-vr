@@ -1,0 +1,23 @@
+--- a/Source/Patches/UI/UIPatches.cs
++++ b/Source/Patches/UI/UIPatches.cs
+@@ -409,6 +409,20 @@
+     [HarmonyPatch(typeof(MenuPageRegions), nameof(MenuPageRegions.GetRegions), MethodType.Enumerator)]
+     [HarmonyTranspiler]
+     private static IEnumerable<CodeInstruction> FixRegionUIPositioning(IEnumerable<CodeInstruction> instructions)
++    {
++        return new CodeMatcher(instructions)
++            .MatchForward(false, new CodeMatch(OpCodes.Ldc_R4, 32f))
++            .SetOperandAndAdvance(1f)
++            .InstructionEnumeration();
++    }
++
++    /// <summary>
++    /// Quest port: the language list steps its buttons 32 world units down, like the region list above: in VR (UI
++    /// scaled down) the step is metres, so the buttons land far below the page (players: the language cannot be changed)
++    /// </summary>
++    [HarmonyPatch(typeof(MenuPageSettingsLanguage), nameof(MenuPageSettingsLanguage.UpdateLanguageList))]
++    [HarmonyTranspiler]
++    private static IEnumerable<CodeInstruction> FixLanguageUIPositioning(IEnumerable<CodeInstruction> instructions)
+     {
+         return new CodeMatcher(instructions)
+             .MatchForward(false, new CodeMatch(OpCodes.Ldc_R4, 32f))

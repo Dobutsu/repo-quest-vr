@@ -38,10 +38,11 @@ input, the scene handoff, grabbing, vehicles, fonts, the shop mirror) come from
 
 ## What works
 
-The current builder (1.1.2) is for **R.E.P.O. 0.5.0** and Unity 6.3. It has been tested in singleplayer on a Quest 3:
-menus, levels, monsters and the shop, 71–73 FPS in most places, the shop mirror included (VR Settings → Rendering →
-Shop Mirror Single Pass). Multiplayer with PC players, the Quest 2 and Pico have
-not been tested on 0.5.0 yet; the notes below come from the previous version (builder 1.0.7, R.E.P.O. 0.4).
+The current builder (1.1.3) is for **R.E.P.O. 0.5.0** and Unity 6.3. It has been tested on a Quest 3 in
+singleplayer (menus, the language list, levels, monsters and the shop, 71–73 FPS in most places, the shop mirror
+included: VR Settings → Rendering → Shop Mirror Single Pass) and joining friends on PC, leaving and joining again.
+The Quest 2 has been tried in singleplayer (menu and shop). Hosting and Pico have not been tested on 0.5.0 yet; the
+notes below come from the previous version (builder 1.0.7, R.E.P.O. 0.4).
 
 - **VR on the headset.** RepoXR's full feature set runs at the Quest 3's 72 Hz, using single-pass (multiview)
   rendering and lighting tuned for the mobile GPU. Most levels hold 55–72 FPS. Shops and crowded lobbies dip lower.

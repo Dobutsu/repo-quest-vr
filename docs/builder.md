@@ -170,6 +170,10 @@ the workspace. Unchanged steps are skipped. Output: `work/build/<name>.apk` (def
 player gets (`work/tools/venv` through uv), not `work/.venv`. `bake.sh` and `make-crossover-test.sh` remain for the
 flatscreen test in CrossOver.
 
+After a change to SteamShim alone, `scripts/codebuild.sh [<tag>]` rebuilds it into the existing project with Unity's
+`-scriptsOnly` (about 28 minutes instead of 60-90; shaders and assets come from the last full build) and writes
+`work/build/repo-quest-vr-<tag>.apk`.
+
 ## Releasing a version
 
 ```sh
