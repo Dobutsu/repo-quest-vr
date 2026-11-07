@@ -151,9 +151,13 @@ namespace RepoXR.Standalone
         [Replaces("MetaManager", "Start", "android", Assembly = "Assembly-CSharp")]
         public static void MetaManagerStart(MetaManager self) => self.StartCoroutine(CosmeticsCloud.StartAfterSync(self));
 
-        /// <summary>Renames the desktop window through user32; there is no such window (or DLL) on Android</summary>
-        [Replaces("WindowManager", "Awake", "android", Assembly = "Assembly-CSharp")]
-        public static void WindowManagerAwake(object self)
+        /// <summary>
+        /// Renames the desktop window through user32; there is no such window (or DLL) on Android. Awake and Start
+        /// both call it (a DllNotFoundException on every scene load), and Awake also destroys the copy each scene brings,
+        /// so only this is emptied
+        /// </summary>
+        [Replaces("WindowManager", "TrySetTitle", "android", Assembly = "Assembly-CSharp")]
+        public static void WindowManagerTrySetTitle(object self)
         {
         }
 

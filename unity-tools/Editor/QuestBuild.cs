@@ -134,6 +134,10 @@ namespace RepoQuest.Editor
             PlayerSettings.SetApplicationIdentifier(android, PackageName);
             PlayerSettings.Android.bundleVersionCode = 1;  // exported settings carry 0, which Gradle rejects
             PlayerSettings.SetScriptingBackend(android, ScriptingImplementation.IL2CPP);
+            // The game is CPU-bound on the Quest: Master is IL2CPP's fully optimized C++ (link-time optimization), at a
+            // few minutes more per build. From crimecock's 0.5.0 fork
+            PlayerSettings.SetIl2CppCompilerConfiguration(android, Il2CppCompilerConfiguration.Master);
+            PlayerSettings.SetIl2CppCodeGeneration(android, Il2CppCodeGeneration.OptimizeSpeed);
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
 
             // Quest 3 runs Horizon OS on Android 14 (API 34), which is also the newest platform Unity's SDK module

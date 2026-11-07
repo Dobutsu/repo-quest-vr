@@ -18,6 +18,8 @@
 #                     menus clicked through InputKey.UIClick, InputGlyphs tags, the grab toggle, vehicles and the bike,
 #                     the binary Addressables catalog (catalog_0.1.bin), the hover area in world space menus, the
 #                     popups scaled with a Vector2 (z 0: their text drew as solid blocks in VR)
+#   0010.. see the patches' own comments; 0039-post-processing-awake-0.5.1  R.E.P.O. 0.5.1 moved PostProcessing.Start
+#                                            into Awake: the lens distortion and chromatic aberration patch follows
 # Built against the game in work/game (RepoXR's tester mode): the REPO package on DaXcess' feed stops at 0.4.4
 set -euo pipefail
 
@@ -34,6 +36,11 @@ for patch in "$root"/patches/repoxr/*.patch; do
     echo "applied $(basename "$patch")"
 done
 
-"$dotnet" build -c Release "$src/RepoXR.csproj" -v quiet -nologo -p:USE_TESTER=true \
-    "-p:TesterGamePath=$root/work/game" >/dev/null
+# Quiet unless it fails (dotnet prints its errors on stdout): then the errors, e.g. after a game update
+[ -f "$root/work/game/REPO_Data/Managed/Assembly-CSharp.dll" ] || { echo "no game at work/game (installed?)" >&2; exit 1; }
+if ! out=$("$dotnet" build -c Release "$src/RepoXR.csproj" -v quiet -nologo -p:USE_TESTER=true \
+    "-p:TesterGamePath=$root/work/game"); then
+    grep -E " error " <<<"$out" | sed -E 's/ \[[^]]*\]$//' | sort -u >&2
+    exit 1
+fi
 echo "RepoXR built: $src/bin/Release/netstandard2.1/RepoXR.dll"

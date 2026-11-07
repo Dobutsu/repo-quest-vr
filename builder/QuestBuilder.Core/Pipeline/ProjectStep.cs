@@ -138,6 +138,8 @@ public sealed class ProjectStep : BuildStep
         FileOps.CopyFiles(Path.Combine(tools, "Runtime", "Shaders"), "*.shader", Path.Combine(repoQuest, "Resources"));
         // Shared shader code the generated and Standard shaders include (per-pixel lamps)
         FileOps.CopyFiles(Path.Combine(tools, "Runtime", "Shaders"), "*.cginc", Path.Combine(repoQuest, "Shaders"));
+        // The graphics states recorded on a Quest 3, whose pipelines ShaderStateTrace creates ahead of time
+        CopyTree(Path.Combine(tools, "StreamingAssets", "RepoQuest"), Path.Combine(project, "Assets", "StreamingAssets", "RepoQuest"));
         Report(context, 1, "done");
     }
 

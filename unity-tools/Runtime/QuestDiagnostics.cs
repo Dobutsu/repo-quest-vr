@@ -34,6 +34,7 @@ namespace RepoQuest
     /// files/command runs a test script without anyone in the headset, one line at a time: "wait 5" (seconds),
     /// "tp 3 90" (spawn the local player at the 4th level point, sorted by distance from the player, facing yaw 90),
     /// "at 1.5 0 22 90" (the same at a position), "yaw 180" (face yaw 180 where it stands), "turn 45" (turn by 45),
+    /// "culling off|on" (LevelCulling's A/B; the reply has its last pass, the camera's far plane and the fog),
     /// anything else goes to the game's debug console
     /// (DebugCommandHandler: "level sunstone valley resort", "spawn enemy pony", "godmode", "noaggro", "level shop").
     /// The reports of these requests also go to files/reports/&lt;request&gt;-&lt;time&gt;.txt: logcat cuts a message at 4 KB.
@@ -590,6 +591,16 @@ namespace RepoQuest
             const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
             float Number(int index) => words.Length > index ? float.Parse(words[index], CultureInfo.InvariantCulture) : 0;
 
+            if (words[0] == "culling")
+            {
+                // A/B of LevelCulling at the current spot: "culling off", "culling on", "culling" (status only)
+                if (words.Length > 1)
+                    LevelCulling.Suspended = words[1] == "off";
+                var camera = Camera.main;
+                return $"suspended {LevelCulling.Suspended}; last pass {LevelCulling.LastPass}; camera " +
+                       (camera ? $"{camera.name} far {camera.farClipPlane:0} m at {camera.transform.position}" : "none") +
+                       $"; fog {RenderSettings.fog} {RenderSettings.fogMode} end {RenderSettings.fogEndDistance:0} density {RenderSettings.fogDensity:0.###}";
+            }
             if (words[0] == "yaw")
                 return Aim("SetAimNow", Number(1));
             if (words[0] == "turn")

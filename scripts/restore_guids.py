@@ -46,13 +46,21 @@ def main() -> int:
         print("all GUIDs already original")
         return 0
 
-    pattern = re.compile("|".join(remap))
+    # One alternation of all remapped GUIDs crawled for 8-25 minutes over R.E.P.O. 0.5.0's 712 (the cosmetics icons):
+    # match every "guid: " reference once and look it up instead (crimecock's 0.5.0 fork). AssetRipper writes its own
+    # GUIDs only as "guid: "; m_AssetGUID and the like already carry the game's originals
+    def swap(m: re.Match) -> str:
+        new = remap.get(m.group(1))
+        return f"guid: {new}" if new else m.group(0)
+
     touched = 0
     for path in list((project / "Assets").rglob("*")) + list((project / "ProjectSettings").glob("*.asset")):
         if path.suffix not in YAML_SUFFIXES or not path.is_file():
             continue
         text = path.read_text(errors="surrogateescape")
-        updated = pattern.sub(lambda m: remap[m.group(0)], text)
+        if "guid: " not in text:
+            continue
+        updated = GUID_RE.sub(swap, text)
         if updated != text:
             path.write_text(updated, errors="surrogateescape", newline="\n")
             touched += 1

@@ -78,6 +78,13 @@ namespace RepoQuest
         private const string Animators = "animators off";
         private const string Audio = "audio paused";
         private const string AllOff = "all of the above";
+        // MSAA is not in the default lists (it adds work): files/perf-phases-shop etc. name them. Each applies
+        // QualitySettings.antiAliasing and logs what the eye texture got, in case the XR display ignores a runtime change
+        private const string Msaa2 = "MSAA 2x";
+        private const string Msaa4 = "MSAA 4x";
+        private const string Msaa4HdrOff = "MSAA 4x, HDR off";
+        // LevelCulling is on by default, so the A/B phase switches it off (files/perf-phases names it)
+        private const string CullingOff = "level culling off";
 
         private enum Place { None, Shop, Arena, Level }
 
@@ -118,7 +125,9 @@ namespace RepoQuest
         private int phase = -1;
         private float phaseStart;
         private float phaseSeconds = 12f, profilingSeconds = 30f;
-        private bool levelTested;
+        // The level the one level test of a launch is for: R.E.P.O. 0.5.0 reloads the scene after the level has changed
+        // (scene Reload, then Main), which ends a running test; like the shop's, it starts again in the same level
+        private string testedLevel;
         private string leftOver = "";
         private float originalScale;
         private readonly Dictionary<string, List<(float fps, float main, float render, float gpu)>> perPhase = new();
@@ -314,9 +323,9 @@ namespace RepoQuest
                     phases = Phases("perf-phases-arena", ArenaPhases);
                     (phaseSeconds, profilingSeconds, settle) = (8f, 20f, 5f);
                     break;
-                case Place.Level when !levelTested:
+                case Place.Level when testedLevel == null || testedLevel == name:
                     phases = Phases("perf-phases", Array.Empty<string>());
-                    levelTested = true;
+                    testedLevel = name;
                     break;
                 default:
                     phases = Array.Empty<string>();
@@ -469,7 +478,7 @@ namespace RepoQuest
                   $"gpu {Median(gpu),5:0.0} ms | scan {scan:0.00} ms | gc {gcs - gcCount} | {Thermal()}" +
                   $"{(Application.isFocused ? "" : " | unfocused")}{tag}");
             Write($"  draws {Count(drawCalls)}, batches {Count(batches)}, setpass {Count(setPass)}, tris {Count(triangles)}, " +
-                  $"verts {Count(vertices)}, gc alloc {Count(gcAlloc)} B | frames >25 ms {over25}, >50 {over50}, >100 {over100} | " +
+                  $"verts {Count(vertices)}, gc alloc {Count(gcAlloc)} B, eye msaa {XRSettings.eyeTextureDesc.msaaSamples} | frames >25 ms {over25}, >50 {over50}, >100 {over100} | " +
                   $"{threads.Summary(5)}");
             Write($"  {PerfVk.Take(4)}");
             Write($"  {PerfVk.TakeMore(3)}");
@@ -638,6 +647,12 @@ namespace RepoQuest
                         camera.allowHDR = true;
                     hdrCameras.Clear();
                 });
+            toggles[Msaa2] = (() => SetMsaa(2), RestoreMsaa);
+            toggles[CullingOff] = (() => LevelCulling.Suspended = true, () => LevelCulling.Suspended = false);
+            toggles[Msaa4] = (() => SetMsaa(4), RestoreMsaa);
+            toggles[Msaa4HdrOff] = (
+                () => { SetMsaa(4); toggles[HdrOff].apply(); },
+                () => { toggles[HdrOff].undo(); RestoreMsaa(); });
             toggles[TopNoDepth] = (
                 () =>
                 {
@@ -662,6 +677,27 @@ namespace RepoQuest
                 () => Disable(Camera.allCameras.Where(c => c.enabled && c.targetTexture == null && c.stereoTargetEye != StereoTargetEyeMask.None)
                     .OrderBy(c => c.depth).Skip(1)),
                 Reenable);
+        }
+
+        private int originalAa = -1;
+
+        private void SetMsaa(int samples)
+        {
+            if (originalAa < 0)
+                originalAa = QualitySettings.antiAliasing;
+            QualitySettings.antiAliasing = samples;
+            Write($"  MSAA {originalAa} -> {samples}: eye texture msaa {XRSettings.eyeTextureDesc.msaaSamples}; cameras " +
+                  string.Join(", ", Camera.allCameras.Where(c => c.isActiveAndEnabled)
+                      .Select(c => $"{c.name} allowMSAA {c.allowMSAA} hdr {c.allowHDR}")));
+        }
+
+        private void RestoreMsaa()
+        {
+            if (originalAa < 0)
+                return;
+            QualitySettings.antiAliasing = originalAa;
+            Write($"  MSAA back to {originalAa}: eye texture msaa {XRSettings.eyeTextureDesc.msaaSamples}");
+            originalAa = -1;
         }
 
         private static string[] Phases(string name, string[] defaults)

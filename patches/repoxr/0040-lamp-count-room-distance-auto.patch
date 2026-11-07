@@ -1,0 +1,48 @@
+diff -ruN a/Source/Config.cs b/Source/Config.cs
+--- a/Source/Config.cs	2026-11-06 00:15:38
++++ b/Source/Config.cs	2026-11-06 00:15:50
+@@ -143,6 +143,13 @@
+     public ConfigEntry<bool> LampLighting { get; } = file.Create("Rendering", nameof(LampLighting), true,
+         "Light the lamps nearest to you per pixel, all in one pass, instead of Unity lighting each object with a few of them in extra passes: no seams between objects and less work for the headset, but lamps cast no shadows. Flashlights are unchanged.");
+ 
++    // Quest port: how many lamps LampLighting hands the shaders; each one is evaluated for every pixel drawn
++    [ConfigDescriptor(customName: "Lamps", stepSize: 1f), QuestOnly]
++    public ConfigEntry<int> LampCount { get; } = file.Create("Rendering", nameof(LampCount), 8,
++        new ConfigDescription(
++            "With Lamp Lighting on: how many of the lamps nearest to you light the scene. Fewer is faster on Quest, where every lamp costs time for each pixel; with too few, far lamps can switch on and off as you move.",
++            new AcceptableValueRange<int>(4, 16)));
++
+     [ConfigDescriptor(customName: "Other Flashlight Shadows")]
+     public ConfigEntry<bool> OtherFlashlightShadows { get; } = file.Create("Rendering", nameof(OtherFlashlightShadows), !Plugin.IsQuest,
+         "Whether other players' flashlights cast shadows. Each one renders the scene again into its own shadow map: with a full lobby this cost 7-10 ms of GPU time per frame on Quest. Their light stays either way.");
+@@ -161,7 +168,7 @@
+     [ConfigDescriptor(customName: "Room Distance", stepSize: 5f, suffix: " m"), QuestOnly]
+     public ConfigEntry<int> CullFarDistance { get; } = file.Create("Rendering", nameof(CullFarDistance), 0,
+         new ConfigDescription(
+-            "With Level Culling on: nothing is drawn beyond this distance. 0 m: as far as the fog lets you see (no visible difference). Lower values hide far rooms for more performance.",
++            "With Level Culling on: nothing is drawn beyond this distance. 0 m: automatic, 5 m past where the fog hides everything and at least 20 m (no visible difference). Lower values hide far rooms for more performance.",
+             new AcceptableValueRange<int>(0, 100)));
+ 
+     [ConfigDescriptor(customName: "Post Processing")]
+diff -ruN a/Source/Rendering/LampLighting.cs b/Source/Rendering/LampLighting.cs
+--- a/Source/Rendering/LampLighting.cs	2026-11-06 00:15:38
++++ b/Source/Rendering/LampLighting.cs	2026-11-06 00:15:50
+@@ -103,14 +103,16 @@
+ 
+         var eye = camera.transform.position;
+         var count = 0;
++        // Rendering.LampCount (Quest port): every lamp handed over costs the shaders time for each pixel
++        var max = Mathf.Clamp(Plugin.Config.LampCount.Value, 1, MaxLamps);
+         for (var i = 0; i < lit.Count; i++)
+         {
+             var distance = Vector3.Distance(litPositions[i], eye) - litRanges[i];
+-            if (count == MaxLamps && distance >= nearestDistances[MaxLamps - 1])
++            if (count == max && distance >= nearestDistances[max - 1])
+                 continue;
+ 
+             // Insert in order, dropping the farthest when full
+-            var k = count < MaxLamps ? count++ : MaxLamps - 1;
++            var k = count < max ? count++ : max - 1;
+             for (; k > 0 && nearestDistances[k - 1] > distance; k--)
+             {
+                 nearestDistances[k] = nearestDistances[k - 1];

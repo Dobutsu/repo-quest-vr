@@ -11,6 +11,10 @@
 #include "UnityPBSLighting.cginc"
 
 #define REPOQUEST_MAX_LAMPS 16
+// A shader can evaluate fewer (the nearest ones): the own VR arms' variants, which can fill the view (generate_shaders.py)
+#ifndef REPOQUEST_LAMPS_LIMIT
+#define REPOQUEST_LAMPS_LIMIT REPOQUEST_MAX_LAMPS
+#endif
 
 float4 _RQLampPosition[REPOQUEST_MAX_LAMPS];  // xyz: position, w: 1 / range²
 half4 _RQLampColor[REPOQUEST_MAX_LAMPS];      // rgb: colour × intensity
@@ -40,7 +44,8 @@ half3 RepoQuestLamps(float3 posWorld, half3 normalWorld, half3 viewDir, half3 di
     noIndirect.diffuse = 0;
     noIndirect.specular = 0;
 
-    for (int k = 0; k < _RQLampCount; k++)
+    int count = min(_RQLampCount, REPOQUEST_LAMPS_LIMIT);
+    for (int k = 0; k < count; k++)
     {
         float3 toLamp = _RQLampPosition[k].xyz - posWorld;
         float x = dot(toLamp, toLamp) * _RQLampPosition[k].w;

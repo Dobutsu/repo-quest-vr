@@ -1,0 +1,13 @@
+--- a/Source/Patches/PostProcessingPatches.cs
++++ b/Source/Patches/PostProcessingPatches.cs
+@@ -7,8 +7,9 @@
+ {
+     /// <summary>
+     /// Disable certain post-processing effects that do not work well with VR
++    /// Quest port: R.E.P.O. 0.5.1 reads the volume's settings in Awake (0.5.0 did in Start, which 0.5.1 removed)
+     /// </summary>
+-    [HarmonyPatch(typeof(PostProcessing), nameof(PostProcessing.Start))]
++    [HarmonyPatch(typeof(PostProcessing), nameof(PostProcessing.Awake))]
+     [HarmonyPostfix]
+     private static void PostProcessingPatch(PostProcessing __instance)
+     {

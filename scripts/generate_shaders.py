@@ -40,6 +40,14 @@ FROM_MATERIALS = "// RepoQuest: stored by materials"
 # of their glow (PlayerMaterial.ColorSet only sets rgb). The Fresnel and Enemy Valuable shaders do not.
 EMISSION_ALPHA = ("Hurtable/", "Semiwork/Standard", "Semiwork/Alpha Clip", "RotatingAlbedoShader")
 EMISSION_SCALE = {"Hurtable/Hurtable Transparent": "0.294118"}  # a constant in that shader's compiled code
+# The local player's VR arms and the cosmetics on them are drawn right in front of the eyes and can fill the view: with
+# a cosmetic sleeve held up, 18-24 ms of GPU time per frame instead of ~9.5 on a Quest 3 (b28). Their Hurtable shaders
+# get a lighter copy, which ArmShaders (unity-tools/Runtime) puts on those renderers: no forward add pass (the
+# flashlight next to them lights them per vertex instead of in a pass of its own with shadows), and the nearest few
+# lamps only. Kept in Resources, which Shader.Find needs in a build.
+ARMS_PREFIX = "RepoQuest/Arms/"
+ARMS_LAMPS = 4
+LAMPS_INCLUDE = '#include "Assets/RepoQuest/Shaders/RepoQuestLamps.cginc"'
 TAG_NAMES = {"queue": "Queue", "rendertype": "RenderType", "ignoreprojector": "IgnoreProjector",
              "previewtype": "PreviewType", "canusespriteatlas": "CanUseSpriteAtlas",
              "disablebatching": "DisableBatching", "forcenoshadowcasting": "ForceNoShadowCasting"}
@@ -608,6 +616,16 @@ def build_shader(name: str, props_block: str, declared: dict[str, str], stored: 
 """
 
 
+def arms_variant(text: str) -> str | None:
+    """The lighter copy of a generated Hurtable shader for the own VR arms; None when it is not lit by the lamps"""
+    if LAMPS_INCLUDE not in text or "#pragma surface surf Standard" not in text:
+        return None
+    text = re.sub(r'Shader "([^"]+)"', lambda m: f'Shader "{ARMS_PREFIX}{m.group(1)}"', text, count=1)
+    text = text.replace(" fullforwardshadows", "")
+    text = text.replace("#pragma surface surf Standard", "#pragma surface surf Standard noforwardadd nometa", 1)
+    return text.replace(LAMPS_INCLUDE, f"#define REPOQUEST_LAMPS_LIMIT {ARMS_LAMPS}\n\t\t{LAMPS_INCLUDE}", 1)
+
+
 def main() -> int:
     project = Path(sys.argv[1])
     states_path = Path(sys.argv[2]) if len(sys.argv) > 2 else WORK / "shader-states.json"
@@ -616,6 +634,8 @@ def main() -> int:
         print(f"{states_path} missing: render state guessed from shader names (run scripts/shader_states.py)")
     stored = material_properties(project)
     count = 0
+    arms_dir = project / "Assets" / "RepoQuest" / "Resources" / "ArmShaders"
+    arms = 0
     for path in sorted((project / "Assets" / "Shader").glob("*.shader")):
         text = path.read_text(errors="ignore")
         if "DummyShaderTextExporter" not in text and "RepoQuest: generated" not in text:
@@ -628,9 +648,15 @@ def main() -> int:
         if override.exists():
             path.write_text(override.read_text().replace("{PROPERTIES}", block), newline="\n")
         else:
-            path.write_text(build_shader(name, block, declared, stored[guid], states.get(name)), newline="\n")
+            shader = build_shader(name, block, declared, stored[guid], states.get(name))
+            path.write_text(shader, newline="\n")
+            variant = arms_variant(shader) if name.startswith("Hurtable/") else None
+            if variant:
+                arms_dir.mkdir(parents=True, exist_ok=True)
+                (arms_dir / path.name).write_text(variant, newline="\n")
+                arms += 1
         count += 1
-    print(f"generated {count} shaders")
+    print(f"generated {count} shaders, {arms} of them also for the VR arms ({ARMS_PREFIX})")
     return 0
 
 

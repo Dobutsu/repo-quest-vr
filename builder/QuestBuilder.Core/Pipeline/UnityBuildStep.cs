@@ -69,6 +69,8 @@ public sealed partial class UnityBuildStep : BuildStep
             "-logFile", buildLog,
         ];
         QuoteSdkManagerPaths(unity);
+        ClearMergedAssets(workspace);
+        ClearGradleTransforms(workspace);
         var started = DateTime.UtcNow;
         await RunUnityAsync(context, unity, build, buildLog,
             new BuildProgress(this, context, ExpectedBuildTime(context.State, freshLibrary)), ct);
@@ -116,6 +118,51 @@ public sealed partial class UnityBuildStep : BuildStep
                 continue;
             File.WriteAllText(script, quoted);
             Log.Info($"quoted the paths in {script}");
+        }
+    }
+
+    /// <summary>
+    /// Gradle merges the exported assets (~20 000 files) into unityLibrary/build/intermediates/assets incrementally.
+    /// When a new game version changes many of them, the merge removes the old files and fails with "Too many open
+    /// files" (the Android Gradle plugin's MergedAssetWriter.removeEmptyParents leaves a directory stream open per
+    /// folder), after the whole IL2CPP build (b28, game 0.5.1). Without the earlier merge Gradle copies everything,
+    /// which costs a few minutes; code-only builds (scripts/codebuild.sh) keep it.
+    /// </summary>
+    private static void ClearMergedAssets(Workspace workspace)
+    {
+        var projects = Path.Combine(workspace.Library, "Bee", "Android", "Prj");
+        if (!Directory.Exists(projects))
+            return;
+        foreach (var backend in Directory.EnumerateDirectories(projects))
+        {
+            var intermediates = Path.Combine(backend, "Gradle", "unityLibrary", "build", "intermediates");
+            var merged = Path.Combine(intermediates, "assets");
+            if (!Directory.Exists(merged))
+                continue;
+            Log.Info($"clearing Gradle's merged assets: {merged}");
+            FileOps.DeleteDirectory(merged);
+            // The merge's own record of what it wrote, which would otherwise make it incremental again
+            FileOps.DeleteDirectory(Path.Combine(intermediates, "incremental", "mergeReleaseAssets"));
+            FileOps.DeleteDirectory(Path.Combine(intermediates, "incremental", "mergeDebugAssets"));
+        }
+    }
+
+    /// <summary>
+    /// The transforms in Gradle's cache: each APK build adds a ~2 GB one of the game's assets, which Gradle keeps for 7
+    /// days and no later build reuses (the assets differ). Removed before each build, so the cache stays the size of one
+    /// </summary>
+    private static void ClearGradleTransforms(Workspace workspace)
+    {
+        var caches = Path.Combine(workspace.Tools, "gradle", "caches");
+        if (!Directory.Exists(caches))
+            return;
+        foreach (var version in Directory.EnumerateDirectories(caches))
+        {
+            var transforms = Path.Combine(version, "transforms");
+            if (!Directory.Exists(transforms))
+                continue;
+            Log.Info($"clearing Gradle's transforms: {transforms}");
+            FileOps.DeleteDirectory(transforms);
         }
     }
 
@@ -190,19 +237,21 @@ public sealed partial class UnityBuildStep : BuildStep
     }
 
     /// <summary>
-    /// Windows: Gradle's cache and the temp folder inside the workspace. Under a user name with non-Latin letters
-    /// (C:\Users\Пользователь) the Android tools (aapt2, the NDK) fail on their own paths; the workspace path is ASCII.
+    /// Gradle's cache inside the workspace: every build leaves a ~2 GB transform of the game's assets there, kept for 7
+    /// days, which in ~/.gradle filled the system disk (25 builds, 49 GB); in the workspace it goes with it.
+    /// Windows: the temp folder too. Under a user name with non-Latin letters (C:\Users\Пользователь) the Android tools
+    /// (aapt2, the NDK) fail on their own paths; the workspace path is ASCII.
     /// </summary>
     private static Dictionary<string, string?> UnityEnvironment(Workspace workspace)
     {
         var environment = new Dictionary<string, string?>();
+        var gradle = Path.Combine(workspace.Tools, "gradle");
+        Directory.CreateDirectory(gradle);
+        environment["GRADLE_USER_HOME"] = gradle;
         if (!Platform.IsWindows)
             return environment;
-        var gradle = Path.Combine(workspace.Tools, "gradle");
         var temp = Path.Combine(workspace.Tools, "tmp");
-        Directory.CreateDirectory(gradle);
         Directory.CreateDirectory(temp);
-        environment["GRADLE_USER_HOME"] = gradle;
         environment["TEMP"] = temp;
         environment["TMP"] = temp;
         return environment;
