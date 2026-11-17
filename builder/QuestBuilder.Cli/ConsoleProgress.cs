@@ -8,6 +8,7 @@ internal sealed class ConsoleProgress : IBuildProgress
     private readonly Dictionary<string, DateTime> started = new();
     private DateTime lastLine = DateTime.MinValue;
     private string? lastText;
+    private int lastQuietMark;
 
     public ConsoleProgress()
     {
@@ -32,6 +33,19 @@ internal sealed class ConsoleProgress : IBuildProgress
         lastText = text;
         lastLine = DateTime.UtcNow;
         Console.WriteLine($"{text}  ({Elapsed(step)})");
+    }
+
+    /// <summary>Unity's log quiet for another 5 minutes: said once per mark, with the line it stopped at</summary>
+    public void StepActivity(string step, string line, TimeSpan quiet)
+    {
+        var mark = (int)quiet.TotalMinutes / 5;
+        if (mark == 0 || mark == lastQuietMark)
+        {
+            lastQuietMark = mark;
+            return;
+        }
+        lastQuietMark = mark;
+        Console.WriteLine($"[{step}] no new log lines for {mark * 5} min; last: {line}");
     }
 
     public void StepFinished(string step, StepStatus status)

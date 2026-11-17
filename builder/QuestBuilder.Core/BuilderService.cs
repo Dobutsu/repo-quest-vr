@@ -257,11 +257,22 @@ public sealed class BuilderService
         // Unity installs (Hub CLI) while AssetRipper exports and the patches are baked
         using var unityCancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var unityTask = EnsureUnityAsync(unityCancel.Token);
+        // A failed Unity installation ends the build at once, not after the export and the bake it runs beside
+        using var prepareCancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _ = unityTask.ContinueWith(_ => prepareCancel.Cancel(), CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         BuildContext context;
         try
         {
-            context = await BuildSession.PrepareAsync(Workspace, Kit, game, null, Options, State, progress, ct);
-            await BuildPipeline.RunAsync(context, ct, until: "bake");
+            context = await BuildSession.PrepareAsync(Workspace, Kit, game, null, Options, State, progress,
+                prepareCancel.Token);
+            await BuildPipeline.RunAsync(context, prepareCancel.Token, until: "bake");
+        }
+        catch (OperationCanceledException) when (unityTask.IsFaulted && !ct.IsCancellationRequested)
+        {
+            Log.Info("build stopped: the Unity installation failed");
+            await unityTask;  // throws the installation's error, which is what the player needs to see
+            throw;
         }
         catch
         {

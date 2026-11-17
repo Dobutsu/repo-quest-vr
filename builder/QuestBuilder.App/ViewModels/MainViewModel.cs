@@ -520,6 +520,10 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             {
                 step.Start();
                 step.Report(0.62, "il2cpp", "10523/16994");
+                step.ReportActivity(@"Starting: C:\Program Files\Unity\Hub\Editor\6000.3.17f1\Editor\Data\" +
+                    @"PlaybackEngines\AndroidPlayer\OpenJDK\bin\java.exe -classpath ""C:\RepoQuest\project\Library\" +
+                    @"Bee\Android\Prj\IL2CPP\Gradle\gradle\wrapper\gradle-wrapper.jar""",
+                    TimeSpan.FromSeconds(14 * 60 + 5));
             }
             else
             {
@@ -544,6 +548,9 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
 
     void IBuildProgress.StepProgress(string step, double? fraction, string? stage, string? detail) =>
         OnStep(step, s => s.Report(fraction, stage, detail));
+
+    void IBuildProgress.StepActivity(string step, string line, TimeSpan quiet) =>
+        OnStep(step, s => s.ReportActivity(line, quiet));
 
     void IBuildProgress.StepFinished(string step, StepStatus status) => OnStep(step, s => s.Finish(status));
 

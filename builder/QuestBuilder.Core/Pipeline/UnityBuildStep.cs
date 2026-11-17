@@ -209,7 +209,7 @@ public sealed partial class UnityBuildStep : BuildStep
     {
         FileOps.DeleteFile(logFile);
         using var stopTail = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var tail = TailAsync(logFile, watcher, stopTail.Token);
+        var tail = TailAsync(logFile, watcher, (line, quiet) => ReportActivity(context, line, quiet), stopTail.Token);
         ProcessResult result;
         try
         {
@@ -257,9 +257,19 @@ public sealed partial class UnityBuildStep : BuildStep
         return environment;
     }
 
-    /// <summary>Feeds new lines of the Unity log to the progress watcher until stopped</summary>
-    private static async Task TailAsync(string path, IUnityLogWatcher watcher, CancellationToken ct)
+    /// <summary>The longest log line shown as activity: Unity's lines can hold whole command lines</summary>
+    private const int ActivityLineLength = 200;
+
+    /// <summary>
+    /// Feeds new lines of the Unity log to the progress watcher until stopped, and reports the latest line with the
+    /// time since it every second: Unity can stay quiet for long (IL2CPP and Gradle, up to 36 minutes on an M-series
+    /// Mac), and a player should be able to tell that from a freeze
+    /// </summary>
+    internal static async Task TailAsync(string path, IUnityLogWatcher watcher, Action<string, TimeSpan> activity,
+        CancellationToken ct)
     {
+        string? lastLine = null;
+        var lastLineTime = DateTime.UtcNow;
         long position = 0;
         var partial = new StringBuilder();
         var buffer = new byte[1 << 16];
@@ -281,11 +291,21 @@ public sealed partial class UnityBuildStep : BuildStep
                 var lastNewline = text.LastIndexOf('\n');
                 if (lastNewline < 0)
                     continue;
-                foreach (var line in text[..lastNewline].Split('\n'))
-                    watcher.OnLine(WithoutTimestamp(line.TrimEnd('\r')));
+                foreach (var raw in text[..lastNewline].Split('\n'))
+                {
+                    var line = WithoutTimestamp(raw.TrimEnd('\r'));
+                    watcher.OnLine(line);
+                    if (line.Trim() is { Length: > 0 } shown)
+                    {
+                        lastLine = shown.Length > ActivityLineLength ? shown[..ActivityLineLength] + "…" : shown;
+                        lastLineTime = DateTime.UtcNow;
+                    }
+                }
                 partial.Clear().Append(text[(lastNewline + 1)..]);
             }
             watcher.OnTick();
+            if (lastLine is not null)
+                activity(lastLine, DateTime.UtcNow - lastLineTime);
         }
     }
 
@@ -323,7 +343,7 @@ public sealed partial class UnityBuildStep : BuildStep
     [GeneratedRegex(@"^\d{4}-\d\d-\d\dT[\d:.]+Z\|0x[0-9A-Fa-f]+\|")]
     private static partial Regex TimestampRegex();
 
-    private interface IUnityLogWatcher
+    internal interface IUnityLogWatcher
     {
         void OnLine(string line);
         void OnTick();

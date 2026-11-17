@@ -21,6 +21,32 @@ public sealed class CoreTests : IDisposable
         Assert.Equal(code, BuildOptions.VersionCodeOf(version));
 
     [Fact]
+    public async Task UnityLogTail_ReportsTheLatestLineAndHowLongAgo()
+    {
+        var log = Path.Combine(temp, "unity-build.log");
+        File.WriteAllText(log,
+            "2026-10-09T22:21:38.161Z|0x0203493f80|first line\n" +
+            "2026-10-09T22:21:39.000Z|0x0203493f80|Starting: java -classpath gradle-wrapper.jar\n\n" +
+            "a partial line without its end");
+        var lines = new List<string>();
+        (string Line, TimeSpan Quiet)? latest = null;
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(3.5));
+        var tail = UnityBuildStep.TailAsync(log, new Watcher(lines), (line, quiet) => latest = (line, quiet), stop.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => tail);
+
+        Assert.Equal(["first line", "Starting: java -classpath gradle-wrapper.jar", ""], lines);
+        Assert.NotNull(latest);
+        Assert.Equal("Starting: java -classpath gradle-wrapper.jar", latest.Value.Line);
+        Assert.InRange(latest.Value.Quiet, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3.5));
+    }
+
+    private sealed class Watcher(List<string> lines) : UnityBuildStep.IUnityLogWatcher
+    {
+        public void OnLine(string line) => lines.Add(line);
+        public void OnTick() { }
+    }
+
+    [Fact]
     public void PluginGuids_MatchTheBashPipeline()
     {
         // `printf 'repoxr-quest:RepoXR.dll' | md5` and friends, as in the project the bash scripts made

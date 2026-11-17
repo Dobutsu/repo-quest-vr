@@ -65,11 +65,23 @@ public static partial class UnitySetup
         }
 
         var installed = UnityInstall.Find(version.Version);
-        if (installed is null || !installed.HasAndroid)
+        if (installed is null)
             throw new BuildException($"Unity Hub did not install Unity {version.Version} with Android support. " +
                                      "Install it in Unity Hub (Installs → Install Editor → Archive) and try again.",
                     $"Hub exit code {result.ExitCode}\n{result.TailText}")
                 { Code = "unity-install-failed" };
+        if (!installed.HasAndroid)
+        {
+            // Seen in a report: the Hub lists every Android module as installed ("No modules found to install") while
+            // folders are missing from disk (an interrupted install, an antivirus); only a reinstall gets them back
+            var missing = string.Join("\n", installed.MissingAndroidParts());
+            throw new BuildException($"Unity {version.Version} is installed, but parts of its Android Build Support are " +
+                                     "missing although Unity Hub lists them. In Unity Hub open Installs, click ⚙ next " +
+                                     $"to {version.Version}, choose Uninstall, then start the build again: it installs " +
+                                     "Unity anew.",
+                    $"{installed.Root}\nmissing:\n{missing}\nHub exit code {result.ExitCode}\n{result.TailText}")
+                { Code = "unity-android-incomplete" };
+        }
         return installed;
     }
 

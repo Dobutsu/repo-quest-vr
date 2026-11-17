@@ -50,10 +50,20 @@ public sealed class UnityInstall
         }
     }
 
-    /// <summary>An installed editor of exactly this version, if there is one (Hub's default and custom locations)</summary>
+    /// <summary>The Android parts that are not there (empty when Android Build Support is complete)</summary>
+    public IEnumerable<string> MissingAndroidParts() =>
+        new[] { Path.Combine("SDK", "platforms"), "NDK", "OpenJDK" }
+            .Where(part => !Directory.Exists(Path.Combine(AndroidPlayer, part)))
+            .Select(part => Path.Combine(AndroidPlayer, part));
+
+    /// <summary>
+    /// An installed editor of exactly this version, if there is one (Hub's default and custom locations); with two
+    /// copies, the one with Android Build Support
+    /// </summary>
     public static UnityInstall? Find(string version, IEnumerable<string>? extraRoots = null)
     {
         var roots = DefaultRoots(version).Concat(UnityHub.CustomEditorRoots(version)).Concat(extraRoots ?? []);
-        return roots.Select(r => new UnityInstall(r)).FirstOrDefault(u => u.HasEditor);
+        var editors = roots.Select(r => new UnityInstall(r)).Where(u => u.HasEditor).ToList();
+        return editors.FirstOrDefault(u => u.HasAndroid) ?? editors.FirstOrDefault();
     }
 }

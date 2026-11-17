@@ -10,6 +10,9 @@ public static class Downloader
 {
     public static HttpClient Http { get; } = CreateClient();
 
+    /// <summary>How long a download may go without receiving a byte before it is treated as broken</summary>
+    internal static TimeSpan StallTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
     private static HttpClient CreateClient()
     {
         var client = new HttpClient(new SocketsHttpHandler
@@ -73,11 +76,28 @@ public static class Downloader
     private static async Task DownloadOnceAsync(string url, string part, IProgress<DownloadProgress>? progress,
         CancellationToken ct)
     {
+        // A connection that stops delivering without closing would hang forever (the client has no overall timeout,
+        // big files take long): no bytes for StallTimeout counts as a broken connection, which is retried and resumed
+        using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        stall.CancelAfter(StallTimeout);
+        try
+        {
+            await DownloadOnceAsync(url, part, progress, stall, ct);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new IOException($"no data for {StallTimeout.TotalSeconds:0} s");
+        }
+    }
+
+    private static async Task DownloadOnceAsync(string url, string part, IProgress<DownloadProgress>? progress,
+        CancellationTokenSource stall, CancellationToken ct)
+    {
         var existing = File.Exists(part) ? new FileInfo(part).Length : 0;
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (existing > 0)
             request.Headers.Range = new RangeHeaderValue(existing, null);
-        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, stall.Token);
         if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
         {
             File.Delete(part);  // the server's file changed or the part is complete garbage: start over
@@ -90,15 +110,16 @@ public static class Downloader
             existing = 0;
         var total = response.Content.Headers.ContentLength is { } length ? existing + length : (long?)null;
 
-        await using var source = await response.Content.ReadAsStreamAsync(ct);
+        await using var source = await response.Content.ReadAsStreamAsync(stall.Token);
         await using var output = new FileStream(part, resumed ? FileMode.Append : FileMode.Create, FileAccess.Write,
             FileShare.None, 1 << 16, useAsync: true);
         var buffer = new byte[1 << 16];
         var done = existing;
         var lastReport = DateTime.MinValue;
         int read;
-        while ((read = await source.ReadAsync(buffer, ct)) > 0)
+        while ((read = await source.ReadAsync(buffer, stall.Token)) > 0)
         {
+            stall.CancelAfter(StallTimeout);
             await output.WriteAsync(buffer.AsMemory(0, read), ct);
             done += read;
             if (DateTime.UtcNow - lastReport > TimeSpan.FromMilliseconds(250))
@@ -112,13 +133,20 @@ public static class Downloader
 
     public static async Task<string> GetStringAsync(string url, CancellationToken ct = default)
     {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(StallTimeout);
         try
         {
-            return await Http.GetStringAsync(url, ct);
+            return await Http.GetStringAsync(url, timeout.Token);
         }
         catch (HttpRequestException e)
         {
             throw new BuildException($"Could not download {url}: {e.Message}", inner: e) { Code = "download" };
+        }
+        catch (OperationCanceledException e) when (!ct.IsCancellationRequested)
+        {
+            throw new BuildException($"Could not download {url}: no answer for {StallTimeout.TotalSeconds:0} s",
+                inner: e) { Code = "download" };
         }
     }
 }

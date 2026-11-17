@@ -13,6 +13,10 @@ public interface IBuildProgress
     void StepProgress(string step, double? fraction, string? stage = null, string? detail = null);
 
     void StepFinished(string step, StepStatus status);
+
+    /// <summary>The latest line a long-running tool wrote (Unity's log) and how long ago: whether a slow step is
+    /// still working</summary>
+    void StepActivity(string step, string line, TimeSpan quiet) { }
 }
 
 public sealed class NullProgress : IBuildProgress
@@ -44,4 +48,7 @@ public abstract class BuildStep
 
     protected void Report(BuildContext context, double? fraction, string? stage = null, string? detail = null) =>
         context.Progress.StepProgress(Id, fraction, stage, detail);
+
+    protected void ReportActivity(BuildContext context, string line, TimeSpan quiet) =>
+        context.Progress.StepActivity(Id, line, quiet);
 }

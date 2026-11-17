@@ -238,6 +238,10 @@
                                             <ProgressBar IsVisible="{Binding IsRunning}" IsIndeterminate="{Binding IsIndeterminate}"
                                                          Value="{Binding Percent}" Minimum="0" Maximum="100" />
                                             <TextBlock Text="{Binding StateText}" FontSize="12" Opacity="0.85" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding ActivityText}" Classes="dim" FontSize="11" TextWrapping="Wrap"
+                                                       IsVisible="{Binding ActivityText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                            <TextBlock Text="{Binding ActivityHint}" Classes="dim" FontSize="11" TextWrapping="Wrap"
+                                                       IsVisible="{Binding ActivityHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>

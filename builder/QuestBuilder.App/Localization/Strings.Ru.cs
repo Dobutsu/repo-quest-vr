@@ -110,6 +110,11 @@ internal static partial class Strings
         ["stage.unity.shaders"] = "Компилируем шейдеры",
         ["stage.unity.il2cpp"] = "Компилируем код игры",
         ["stage.unity.gradle"] = "Упаковываем APK",
+        ["activity.line"] = "Unity: {0}",
+        ["activity.quiet"] = "Unity: {0} · без новых строк {1}",
+        ["activity.hint"] =
+            "Пока Unity компилирует код игры или упаковывает APK, она может молчать полчаса и дольше, на медленном " +
+            "компьютере ещё дольше. Если в диспетчере задач Unity, il2cpp или java нагружают процессор, сборка идёт.",
         ["stage.pico.download"] = "Скачивание Java и ovrport",
         ["stage.pico.patch"] = "Переделка APK для Pico",
         ["stage.unity-setup.hub-download"] = "Скачиваем Unity Hub",
@@ -301,6 +306,10 @@ internal static partial class Strings
             "Unity не смогла собрать APK. Попробуйте ещё раз; если повторится — соберите отчёт и отправьте его нам.",
         ["err.unity-install-failed"] =
             "Unity Hub не смог установить Unity сам. Установите её через окно Unity Hub — кнопка ниже.",
+        ["err.unity-android-incomplete"] =
+            "Unity 6000.3.17f1 установлена, но части Android Build Support на диске нет, хотя Unity Hub считает их " +
+            "установленными. В Unity Hub откройте Installs, нажмите ⚙ рядом с 6000.3.17f1 и выберите Uninstall. " +
+            "Потом снова нажмите «Собрать APK»: сборщик установит Unity заново.",
         ["err.hub-feed"] = "Не удалось связаться с сервером загрузок Unity. Проверьте интернет и попробуйте снова.",
         ["err.hub-hash"] = "Установщик Unity Hub скачался с ошибками. Попробуйте ещё раз.",
         ["err.hub-signature"] =

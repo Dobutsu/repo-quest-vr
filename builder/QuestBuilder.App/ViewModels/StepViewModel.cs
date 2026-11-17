@@ -7,8 +7,15 @@ namespace RepoQuest.Builder.App.ViewModels;
 /// <summary>One row of the build list (a step of <see cref="BuilderService.Steps"/>): its state, stage and time</summary>
 public sealed class StepViewModel : ObservableObject
 {
+    /// <summary>From this long without a new log line, the quiet time is shown; from <see cref="LongQuiet"/>, a hint
+    /// on how to tell a quiet step from a frozen one</summary>
+    private static readonly TimeSpan ShowQuiet = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan LongQuiet = TimeSpan.FromMinutes(10);
+
     private DateTime? started;
     private TimeSpan? duration;
+    private string? activity;
+    private TimeSpan activityQuiet;
 
     public StepViewModel(string id)
     {
@@ -25,6 +32,13 @@ public sealed class StepViewModel : ObservableObject
 
     public string Title => Loc.T($"step.{Id}.title");
     public string About => Loc.T($"step.{Id}.about");
+
+    /// <summary>The latest line Unity wrote while the step runs, with the time since it once that grows</summary>
+    public string? ActivityText => IsRunning && activity is not null
+        ? activityQuiet >= ShowQuiet ? Loc.F("activity.quiet", activity, Format(activityQuiet)) : Loc.F("activity.line", activity)
+        : null;
+
+    public string? ActivityHint => IsRunning && activity is not null && activityQuiet >= LongQuiet ? Loc.T("activity.hint") : null;
 
     public bool IsRunning => Status == StepStatus.Running;
     public bool IsDone => Status == StepStatus.Done;
@@ -62,6 +76,7 @@ public sealed class StepViewModel : ObservableObject
         Fraction = null;
         Stage = null;
         Detail = null;
+        activity = null;
         started = null;
         duration = null;
         Refresh();
@@ -82,6 +97,16 @@ public sealed class StepViewModel : ObservableObject
         Stage = stage ?? Stage;
         Detail = detail;
         Refresh();
+    }
+
+    public void ReportActivity(string line, TimeSpan quiet)
+    {
+        if (!IsRunning)
+            return;
+        activity = line;
+        activityQuiet = quiet;
+        OnPropertyChanged(nameof(ActivityText));
+        OnPropertyChanged(nameof(ActivityHint));
     }
 
     public void Finish(StepStatus status)

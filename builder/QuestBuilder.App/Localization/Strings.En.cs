@@ -107,6 +107,11 @@ internal static partial class Strings
         ["stage.unity.shaders"] = "Compiling shaders",
         ["stage.unity.il2cpp"] = "Compiling the game's code",
         ["stage.unity.gradle"] = "Packing the APK",
+        ["activity.line"] = "Unity: {0}",
+        ["activity.quiet"] = "Unity: {0} · no new lines for {1}",
+        ["activity.hint"] =
+            "Unity can stay quiet for half an hour or longer while it compiles the game's code or packs the APK, more on a " +
+            "slower computer. If Task Manager shows Unity, il2cpp or java using the CPU, it is still working.",
         ["stage.pico.download"] = "Downloading Java and ovrport",
         ["stage.pico.patch"] = "Converting the APK for Pico",
         ["stage.unity-setup.hub-download"] = "Downloading Unity Hub",
@@ -297,6 +302,10 @@ internal static partial class Strings
             "Unity could not build the APK. Try again; if it happens again, create a report and send it to us.",
         ["err.unity-install-failed"] =
             "Unity Hub could not install Unity by itself. Install it from Unity Hub's own window: use the button below.",
+        ["err.unity-android-incomplete"] =
+            "Unity 6000.3.17f1 is installed, but parts of its Android Build Support are missing on disk, although " +
+            "Unity Hub lists them as installed. In Unity Hub open Installs, click ⚙ next to 6000.3.17f1 and choose " +
+            "Uninstall. Then press \"Build APK\" again: the builder installs Unity anew.",
         ["err.hub-feed"] = "Could not reach Unity's download server. Check your internet connection and try again.",
         ["err.hub-hash"] = "The Unity Hub installer was damaged while downloading. Try again.",
         ["err.hub-signature"] =
