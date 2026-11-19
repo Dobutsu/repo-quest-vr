@@ -52,7 +52,9 @@ public sealed class GameInstall
         var text = new StringBuilder();
         foreach (var file in Directory.EnumerateFiles(Path, "*", SearchOption.AllDirectories)
                      .Select(f => (Rel: System.IO.Path.GetRelativePath(Path, f).Replace('\\', '/'), Full: f))
-                     .Where(f => !f.Rel.StartsWith("BepInEx/", StringComparison.OrdinalIgnoreCase))
+                     .Where(f => !f.Rel.StartsWith("BepInEx/", StringComparison.OrdinalIgnoreCase) &&
+                                 // SteamCMD's own bookkeeping next to a game it downloaded (macOS)
+                                 !f.Rel.StartsWith("steamapps/", StringComparison.Ordinal))
                      .OrderBy(f => f.Rel, StringComparer.Ordinal))
         {
             var info = new FileInfo(file.Full);
@@ -66,6 +68,10 @@ public sealed class GameInstall
     public string? SteamBuildId()
     {
         var manifest = System.IO.Path.Combine(Path, "..", "..", $"appmanifest_{SteamAppId}.acf");
+        // A game SteamCMD downloaded (macOS) keeps its manifest inside, in steamapps/
+        var inside = System.IO.Path.Combine(Path, "steamapps", $"appmanifest_{SteamAppId}.acf");
+        if (!File.Exists(manifest) && File.Exists(inside))
+            manifest = inside;
         try
         {
             return File.Exists(manifest) ? VdfNode.Parse(File.ReadAllText(manifest)).Child("AppState")?.Value("buildid") : null;

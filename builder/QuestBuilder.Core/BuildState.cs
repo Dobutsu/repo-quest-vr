@@ -9,6 +9,8 @@ namespace RepoQuest.Builder;
 public sealed class BuildState
 {
     public string? GamePath { get; set; }
+    /// <summary>macOS: the Steam account SteamCMD downloaded the game with (its login is cached by SteamCMD)</summary>
+    public string? SteamCmdUser { get; set; }
 
     /// <summary>Step id -> stamp of the inputs it last finished with (see <see cref="Pipeline.BuildPipeline"/>)</summary>
     public Dictionary<string, string> Stamps { get; set; } = new();

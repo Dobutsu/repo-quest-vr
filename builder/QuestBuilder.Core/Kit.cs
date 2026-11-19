@@ -25,7 +25,9 @@ public sealed record KitDownloads(
     PinnedPackage[] NuGet,
     PinnedRelease BuiltinShaders,
     PinnedTool? Java = null,
-    PinnedRelease? Ovrport = null);
+    PinnedRelease? Ovrport = null,
+    // macOS: Valve's SteamCMD downloads the Windows game (Game/SteamCmd.cs)
+    PinnedTool? SteamCmd = null);
 
 public sealed record UnityVersion(string Version, string Changeset);
 

@@ -84,10 +84,22 @@ public static class FileOps
         File.Move(temp, path, overwrite: true);
     }
 
-    public static long FreeSpace(string path)
+    public static long FreeSpace(string path) => new DriveInfo(VolumeOf(path)).AvailableFreeSpace;
+
+    /// <summary>
+    /// The volume a path is on: its drive on Windows; elsewhere the deepest mount point containing it (Path.GetPathRoot
+    /// is "/" for every path there, which put a workspace on an external disk on the system disk)
+    /// </summary>
+    internal static string VolumeOf(string path)
     {
-        var root = Path.GetPathRoot(Path.GetFullPath(path))!;
-        return new DriveInfo(root).AvailableFreeSpace;
+        var full = Path.GetFullPath(path);
+        if (OperatingSystem.IsWindows())
+            return Path.GetPathRoot(full)!;
+        return DriveInfo.GetDrives()
+                   .Select(d => d.RootDirectory.FullName)
+                   .Where(root => full == root || full.StartsWith(root.TrimEnd('/') + "/", StringComparison.Ordinal))
+                   .MaxBy(root => root.Length)
+               ?? "/";
     }
 
     // macOS: clones a file or a whole folder tree (APFS); strings marshal as UTF-8 on Unix

@@ -55,6 +55,11 @@ public partial class MainWindow : Window, IWindowServices
             LogList.ScrollIntoView(LogList.ItemCount - 1);
     }
 
+    /// <summary>The release page of Dobutsu VR Installer, which shows all our ports</summary>
+    private const string InstallerPage = "https://github.com/Dobutsu/dobutsu-vr-installer/releases/latest";
+
+    private void OnOpenInstaller(object? sender, RoutedEventArgs e) => Dialog<bool>.OpenUrl(InstallerPage);
+
     private async void OnCopyLog(object? sender, RoutedEventArgs e)
     {
         if (ViewModel is { } vm && Clipboard is { } clipboard)
@@ -84,6 +89,10 @@ public partial class MainWindow : Window, IWindowServices
         var choice = await Dialogs.PickDevice(devices).ShowAsync(this);
         return choice >= 0 ? devices[choice] : null;
     }
+
+    public Task<string?> AskSteamUserAsync(string? lastUser) => Dialogs.SteamUser(lastUser).ShowAsync(this);
+
+    public RepoQuest.Builder.Game.ISteamLoginPrompts SteamPrompts => new SteamWindowPrompts(this);
 
     public Task<bool> ShowInstallHelpAsync(bool unauthorized, bool pico) => Dialogs.InstallHelp(unauthorized, pico).ShowAsync(this);
 
@@ -164,6 +173,10 @@ public partial class MainWindow : Window, IWindowServices
                 ("install-none-pico", Dialogs.InstallHelp(unauthorized: false, pico: true)),
                 ("installed", Dialogs.Message(Loc.T("install.done.title"), Loc.T("install.done.text"), Loc.T("install.done.reinstalled"))),
                 ("cancel", Dialogs.Confirm(Loc.T("cancel.title"), Loc.T("cancel.text"), Loc.T("cancel.stop"), Loc.T("cancel.continue"))),
+                ("steam-user", Dialogs.SteamUser("player123")),
+                ("steam-password", Dialogs.SteamPassword("player123")),
+                ("steam-guard-email", Dialogs.SteamGuard(email: true, wrongBefore: false)),
+                ("steam-guard-app-wrong", Dialogs.SteamGuard(email: false, wrongBefore: true)),
             };
             foreach (var (name, dialog) in samples)
             {
@@ -181,6 +194,18 @@ public partial class MainWindow : Window, IWindowServices
         using var bitmap = new RenderTargetBitmap(size, new Vector(96, 96));
         bitmap.Render(window);
         bitmap.Save(path, new PngBitmapEncoderOptions());
+    }
+
+    /// <summary>SteamCMD's login questions, as dialogs over this window (asked from a background thread)</summary>
+    private sealed class SteamWindowPrompts(MainWindow window) : RepoQuest.Builder.Game.ISteamLoginPrompts
+    {
+        public Task<string?> AskPasswordAsync(string user) =>
+            Dispatcher.UIThread.InvokeAsync(() => Dialogs.SteamPassword(user).ShowAsync(window));
+
+        public Task<string?> AskGuardCodeAsync(bool email, bool wrongBefore) =>
+            Dispatcher.UIThread.InvokeAsync(() => Dialogs.SteamGuard(email, wrongBefore).ShowAsync(window));
+
+        public void ShowMobileConfirmation() => Log.Info("SteamCMD waits for the login to be approved in the Steam Mobile app");
     }
 
     /// <summary>The builder's questions to the player, as dialogs over this window (asked from background threads)</summary>

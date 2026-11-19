@@ -75,6 +75,48 @@ public static class Dialogs
         return box;
     }
 
+    /// <summary>macOS: which Steam account SteamCMD downloads the game for (null: cancelled)</summary>
+    public static Dialog<string?> SteamUser(string? lastUser)
+    {
+        var user = new TextBox { Text = lastUser ?? "", PlaceholderText = Loc.T("steamcmd.user"), MaxLength = 64 };
+        var dialog = new Dialog<string?>(Loc.T("steamcmd.title"), null)
+            .Text(Loc.T("steamcmd.text"))
+            .Text(Loc.T("steamcmd.privacy"), opacity: 0.85)
+            .Add(user)
+            .Text(Loc.T("steamcmd.size"), opacity: 0.7);
+        user.TextChanged += (_, _) => dialog.Revalidate();
+        return dialog
+            .Button(Loc.T("common.cancel"), (string?)null)
+            .Button(Loc.T("steamcmd.start"), () => user.Text?.Trim(), accent: true, enabled: () => !string.IsNullOrWhiteSpace(user.Text));
+    }
+
+    /// <summary>SteamCMD asks for the password (no saved login for this account yet)</summary>
+    public static Dialog<string?> SteamPassword(string user)
+    {
+        var password = new TextBox { PasswordChar = '•', PlaceholderText = Loc.T("steamcmd.password") };
+        var dialog = new Dialog<string?>(Loc.F("steamcmd.passwordTitle", user), null)
+            .Text(Loc.T("steamcmd.passwordText"))
+            .Add(password);
+        password.TextChanged += (_, _) => dialog.Revalidate();
+        return dialog
+            .Button(Loc.T("common.cancel"), (string?)null)
+            .Button(Loc.T("common.ok"), () => password.Text, accent: true, enabled: () => !string.IsNullOrEmpty(password.Text));
+    }
+
+    /// <summary>A Steam Guard code: from the e-mail Steam sent, or from the Steam Mobile app's authenticator</summary>
+    public static Dialog<string?> SteamGuard(bool email, bool wrongBefore)
+    {
+        var code = new TextBox { PlaceholderText = "XXXXX", MaxLength = 10 };
+        var dialog = new Dialog<string?>(Loc.T("steamcmd.guardTitle"), null);
+        if (wrongBefore)
+            dialog.Text(Loc.T("steamcmd.guardWrong"), bold: true);
+        dialog.Text(Loc.T(email ? "steamcmd.guardEmail" : "steamcmd.guardApp")).Add(code);
+        code.TextChanged += (_, _) => dialog.Revalidate();
+        return dialog
+            .Button(Loc.T("common.cancel"), (string?)null)
+            .Button(Loc.T("common.ok"), () => code.Text?.Trim(), accent: true, enabled: () => !string.IsNullOrWhiteSpace(code.Text));
+    }
+
     public static Dialog<bool> Defender(string workspace) =>
         new Dialog<bool>(Loc.T("defender.title"), false)
             .Text(Loc.F("defender.text", workspace))

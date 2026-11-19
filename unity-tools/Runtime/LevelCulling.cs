@@ -50,6 +50,7 @@ namespace RepoQuest
         private Type generatorType;
         private Type moduleType;
         private FieldInfo instanceField, generatedField, levelParentField, itemParentField;
+        private MethodInfo menuLevelMethod;
 
         private sealed class Entry
         {
@@ -119,6 +120,13 @@ namespace RepoQuest
             {
                 generatorType ??= assembly.GetType("LevelGenerator");
                 moduleType ??= assembly.GetType("Module");
+            }
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                menuLevelMethod = assembly.GetType("SemiFunc")?.GetMethod("MenuLevel", BindingFlags.Public | BindingFlags.Static,
+                    null, Type.EmptyTypes, null);
+                if (menuLevelMethod != null)
+                    break;
             }
             const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic;
             instanceField = generatorType?.GetField("Instance", all | BindingFlags.Static);
@@ -222,7 +230,7 @@ namespace RepoQuest
             var generator = instanceField.GetValue(null) as UnityEngine.Object;
             var levelParent = generator ? levelParentField.GetValue(generator) as GameObject : null;
             var generated = generator && (bool)generatedField.GetValue(generator);
-            if (!generated || !levelParent)
+            if (!generated || !levelParent || IsMenuLevel())
             {
                 if (roots.Count > 0)
                     Clear();
@@ -282,6 +290,22 @@ namespace RepoQuest
                     entryIndex = 0;
                     rootIndex++;
                 }
+            }
+        }
+
+        /// <summary>
+        /// The main menu, the lobby menu and the splash screen (SemiFunc.MenuLevel): one small scene that runs at full
+        /// frame rate anyway, and culling hid parts of the menu truck there (2026-11-19, the truck missing from the menu)
+        /// </summary>
+        private bool IsMenuLevel()
+        {
+            try
+            {
+                return menuLevelMethod != null && menuLevelMethod.Invoke(null, null) is true;
+            }
+            catch (Exception)
+            {
+                return false; // RunManager not up yet
             }
         }
 

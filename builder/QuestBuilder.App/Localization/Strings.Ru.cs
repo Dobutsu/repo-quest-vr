@@ -142,6 +142,64 @@ internal static partial class Strings
 
         ["log.title"] = "Журнал",
         ["log.debug"] = "Показывать всё (для поиска проблем)",
+        ["game.notFoundMac"] =
+            "Не найдена. У R.E.P.O. нет версии для Mac в Steam: скачайте Windows-версию через SteamCMD или укажите папку с REPO.exe.",
+        ["game.steamcmd"] =
+            "Скачать через SteamCMD…",
+        ["steamcmd.title"] =
+            "Скачать R.E.P.O. через SteamCMD",
+        ["steamcmd.text"] =
+            "У R.E.P.O. нет версии для Mac в Steam. SteamCMD, официальный консольный клиент Steam от Valve, скачает Windows-версию для вашего аккаунта в рабочую папку. Билдеру нужны только её файлы, запускать её он не будет.",
+        ["steamcmd.privacy"] =
+            "Пароль и код Steam Guard уходят в SteamCMD, а из него только в Steam; билдер их не хранит. SteamCMD запоминает вход, поэтому для обновлений игры потом ничего вводить не придётся.",
+        ["steamcmd.user"] =
+            "Имя аккаунта Steam",
+        ["steamcmd.size"] =
+            "Скачается около 1,5 ГБ. При первом запуске SteamCMD ещё скачает своё обновление.",
+        ["steamcmd.start"] =
+            "Скачать",
+        ["steamcmd.password"] =
+            "Пароль",
+        ["steamcmd.passwordTitle"] =
+            "Пароль Steam для {0}",
+        ["steamcmd.passwordText"] =
+            "У SteamCMD ещё нет сохранённого входа для этого аккаунта. Введите пароль от Steam.",
+        ["steamcmd.guardTitle"] =
+            "Steam Guard",
+        ["steamcmd.guardEmail"] =
+            "Steam отправил код на почту аккаунта. Введите его здесь.",
+        ["steamcmd.guardApp"] =
+            "Введите код из мобильного приложения Steam (Steam Guard).",
+        ["steamcmd.guardWrong"] =
+            "Этот код не подошёл. Введите самый свежий.",
+        ["steamcmd.preparing"] =
+            "Готовлю SteamCMD…",
+        ["steamcmd.login"] =
+            "Вхожу в Steam…",
+        ["steamcmd.login-confirm"] =
+            "Подтвердите вход в мобильном приложении Steam…",
+        ["steamcmd.download"] =
+            "Скачиваю игру… {0}%",
+        ["steamcmd.verify"] =
+            "Проверяю файлы игры… {0}%",
+        ["err.steamcmd-signature"] =
+            "SteamCMD не подписан Valve, поэтому не запущен. Удалите папку steamcmd в tools рабочей папки и повторите.",
+        ["err.rosetta-missing"] =
+            "SteamCMD — программа для Intel, ей нужна Rosetta. Откройте Терминал, выполните: softwareupdate --install-rosetta --agree-to-license, затем повторите.",
+        ["err.steam-password"] =
+            "Steam не принял имя аккаунта или пароль.",
+        ["err.steam-rate-limit"] =
+            "После нескольких попыток Steam временно заблокировал вход. Подождите около часа и повторите.",
+        ["err.steam-not-owned"] =
+            "На этом аккаунте Steam нет R.E.P.O.",
+        ["err.steamcmd-failed"] =
+            "SteamCMD не смог скачать игру. Ниже его последнее сообщение.",
+
+        ["more.title"] = "Другие VR-порты от Dobutsu",
+        ["more.text"] =
+            "Вышли Lethal Company VR и PEAK VR. Dobutsu VR Installer показывает все наши порты, находит ваши игры в Steam и обновляет билдеры.",
+        ["more.button"] = "Скачать установщик",
+
         ["log.copy"] = "Копировать всё",
 
         ["update.title"] = "Обновления",

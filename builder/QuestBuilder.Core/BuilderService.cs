@@ -92,7 +92,8 @@ public sealed class BuilderService
         Kit = kitDir is not null ? Kit.Load(kitDir) : Kit.ExtractEmbedded(Workspace);
         Unity = UnityInstall.Find(Kit.Manifest.Unity.Version);
 
-        var gamePath = GameInstall.IsValid(State.GamePath) ? State.GamePath : GameLocator.Find();
+        var gamePath = GameInstall.IsValid(State.GamePath) ? State.GamePath
+            : GameLocator.Find() ?? (GameInstall.IsValid(SteamCmd.GameFolder(Workspace)) ? SteamCmd.GameFolder(Workspace) : null);
         Game = gamePath is not null ? new GameInstall(gamePath) : null;
         Log.Info($"kit {Kit.Version}, workspace {Workspace.Root}, game {Game?.Path ?? "not found"}, unity {Unity?.Root ?? "not found"}");
     }
@@ -112,6 +113,28 @@ public sealed class BuilderService
         State.GamePath = Game.Path;
         State.Save(Workspace.StatePath);
         return null;
+    }
+
+    /// <summary>macOS: whether the game can be downloaded with SteamCMD (R.E.P.O. has no Mac version on Steam)</summary>
+    public bool CanDownloadGame => SteamCmd.IsSupported;
+
+    /// <summary>The Steam account the game was last downloaded with (SteamCMD remembers its login)</summary>
+    public string? SteamCmdUser => State.SteamCmdUser;
+
+    /// <summary>
+    /// macOS: downloads or updates the Windows version of the game with SteamCMD into the workspace and makes it the
+    /// game the builder uses
+    /// </summary>
+    public async Task DownloadGameAsync(string user, ISteamLoginPrompts prompts, IProgress<(double? Fraction, string Text)> progress,
+        CancellationToken ct)
+    {
+        using var awake = SleepBlocker.Start();
+        var folder = await SteamCmd.DownloadGameAsync(Workspace, Kit.Manifest, user, prompts, progress, ct);
+        State.SteamCmdUser = user;
+        State.Save(Workspace.StatePath);
+        var problem = SetGamePath(folder);
+        if (problem is not null)
+            throw new BuildException($"The downloaded game is not usable ({problem})") { Code = "steamcmd-failed" };
     }
 
     /// <summary>Moves the builder to another workspace (the old one stays as it is); a problem code or null</summary>

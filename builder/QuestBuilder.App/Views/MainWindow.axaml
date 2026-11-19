@@ -169,8 +169,13 @@
                             <TextBlock Text="{Binding GameProblemText}" Classes="problem"
                                        IsVisible="{Binding GameProblemText, Converter={x:Static ObjectConverters.IsNotNull}}" />
                         </StackPanel>
-                        <Button Grid.Column="1" Content="{l:Tr game.choose}" Command="{Binding ChooseGameCommand}"
-                                IsEnabled="{Binding IsIdle}" VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Top">
+                            <Button Content="{l:Tr game.choose}" Command="{Binding ChooseGameCommand}"
+                                    IsEnabled="{Binding IsIdle}" HorizontalAlignment="Stretch" />
+                            <!-- macOS: the Windows game through Valve's SteamCMD -->
+                            <Button Content="{l:Tr game.steamcmd}" Command="{Binding DownloadGameCommand}"
+                                    IsEnabled="{Binding IsIdle}" IsVisible="{Binding CanDownloadGame}" HorizontalAlignment="Stretch" />
+                        </StackPanel>
                     </Grid>
                 </Border>
 
@@ -249,6 +254,19 @@
                         </ItemsControl>
                         <TextBlock Text="{l:Tr common.checking}" Classes="dim" IsVisible="{Binding IsChecking}" />
                     </StackPanel>
+                </Border>
+
+
+                <!-- Our other ports: the installer that has them all -->
+                <Border Classes="card">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{l:Tr more.title}" Classes="heading" />
+                            <TextBlock Text="{l:Tr more.text}" Classes="dim" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="{l:Tr more.button}" Click="OnOpenInstaller"
+                                VerticalAlignment="Center" Margin="12,0,0,0" />
+                    </Grid>
                 </Border>
 
             </StackPanel>

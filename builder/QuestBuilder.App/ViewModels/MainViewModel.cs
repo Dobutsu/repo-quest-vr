@@ -25,6 +25,10 @@ public interface IWindowServices
     Task<bool> ShowInstallHelpAsync(bool unauthorized, bool pico);
     Task<UninstallChoice?> AskUninstallAsync(string workspace, bool defenderExclusion, string unityVersion);
     IBuilderPrompts Prompts { get; }
+    /// <summary>macOS: the Steam account to download the game with (null: cancelled)</summary>
+    Task<string?> AskSteamUserAsync(string? lastUser);
+    /// <summary>macOS: SteamCMD's password and Steam Guard questions</summary>
+    RepoQuest.Builder.Game.ISteamLoginPrompts SteamPrompts { get; }
     void Shutdown();
 }
 
@@ -177,7 +181,8 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
     private void Apply(BuilderStatus s, bool resetSteps)
     {
         GameFound = s.GamePath is not null;
-        GamePathText = s.GamePath ?? Loc.T("game.notFound");
+        GamePathText = s.GamePath ?? Loc.T(CanDownloadGame ? "game.notFoundMac" : "game.notFound");
+        OnPropertyChanged(nameof(CanDownloadGame));
         GameDetailText = s.GamePath is null
             ? null
             : Loc.F("game.version", s.GameVersion ?? Loc.T("common.unknown")) + " · " +
@@ -240,6 +245,42 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             return;
         var problem = service.SetGamePath(path);
         GameProblemText = problem is null ? null : Loc.TryT($"problem.{problem}") ?? problem;
+        await RefreshAsync();
+    }
+
+    /// <summary>macOS: R.E.P.O. has no Mac version on Steam; SteamCMD downloads the Windows one</summary>
+    public bool CanDownloadGame => service?.CanDownloadGame == true;
+
+    [RelayCommand]
+    private async Task DownloadGameAsync()
+    {
+        if (service is null || IsBusy)
+            return;
+        var user = await view.AskSteamUserAsync(service.SteamCmdUser);
+        if (string.IsNullOrWhiteSpace(user))
+            return;
+        IsBusy = true;
+        BusyText = Loc.T("steamcmd.preparing");
+        try
+        {
+            var progress = new Progress<(double? Fraction, string Text)>(p => BusyText = p.Fraction is { } f
+                ? Loc.F($"steamcmd.{p.Text}", (f * 100).ToString("0.0", Loc.Instance.Culture))
+                : Loc.TryT($"steamcmd.{p.Text}") ?? p.Text);
+            await Task.Run(() => service.DownloadGameAsync(user, view.SteamPrompts, progress, CancellationToken.None));
+            GameProblemText = null;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception e)
+        {
+            await view.ShowErrorAsync(e, service.CreateReport, null);
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyText = null;
+        }
         await RefreshAsync();
     }
 

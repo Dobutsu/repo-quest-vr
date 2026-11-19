@@ -14,7 +14,12 @@ public static partial class UnityHub
     public static string? Executable()
     {
         var candidates = Platform.IsMac
-            ? new[] { "/Applications/Unity Hub.app/Contents/MacOS/Unity Hub" }
+            ? new[]
+            {
+                "/Applications/Unity Hub.app/Contents/MacOS/Unity Hub",
+                // Where the builder installs it when /Applications is not writable
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Applications", "Unity Hub.app", "Contents", "MacOS", "Unity Hub"),
+            }
             : new[]
             {
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Unity Hub", "Unity Hub.exe"),

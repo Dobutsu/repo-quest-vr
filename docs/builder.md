@@ -7,8 +7,20 @@ installs it on the headset. New versions are installed through it as well. The p
 
 The window is in English by default; the EN/RU switch in its header turns on Russian, and the choice is remembered.
 
-There is no Mac release for now (the author's decision of 2026-10-03). The Mac stays the development machine: our
-builds run the same pipeline from the terminal (`scripts/build.sh`), and the window is run from source for testing.
+A Mac version for Apple Silicon (`RepoQuestBuilder.app`, decided 2026-11-18, not yet released) is the same window with
+the osx-arm64 kit tools. What differs on a Mac:
+- The game has no Mac version, so it comes from SteamCMD (Valve's console client, x86_64 under Rosetta): "Download with
+  SteamCMD…" asks for the Steam account, then the password and the Steam Guard code as SteamCMD asks for them
+  (`Game/SteamCmd.cs` answers its prompts on stdin and never logs them). The game goes to `<workspace>/game/REPO`
+  with `+@sSteamCmdForcePlatformType windows`. SteamCMD's tarball is pinned in `kit.json` (sha256) and its signature is
+  checked against Valve's team ID. A game in a CrossOver/Whisky bottle or a chosen folder works as before.
+- Unity Hub comes from Unity's `latest-mac.yml` feed (sha512, signature checked against Unity's team ID) and goes to
+  /Applications, or ~/Applications when that is not writable.
+- The app is not notarized (no Apple Developer ID): it is signed ad hoc, and `README-mac.txt` explains "Open Anyway".
+  A self-update replaces the exe inside the bundle, moves the old one out of it and signs the bundle again. Before the
+  swap it starts a trivial process: the compressed single-file exe loads assemblies from its own file on first use, and
+  after the rename `System.IO.Pipes` could no longer be found (seen on 2026-11-18).
+Our own builds still run the pipeline from the terminal (`scripts/build.sh`).
 
 ## Design
 
@@ -181,8 +193,13 @@ scripts/release.sh 1.0.1 --notes-ru notes-ru.txt --notes-en notes-en.txt [--upda
 ```
 
 The output goes to `work/release/1.0.1/`: `RepoQuestBuilder-1.0.1-win-x64.zip` (the exe with the kit + README),
-`latest.json`, `latest.json.sig`, and with `--mac-test` also a build for this Mac. Nothing is published by the script.
-Public releases are uploaded to GitHub Releases (`gh release create`) with those three files.
+`RepoQuestBuilder-1.0.1-osx-arm64.zip` (the .app + README-mac.txt, made with `ditto` to keep the bundle intact),
+`latest.json`, `latest.json.sig`, and with `--mac-test` also `RepoQuest-cli-1.0.1-osx-arm64.zip` (the CLI, for testing,
+not in latest.json). Nothing is published by the script. Public releases are uploaded to GitHub Releases
+(`gh release create`) with the two builder zips and the two latest.json files.
+
+For the Thunderstore package, run `python3 scripts/package-thunderstore.py` against the existing release.
+See [thunderstore.md](thunderstore.md) for metadata, validation and upload settings.
 
 To test an update without publishing:
 1. Put the old exe in a folder with an `update-source.txt` next to it holding the path to
@@ -205,6 +222,12 @@ To test an update without publishing:
   --yes`, and for self-update `QuestBuilder.Cli update --update-source work/release/<new> --workspace <folder>
   --then-build --yes`.
 - The window without a display: `RepoQuestBuilder --kit work/kit --screenshot <folder>` renders the window, the build
-  state and every dialog in both languages to PNG.
+  state and every dialog in both languages to PNG. On a Mac the display must be awake (`caffeinate -u -t 60`), or
+  Avalonia fails with "RenderTimer ... -6661".
+- SteamCMD without the window: `QuestBuilder.Cli download-game --user <account> --workspace <folder>` asks for the
+  password and code in the terminal. With a made-up account it must end in "Steam refused the login".
+- The Mac app's self-update: put the `--mac-test` CLI inside a bundle as `RepoQuestBuilder.app/Contents/MacOS/
+  RepoQuestBuilder`, sign it ad hoc, run `update --update-source work/release/<new> --yes`; the new window starts from
+  the bundle and `codesign --verify --deep --strict` passes.
 - A friend tests on Windows. If something fails, they click "Create report" and send the zip: only logs and a summary,
   no game files.

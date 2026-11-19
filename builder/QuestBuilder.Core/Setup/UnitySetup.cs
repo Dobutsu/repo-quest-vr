@@ -23,7 +23,7 @@ public static partial class UnitySetup
         var existing = UnityInstall.Find(version.Version);
         if (existing is { HasAndroid: true })
             return existing;
-        if (!Platform.IsWindows)
+        if (!Platform.IsWindows && !Platform.IsMac)
             throw new BuildException($"Install Unity {version.Version} with Android Build Support (SDK, NDK, OpenJDK) " +
                                      "in Unity Hub") { Code = "unity-missing" };
 
@@ -38,7 +38,8 @@ public static partial class UnitySetup
         // workspace's drive (the Hub's install path is put back afterwards)
         string? previousPath = null;
         var defaultRoot = UnityInstall.DefaultRoots(version.Version).First();
-        if (existing is null && FreeBytes(defaultRoot) < EditorBytes)
+        // (Windows: on a Mac the Hub's default is /Applications on the only internal disk)
+        if (Platform.IsWindows && existing is null && FreeBytes(defaultRoot) < EditorBytes)
         {
             previousPath = (await HubAsync(hub, ["install-path", "-g"], null, ct)).TailText.Trim();
             var target = Path.Combine(Path.GetPathRoot(workspace.Root)!, "Unity", "Hub", "Editor");
@@ -90,6 +91,8 @@ public static partial class UnitySetup
     private static async Task<string> InstallHubAsync(Workspace workspace,
         IProgress<(string Stage, double? Fraction, string? Detail)> progress, CancellationToken ct)
     {
+        if (Platform.IsMac)
+            return await InstallHubOnMacAsync(workspace, progress, ct);
         var feed = await Downloader.GetStringAsync(HubFeed + "latest.yml", ct);
         var entry = HubInstallerRegex().Match(feed);
         if (!entry.Success)
@@ -126,6 +129,80 @@ public static partial class UnitySetup
         return UnityHub.Executable()
                ?? throw new BuildException("Unity Hub was not installed", $"installer exit code {process.ExitCode}")
                    { Code = "hub-install" };
+    }
+
+    /// <summary>Unity's Developer ID team (macOS): the Hub must be signed by it</summary>
+    private const string UnityTeam = "9QW8UQUTAA";
+
+    /// <summary>
+    /// macOS: the Hub comes as a zip with Unity Hub.app (latest-mac.yml: per architecture, sha512). It is unpacked with
+    /// ditto (keeps the bundle's symlinks and signature), checked against Unity's Developer ID and moved to
+    /// /Applications, or ~/Applications when /Applications is not writable; no administrator rights are needed.
+    /// </summary>
+    private static async Task<string> InstallHubOnMacAsync(Workspace workspace,
+        IProgress<(string Stage, double? Fraction, string? Detail)> progress, CancellationToken ct)
+    {
+        var feed = await Downloader.GetStringAsync(HubFeed + "latest-mac.yml", ct);
+        var arch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64
+            ? "arm64" : "x64";
+        var entry = MacHubRegex().Matches(feed).FirstOrDefault(m => m.Groups[2].Value == arch);
+        if (entry is null)
+            throw new BuildException("Could not read Unity Hub's download feed", feed) { Code = "hub-feed" };
+        var file = entry.Groups[1].Value;
+        var sha512 = entry.Groups[3].Value;
+        var zip = Path.Combine(workspace.Downloads, Path.GetFileName(file));
+        await Downloader.DownloadAsync(HubFeed + file, zip, null,
+            new Progress<DownloadProgress>(p => progress.Report(("hub-download",
+                p.Total is { } total ? p.Done / (double)total : null, $"{p.Done >> 20}/{(p.Total ?? 0) >> 20} MB"))), ct);
+        if (Hashing.Sha512Base64File(zip) != sha512)
+        {
+            File.Delete(zip);
+            throw new BuildException("The downloaded Unity Hub is damaged; try again") { Code = "hub-hash" };
+        }
+
+        progress.Report(("hub-install", null, null));
+        var staging = Path.Combine(workspace.Downloads, "unity-hub");
+        FileOps.DeleteDirectory(staging);
+        await ProcessRunner.RunCheckedAsync(new ProcessSpec { FileName = "/usr/bin/ditto", Arguments = ["-x", "-k", zip, staging] },
+            "Could not unpack Unity Hub", ct: ct);
+        var app = Path.Combine(staging, "Unity Hub.app");
+        var check = await ProcessRunner.RunAsync(new ProcessSpec
+        {
+            FileName = "/usr/bin/codesign",
+            Arguments = ["--verify", "--deep", "--strict", $"-R=anchor apple generic and certificate leaf[subject.OU] = \"{UnityTeam}\"", app],
+            LogPrefix = "[codesign] ",
+        }, ct: ct);
+        if (check.ExitCode != 0)
+        {
+            FileOps.DeleteDirectory(staging);
+            throw new BuildException("The downloaded Unity Hub is not signed by Unity", check.TailText) { Code = "hub-signature" };
+        }
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var target = IsWritable("/Applications") ? "/Applications" : Path.Combine(home, "Applications");
+        Directory.CreateDirectory(target);
+        var installed = Path.Combine(target, "Unity Hub.app");
+        FileOps.DeleteDirectory(installed);
+        await ProcessRunner.RunCheckedAsync(new ProcessSpec { FileName = "/bin/mv", Arguments = [app, installed] },
+            "Could not install Unity Hub", ct: ct);
+        FileOps.DeleteDirectory(staging);
+        Log.Info($"Unity Hub installed in {installed}");
+        return UnityHub.Executable() ?? throw new BuildException("Unity Hub was not installed") { Code = "hub-install" };
+    }
+
+    private static bool IsWritable(string folder)
+    {
+        try
+        {
+            var probe = Path.Combine(folder, $".repoquest-{Guid.NewGuid():N}");
+            File.WriteAllText(probe, "");
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The installer must be signed by Unity Technologies (Windows Authenticode)</summary>
@@ -191,6 +268,10 @@ public static partial class UnitySetup
     // latest.yml: "- url: 3.22.2/UnityHubSetup-3.22.2-x64.exe\n    sha512: <base64>"
     [GeneratedRegex(@"url:\s*(\S*UnityHubSetup-[\d.]+-x64\.exe)\s*\n\s*sha512:\s*(\S+)")]
     private static partial Regex HubInstallerRegex();
+
+    // latest-mac.yml: "- url: 4.0.1/UnityHubSetup-4.0.1-arm64.zip\n    sha512: <base64>"
+    [GeneratedRegex(@"url:\s*(\S*UnityHubSetup-[\d.]+-(arm64|x64)\.zip)\s*\n\s*sha512:\s*(\S+)")]
+    private static partial Regex MacHubRegex();
 
     [GeneratedRegex(@"(\d{1,3}(?:\.\d+)?)\s*%")]
     private static partial Regex PercentRegex();

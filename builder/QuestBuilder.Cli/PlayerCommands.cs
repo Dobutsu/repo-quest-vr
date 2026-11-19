@@ -10,6 +10,7 @@ namespace RepoQuest.Builder.Cli;
 ///   update [--update-source &lt;url|dir&gt;] [--workspace &lt;dir&gt;] [--then-build] [--yes]
 ///   install [--workspace &lt;dir&gt;] [--kit &lt;dir&gt;]
 ///   uninstall [--workspace &lt;dir&gt;] [--headset] [--files] [--defender]
+///   download-game --user &lt;steam account&gt; [--workspace &lt;dir&gt;] [--kit &lt;dir&gt;]   macOS: the game through SteamCMD
 /// </summary>
 internal static class PlayerCommands
 {
@@ -89,6 +90,55 @@ internal static class PlayerCommands
             Console.WriteLine($"removed; kept: {result.KeptBackups ?? "nothing"}; failed: {(result.Failed.Count == 0 ? "nothing" : string.Join(", ", result.Failed))}");
         }
         return 0;
+    }
+
+    /// <summary>macOS: the Windows game through SteamCMD, asking for the password and Steam Guard code in the terminal</summary>
+    public static async Task<int> DownloadGameAsync(Options options)
+    {
+        var user = options.Get("user") ?? throw new BuildException("--user <steam account> is required");
+        var service = Start(options);
+        using var cancel = CancelOnCtrlC();
+        var last = "";
+        var progress = new Progress<(double? Fraction, string Text)>(p =>
+        {
+            var text = p.Fraction is { } f ? $"{p.Text} {f * 100:0}%" : p.Text;
+            if (text != last)
+                Console.WriteLine(last = text);
+        });
+        await service.DownloadGameAsync(user, new ConsoleSteamPrompts(), progress, cancel.Token);
+        Console.WriteLine($"game: {service.Game?.Path} ({service.Game?.Version()})");
+        return 0;
+    }
+
+    private sealed class ConsoleSteamPrompts : RepoQuest.Builder.Game.ISteamLoginPrompts
+    {
+        public Task<string?> AskPasswordAsync(string user) => Task.FromResult(ReadSecret($"Steam password for {user}: "));
+
+        public Task<string?> AskGuardCodeAsync(bool email, bool wrongBefore)
+        {
+            Console.Write($"{(wrongBefore ? "That code did not work. " : "")}Steam Guard code ({(email ? "e-mail" : "Steam Mobile app")}): ");
+            return Task.FromResult(Console.ReadLine());
+        }
+
+        public void ShowMobileConfirmation() => Console.WriteLine("Approve the login in the Steam Mobile app…");
+
+        private static string? ReadSecret(string prompt)
+        {
+            Console.Write(prompt);
+            var text = new System.Text.StringBuilder();
+            while (true)
+            {
+                var key = Console.ReadKey(intercept: true);
+                if (key.Key == ConsoleKey.Enter)
+                    break;
+                if (key.Key == ConsoleKey.Backspace && text.Length > 0)
+                    text.Length--;
+                else if (!char.IsControl(key.KeyChar))
+                    text.Append(key.KeyChar);
+            }
+            Console.WriteLine();
+            return text.ToString();
+        }
     }
 
     private static BuilderService Start(Options options)

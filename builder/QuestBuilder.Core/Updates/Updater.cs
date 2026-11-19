@@ -114,6 +114,7 @@ public static class SelfUpdater
     /// <summary>Puts the builder from a release zip in place of this one and starts it; the caller then exits</summary>
     public static void ApplyAndRestart(string zipPath, IEnumerable<string> restartArguments)
     {
+        LoadProcessAssemblies();
         var exe = CurrentExecutable;
         var dir = Path.GetDirectoryName(exe)!;
         var name = Path.GetFileName(exe);
@@ -124,9 +125,13 @@ public static class SelfUpdater
                         ?? zip.Entries.FirstOrDefault(e => e.Name.EndsWith(Platform.IsWindows ? ".exe" : "Builder", StringComparison.OrdinalIgnoreCase))
                         ?? throw new BuildException("The update has no builder inside");
             entry.ExtractToFile(staged, overwrite: true);
-            // Other files of the release (README) are refreshed too
-            foreach (var other in zip.Entries.Where(e => e != entry && e.Name.Length > 0 && !e.FullName.Contains('/')))
-                other.ExtractToFile(Path.Combine(dir, other.Name), overwrite: true);
+            // Other files of the release (README) are refreshed too; on a Mac the exe sits inside the .app bundle,
+            // where they do not belong
+            if (Platform.IsWindows)
+            {
+                foreach (var other in zip.Entries.Where(e => e != entry && e.Name.Length > 0 && !e.FullName.Contains('/')))
+                    other.ExtractToFile(Path.Combine(dir, other.Name), overwrite: true);
+            }
         }
 
         var old = OldPath(exe);
@@ -135,11 +140,61 @@ public static class SelfUpdater
         File.Move(staged, exe);
         if (!OperatingSystem.IsWindows())
             File.SetUnixFileMode(exe, File.GetUnixFileMode(old));
+        if (OperatingSystem.IsMacOS())
+            ResignBundle(exe, old);
 
         var start = new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = dir };
         foreach (var argument in restartArguments)
             start.ArgumentList.Add(argument);
         Process.Start(start);
+    }
+
+    /// <summary>
+    /// macOS: the new exe replaced the one inside RepoQuestBuilder.app, whose ad-hoc signature covered the old one; the
+    /// bundle is signed again (ad hoc, as released), without the .old file, which must not be part of the seal
+    /// </summary>
+    private static void ResignBundle(string exe, string old)
+    {
+        var macOs = Path.GetDirectoryName(exe)!;
+        var bundle = Path.GetDirectoryName(Path.GetDirectoryName(macOs)!)!;
+        if (!bundle.EndsWith(".app", StringComparison.OrdinalIgnoreCase))
+            return;
+        // The old exe leaves the bundle (it is still running, so it is moved, not deleted)
+        var outside = Path.Combine(Path.GetTempPath(), $"RepoQuestBuilder.old-{Environment.ProcessId}");
+        try
+        {
+            File.Move(old, outside, overwrite: true);
+        }
+        catch (IOException e)
+        {
+            Log.Warn($"could not move {old} out of the app: {e.Message}");
+        }
+        try
+        {
+            using var codesign = Process.Start(new ProcessStartInfo("/usr/bin/codesign", ["--force", "--deep", "-s", "-", bundle])
+                { UseShellExecute = false, RedirectStandardError = true });
+            codesign?.WaitForExit(60_000);
+            if (codesign is { ExitCode: not 0 })
+                Log.Warn($"codesign {bundle}: {codesign.StandardError.ReadToEnd()}");
+        }
+        catch (Exception e)
+        {
+            Log.Warn($"codesign {bundle}: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// A single-file build reads its assemblies from the exe file when they are first used (they are compressed in it);
+    /// on a Mac they cannot be found any more once the exe has been renamed, so what starting codesign and the new
+    /// version needs (System.Diagnostics.Process, System.IO.Pipes) is loaded first, by starting a process the same way
+    /// </summary>
+    private static void LoadProcessAssemblies()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var warm = Process.Start(new ProcessStartInfo("/usr/bin/true") { UseShellExecute = false, RedirectStandardError = true });
+        warm?.StandardError.ReadToEnd();
+        warm?.WaitForExit();
     }
 
     /// <summary>Removes the previous version left by an update (it was still running then)</summary>

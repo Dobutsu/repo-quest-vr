@@ -38,8 +38,9 @@ input, the scene handoff, grabbing, vehicles, fonts, the shop mirror) come from
 
 ## What works
 
-The current builder (1.2.1) is for **R.E.P.O. 0.5.1** and Unity 6.3. On 0.5.1 it has been tested on a Quest 3 in
-singleplayer: menus, the shop and the new Desert level, 72 FPS at its extraction point. How many lamps light the scene and
+The current builder (1.3.0) is for **R.E.P.O. 0.5.2** and Unity 6.3. On 0.5.2 it has been tested on a Quest 3 in
+singleplayer: the menu, a level and the shop; builder 1.2.x on 0.5.1 also in the new Desert level, 72 FPS at its
+extraction point. How many lamps light the scene and
 how far the level is drawn are set in VR Settings → Rendering (Lamps, Room Distance, Small Object Distance). Builder 1.1.3 on
 0.5.0 was also tested in levels with monsters, with the shop mirror (Shop Mirror Single Pass) and joining friends on
 PC, leaving and joining again; the Quest 2 has been tried in singleplayer (menu and shop). Hosting and Pico have not

@@ -139,6 +139,64 @@ internal static partial class Strings
 
         ["log.title"] = "Log",
         ["log.debug"] = "Show everything (for troubleshooting)",
+        ["game.notFoundMac"] =
+            "Not found. R.E.P.O. has no Mac version on Steam: download the Windows version with SteamCMD, or choose a folder with REPO.exe.",
+        ["game.steamcmd"] =
+            "Download with SteamCMD…",
+        ["steamcmd.title"] =
+            "Download R.E.P.O. with SteamCMD",
+        ["steamcmd.text"] =
+            "R.E.P.O. has no Mac version on Steam. SteamCMD, Valve's official command-line Steam client, downloads the Windows version for your account into the working folder. The builder needs only its files; it does not run it.",
+        ["steamcmd.privacy"] =
+            "Your password and Steam Guard code go to SteamCMD and from it only to Steam; the builder does not store them. SteamCMD remembers the login, so updating the game later asks for nothing.",
+        ["steamcmd.user"] =
+            "Steam account name",
+        ["steamcmd.size"] =
+            "About 1.5 GB is downloaded. The first start of SteamCMD also downloads its own update.",
+        ["steamcmd.start"] =
+            "Download",
+        ["steamcmd.password"] =
+            "Password",
+        ["steamcmd.passwordTitle"] =
+            "Steam password for {0}",
+        ["steamcmd.passwordText"] =
+            "SteamCMD has no saved login for this account yet. Enter the account's Steam password.",
+        ["steamcmd.guardTitle"] =
+            "Steam Guard",
+        ["steamcmd.guardEmail"] =
+            "Steam sent a code to the account's e-mail. Enter it here.",
+        ["steamcmd.guardApp"] =
+            "Enter the code from the Steam Mobile app (Steam Guard).",
+        ["steamcmd.guardWrong"] =
+            "That code did not work. Try the newest one.",
+        ["steamcmd.preparing"] =
+            "Preparing SteamCMD…",
+        ["steamcmd.login"] =
+            "Logging in to Steam…",
+        ["steamcmd.login-confirm"] =
+            "Approve the login in the Steam Mobile app on your phone…",
+        ["steamcmd.download"] =
+            "Downloading the game… {0}%",
+        ["steamcmd.verify"] =
+            "Checking the game's files… {0}%",
+        ["err.steamcmd-signature"] =
+            "SteamCMD is not signed by Valve, so it was not started. Delete the steamcmd folder in the working folder's tools and try again.",
+        ["err.rosetta-missing"] =
+            "SteamCMD is an Intel program and needs Rosetta. Open Terminal, run: softwareupdate --install-rosetta --agree-to-license, then try again.",
+        ["err.steam-password"] =
+            "Steam did not accept the account name or password.",
+        ["err.steam-rate-limit"] =
+            "Steam blocked logins for a while after several attempts. Wait about an hour and try again.",
+        ["err.steam-not-owned"] =
+            "This Steam account does not own R.E.P.O.",
+        ["err.steamcmd-failed"] =
+            "SteamCMD could not download the game. The details below show its last message.",
+
+        ["more.title"] = "More VR ports by Dobutsu",
+        ["more.text"] =
+            "Lethal Company VR and PEAK VR are out too. Dobutsu VR Installer shows our ports, finds your games in Steam and keeps every builder up to date.",
+        ["more.button"] = "Get the installer",
+
         ["log.copy"] = "Copy all",
 
         ["update.title"] = "Updates",
