@@ -1,0 +1,438 @@
+diff -ruN a/Source/Config.cs b/Source/Config.cs
+--- a/Source/Config.cs	2026-11-21 20:21:14
++++ b/Source/Config.cs	2026-11-21 20:21:14
+@@ -17,6 +17,11 @@
+ 
+     // General configuration
+ 
++    // Quest port: Patches/UI/HostButtonsPatches.cs
++    [ConfigDescriptor(customName: "Host Game Buttons", trueText: "Shown", falseText: "Hidden"), QuestOnly]
++    public ConfigEntry<bool> ShowHostButtons { get; } = file.Create("General", nameof(ShowHostButtons), false,
++        "Shows Private Game and Public Game in the main menu. Hosting a game on the headset is not tested: they are hidden by default. Joining a friend's game works either way.");
++
+     [ConfigDescriptor(customName: "Enable VR", trueText: "Disable", falseText: "Enable")]
+     public ConfigEntry<bool> DisableVR { get; } = file.Create("General", nameof(DisableVR), false,
+         "Disables the main functionality of this mod, can be used if you want to play without VR while keeping the mod installed.");
+@@ -127,6 +132,20 @@
+ 
+     // Rendering configuration
+ 
++    // Quest port: Rendering/GraphicsPreset.cs sets the settings below from the mode; changing one of them by hand
++    // switches the mode to Personal
++    [ConfigDescriptor(customName: "Graphics Mode", enumDisableBar: true), QuestOnly]
++    public ConfigEntry<GraphicsModeOption> GraphicsMode { get; } =
++        file.Create("Rendering", nameof(GraphicsMode), GraphicsModeOption.Performance,
++            new ConfigDescription(
++                "Quality: Application SpaceWarp (the game renders 36 frames a second and the headset makes the frames between), post-processing, more pixel lights. Performance: every frame rendered at 72, no post-processing, one pixel light. Personal: your own combination; changing any of these settings by hand switches to it.",
++                new AcceptableValueEnum<GraphicsModeOption>()));
++
++    // Quest port: unity-tools/Runtime/QuestSpaceWarp.cs reads it (XR_FB_space_warp)
++    [ConfigDescriptor(customName: "Application SpaceWarp"), QuestOnly]
++    public ConfigEntry<bool> SpaceWarp { get; } = file.Create("Rendering", nameof(SpaceWarp), false,
++        "The game renders 36 frames a second and the headset makes the frames between from the head's movement, so you still see 72. Twice the time for each frame: room for post-processing and more lights. Off: the game renders all 72.");
++
+     [ConfigDescriptor(stepSize: 5f, suffix: "%")]
+     public ConfigEntry<int> CameraResolution { get; } = file.Create("Rendering", nameof(CameraResolution), 100,
+         new ConfigDescription(
+@@ -139,6 +158,20 @@
+             "How many lights can light an object at full quality. Too few and lights compete (a surface darkens when the flashlight comes near); more costs performance. The PC game uses 12.",
+             new AcceptableValueRange<int>(1, 12)));
+ 
++    // Quest port: Rendering/QualityExtras.cs
++    [ConfigDescriptor(customName: "Anti-Aliasing (MSAA)", enumDisableBar: true), QuestOnly]
++    public ConfigEntry<MsaaOption> Msaa { get; } = file.Create("Rendering", nameof(Msaa), MsaaOption.Off,
++        new ConfigDescription(
++            "Multisample anti-aliasing of the eyes' images: smoother edges, less shimmering. Expensive on Quest 3: X2 costs about 9 ms of GPU time per frame (the shop then falls below 36 frames a second), X4 about 17 ms.",
++            new AcceptableValueEnum<MsaaOption>()));
++
++    // Quest port: Rendering/QualityExtras.cs
++    [ConfigDescriptor(customName: "Shadows", enumDisableBar: true), QuestOnly]
++    public ConfigEntry<ShadowOption> Shadows { get; } = file.Create("Rendering", nameof(Shadows), ShadowOption.Game,
++        new ConfigDescription(
++            "Game: as the game's Graphics settings set them (shadow quality and distance). Medium: sharper shadow maps, shadows up to 25 m. High: also soft edges. Each step costs GPU time where shadows are cast (flashlights).",
++            new AcceptableValueEnum<ShadowOption>()));
++
+     [ConfigDescriptor(customName: "Lamp Lighting"), QuestOnly]
+     public ConfigEntry<bool> LampLighting { get; } = file.Create("Rendering", nameof(LampLighting), true,
+         "Light the lamps nearest to you per pixel, all in one pass, instead of Unity lighting each object with a few of them in extra passes: no seams between objects and less work for the headset, but lamps cast no shadows. Flashlights are unchanged.");
+@@ -252,6 +285,14 @@
+             PixelLightCount.SettingChanged += (_, _) => QualitySettings.pixelLightCount = PixelLightCount.Value;
+         }
+         PostProcessing.SettingChanged += (_, _) => Rendering.PostProcessingSetting.Update();
++        if (Plugin.IsQuest)
++        {
++            Msaa.SettingChanged += (_, _) => Rendering.QualityExtras.UpdateMsaa();
++            Shadows.SettingChanged += (_, _) => Rendering.QualityExtras.UpdateShadows();
++            Rendering.QualityExtras.UpdateMsaa();
++            Rendering.GraphicsPreset.Setup(this);
++            Patches.UI.HostButtonsPatches.Setup(this);
++        }
+         OtherFlashlightShadows.SettingChanged += (_, _) => Rendering.FlashlightShadows.Update();
+         if (Plugin.IsQuest)
+             Rendering.LampLighting.Create();
+@@ -288,6 +329,27 @@
+                 ?  OpenXRSettings.RenderMode.SinglePassInstanced
+                 : OpenXRSettings.RenderMode.MultiPass;
+         };
++    }
++
++    public enum GraphicsModeOption
++    {
++        Quality,
++        Performance,
++        Personal
++    }
++
++    public enum MsaaOption
++    {
++        Off,
++        X2,
++        X4
++    }
++
++    public enum ShadowOption
++    {
++        Game,
++        Medium,
++        High
+     }
+ 
+     public enum HapticFeedbackOption
+diff -ruN a/Source/Managers/VRSession.cs b/Source/Managers/VRSession.cs
+--- a/Source/Managers/VRSession.cs	2026-11-21 20:21:14
++++ b/Source/Managers/VRSession.cs	2026-11-21 20:21:14
+@@ -54,6 +54,8 @@
+         topCamera.depth = 1;
+         topCamera.targetTexture = null;
+         Rendering.PostProcessingSetting.Apply(MainCamera, topCamera);
++        if (Plugin.IsQuest)
++            Rendering.QualityExtras.SetCameras(MainCamera, topCamera);
+         
+         // Initialize VR Player
+         Player = PlayerController.instance.gameObject.AddComponent<VRPlayer>();
+diff -ruN a/Source/Patches/UI/HostButtonsPatches.cs b/Source/Patches/UI/HostButtonsPatches.cs
+--- a/Source/Patches/UI/HostButtonsPatches.cs	1970-01-01 01:00:00
++++ b/Source/Patches/UI/HostButtonsPatches.cs	2026-11-21 20:21:14
+@@ -0,0 +1,72 @@
++using System.Collections.Generic;
++using System.Linq;
++using HarmonyLib;
++using UnityEngine;
++
++namespace RepoXR.Patches.UI;
++
++/// <summary>
++/// Quest port: the main menu's Private Game and Public Game buttons are hidden unless "Host Game Buttons" is on
++/// (General). Hosting a game on the headset is not tested; joining a friend works either way. The buttons below move
++/// up into their places, so the column has no gap.
++/// </summary>
++[RepoXRPatch]
++internal static class HostButtonsPatches
++{
++    private static readonly string[] HostButtons = ["Menu Button - Private Game", "Menu Button - Public Game"];
++
++    /// <summary>Each main menu's buttons with their original places, top first</summary>
++    private static readonly Dictionary<int, List<(MenuButton button, Vector3 place)>> layouts = new();
++
++    public static void Setup(Config config)
++    {
++        config.ShowHostButtons.SettingChanged += (_, _) =>
++        {
++            if (MenuPageMain.instance)
++                Apply(MenuPageMain.instance);
++        };
++    }
++
++    [HarmonyPatch(typeof(MenuPageMain), nameof(MenuPageMain.Start))]
++    [HarmonyPostfix]
++    private static void OnMainMenuStart(MenuPageMain __instance)
++    {
++        Apply(__instance);
++    }
++
++    private static void Apply(MenuPageMain page)
++    {
++        var id = page.GetInstanceID();
++        if (!layouts.TryGetValue(id, out var layout))
++        {
++            // The buttons' column: the parent of the Private Game button
++            var anchor = page.GetComponentsInChildren<MenuButton>(true).FirstOrDefault(b => b.name == HostButtons[0]);
++            if (!anchor || !anchor.transform.parent)
++                return;
++            layout = anchor.transform.parent.GetComponentsInChildren<MenuButton>(true)
++                .Where(b => b.transform.parent == anchor.transform.parent)
++                .Select(b => (b, b.transform.localPosition))
++                .OrderByDescending(entry => entry.Item2.y)
++                .ToList();
++            layouts.Clear(); // one main menu at a time
++            layouts[id] = layout;
++        }
++
++        var show = Plugin.Config.ShowHostButtons.Value;
++        var places = layout.Select(entry => entry.place).ToList();
++        var next = 0;
++        foreach (var (button, _) in layout)
++        {
++            if (!button)
++                continue;
++            var visible = show || !HostButtons.Contains(button.name);
++            button.gameObject.SetActive(visible);
++            if (!visible)
++                continue;
++            // MenuButton puts itself back to originalButtonPosition when it resizes to its text
++            button.transform.localPosition = places[next];
++            button.originalButtonPosition = (Vector2)places[next];
++            next++;
++        }
++    }
++}
+diff -ruN a/Source/Rendering/GraphicsPreset.cs b/Source/Rendering/GraphicsPreset.cs
+--- a/Source/Rendering/GraphicsPreset.cs	1970-01-01 01:00:00
++++ b/Source/Rendering/GraphicsPreset.cs	2026-11-21 20:21:14
+@@ -0,0 +1,99 @@
++﻿using System;
++using System.Collections.Generic;
++using BepInEx.Configuration;
++using RepoXR.UI.Menu;
++
++namespace RepoXR.Rendering;
++
++/// <summary>
++/// Quest port: the Graphics Mode setting, as consoles have it. Quality and Performance each set the settings below;
++/// changing one of them by hand (the VR settings menu or the config file) switches the mode to Personal, where they
++/// stay as the player left them. Choosing Quality or Performance again sets them anew.
++/// </summary>
++internal static class GraphicsPreset
++{
++    private sealed class Managed(ConfigEntryBase entry, object quality, object performance)
++    {
++        public readonly ConfigEntryBase Entry = entry;
++        public object For(Config.GraphicsModeOption mode) => mode == Config.GraphicsModeOption.Quality ? quality : performance;
++    }
++
++    private static Config config = null!;
++    private static readonly List<Managed> managed = [];
++    private static bool applying;
++
++    public static void Setup(Config cfg)
++    {
++        config = cfg;
++        managed.Clear();
++        // Quality fits 36 frames a second (Application SpaceWarp); Performance is the build without it, at 72
++        managed.Add(new Managed(cfg.SpaceWarp, true, false));
++        managed.Add(new Managed(cfg.PostProcessing, true, false));
++        managed.Add(new Managed(cfg.PixelLightCount, 3, 1));
++        // MSAA stays off in both: X2 took 9 ms of GPU time in the shop and Manor (appsw7), so Quality fell to 32 a second
++        managed.Add(new Managed(cfg.Msaa, Config.MsaaOption.Off, Config.MsaaOption.Off));
++        managed.Add(new Managed(cfg.Shadows, Config.ShadowOption.High, Config.ShadowOption.Game));
++
++        // ConfigEntryBase has no event of its own: the file's tells which entry changed
++        cfg.File.SettingChanged += (_, e) =>
++        {
++            if (e.ChangedSetting == cfg.GraphicsMode)
++                OnModeChanged();
++            else if (managed.Exists(item => item.Entry == e.ChangedSetting))
++                OnManagedChanged();
++        };
++
++        Apply();
++    }
++
++    /// <summary>Sets every managed setting to the mode's value (nothing for Personal)</summary>
++    private static void Apply()
++    {
++        var mode = config.GraphicsMode.Value;
++        if (mode == Config.GraphicsModeOption.Personal)
++            return;
++        applying = true;
++        try
++        {
++            foreach (var item in managed)
++                item.Entry.BoxedValue = item.For(mode);
++        }
++        finally
++        {
++            applying = false;
++        }
++        Logger.LogInfo($"Graphics mode {mode}");
++    }
++
++    private static void OnModeChanged()
++    {
++        if (applying)
++            return; // switched to Personal below
++        Apply();
++        // The open settings page shows the old values: open it again
++        SettingsCategoryPage.Reopen("Rendering");
++    }
++
++    private static void OnManagedChanged()
++    {
++        if (applying)
++            return;
++        var mode = config.GraphicsMode.Value;
++        if (mode == Config.GraphicsModeOption.Personal)
++            return;
++        // A managed setting changed by hand: the combination is the player's own now
++        var changed = managed.Exists(item => !Equals(item.Entry.BoxedValue, item.For(mode)));
++        if (!changed)
++            return;
++        applying = true;
++        try
++        {
++            config.GraphicsMode.Value = Config.GraphicsModeOption.Personal;
++        }
++        finally
++        {
++            applying = false;
++        }
++        SettingsCategoryPage.RefreshOption("Rendering", nameof(Config.GraphicsMode));
++    }
++}
+diff -ruN a/Source/Rendering/QualityExtras.cs b/Source/Rendering/QualityExtras.cs
+--- a/Source/Rendering/QualityExtras.cs	1970-01-01 01:00:00
++++ b/Source/Rendering/QualityExtras.cs	2026-11-21 20:21:14
+@@ -0,0 +1,83 @@
++using HarmonyLib;
++using RepoXR.Patches;
++using UnityEngine;
++
++namespace RepoXR.Rendering;
++
++/// <summary>
++/// Quest port: the Anti-Aliasing (MSAA) and Shadows settings (Graphics Mode's Quality sets Off and High).
++/// MSAA: QualitySettings.antiAliasing gives the eye textures their samples (the XR display follows a change at runtime),
++/// and the game's main and top cameras get allowMSAA, which the game leaves off: a camera without it renders into a
++/// separate single-sample texture first.
++/// Shadows: "Game" leaves the game's own Graphics settings (GraphicsManager: shadow quality and distance; hard shadows
++/// from the quality level); Medium and High override them after the game applies its own.
++/// </summary>
++[RepoXRPatch]
++internal static class QualityExtras
++{
++    private static Camera? mainCamera;
++    private static Camera? topCamera;
++    private static ShadowQuality? gameShadows;
++
++    public static void SetCameras(Camera main, Camera top)
++    {
++        mainCamera = main;
++        topCamera = top;
++        UpdateMsaa();
++        UpdateShadows();
++    }
++
++    public static void UpdateMsaa()
++    {
++        var samples = Plugin.Config.Msaa.Value switch
++        {
++            Config.MsaaOption.X2 => 2,
++            Config.MsaaOption.X4 => 4,
++            _ => 0
++        };
++        QualitySettings.antiAliasing = samples;
++        if (mainCamera)
++            mainCamera!.allowMSAA = samples > 1;
++        if (topCamera)
++            topCamera!.allowMSAA = samples > 1;
++    }
++
++    public static void UpdateShadows()
++    {
++        if (Plugin.Config.Shadows.Value == Config.ShadowOption.Game)
++        {
++            if (gameShadows is { } shadows)
++                QualitySettings.shadows = shadows;
++            gameShadows = null;
++            // The game's own values again (the postfixes below leave them alone now)
++            if (GraphicsManager.instance)
++            {
++                GraphicsManager.instance.UpdateShadowQuality();
++                GraphicsManager.instance.UpdateShadowDistance();
++            }
++            return;
++        }
++        Override();
++    }
++
++    private static void Override()
++    {
++        var option = Plugin.Config.Shadows.Value;
++        if (option == Config.ShadowOption.Game)
++            return;
++        gameShadows ??= QualitySettings.shadows;
++        QualitySettings.shadowResolution = option == Config.ShadowOption.High ? ShadowResolution.High : ShadowResolution.Medium;
++        QualitySettings.shadowDistance = 25f;
++        QualitySettings.shadows = option == Config.ShadowOption.High ? ShadowQuality.All : ShadowQuality.HardOnly;
++        if (GraphicsManager.instance)
++            GraphicsManager.instance.shadowDistance = 25f;
++    }
++
++    [HarmonyPatch(typeof(GraphicsManager), nameof(GraphicsManager.UpdateShadowQuality))]
++    [HarmonyPostfix]
++    private static void AfterGameShadowQuality() => Override();
++
++    [HarmonyPatch(typeof(GraphicsManager), nameof(GraphicsManager.UpdateShadowDistance))]
++    [HarmonyPostfix]
++    private static void AfterGameShadowDistance() => Override();
++}
+diff -ruN a/Source/UI/MainMenu.cs b/Source/UI/MainMenu.cs
+--- a/Source/UI/MainMenu.cs	2026-11-21 20:21:14
++++ b/Source/UI/MainMenu.cs	2026-11-21 20:21:14
+@@ -54,6 +54,8 @@
+         topCamera.depth = 1;
+         topCamera.targetTexture = null;
+         Rendering.PostProcessingSetting.Apply(mainCamera, topCamera);
++        if (Plugin.IsQuest)
++            Rendering.QualityExtras.SetCameras(mainCamera, topCamera);
+     }
+ 
+     private void SetupMainCanvas()
+diff -ruN a/Source/UI/Menu/SettingsCategoryPage.cs b/Source/UI/Menu/SettingsCategoryPage.cs
+--- a/Source/UI/Menu/SettingsCategoryPage.cs	2026-11-21 20:21:14
++++ b/Source/UI/Menu/SettingsCategoryPage.cs	2026-11-21 20:21:14
+@@ -15,6 +15,32 @@
+     public TextMeshProUGUI categoryText;
+ 
+     public Transform scrollerTransform;
++
++    /// <summary>Quest port (Graphics Mode): opens the category's page again if it is open, to show values set by code</summary>
++    public static void Reopen(string category)
++    {
++        var open = FindObjectsOfType<SettingsCategoryPage>();
++        if (!Array.Exists(open, page => page.categoryName == category))
++            return;
++        MenuManager.instance.PageCloseAllAddedOnTop();
++        var page = MenuHelper.PageAddOnTop(MenuHelper.RepoXRMenuPage.VRSettingsCategory);
++        page.GetComponent<SettingsCategoryPage>().categoryName = category;
++    }
++
++    /// <summary>Quest port (Graphics Mode): shows a slider or choice setting's current value on the open page</summary>
++    public static void RefreshOption(string category, string key)
++    {
++        foreach (var option in FindObjectsOfType<SettingOption>())
++        {
++            if (option.settingCategory != category || option.settingName != key)
++                continue;
++            if (option.GetComponent<FloatMenuSlider>() is not { } slider)
++                continue;
++            var value = Plugin.Config.File[category, key].BoxedValue;
++            slider.currentValue = value is Enum ? (int)value : Convert.ToSingle(value);
++            slider.UpdateSegmentTextAndValue();
++        }
++    }
+     
+     private void Start()
+     {
+diff -ruN a/Source/UI/Settings/FloatMenuSlider.cs b/Source/UI/Settings/FloatMenuSlider.cs
+--- a/Source/UI/Settings/FloatMenuSlider.cs	2026-11-21 20:21:14
++++ b/Source/UI/Settings/FloatMenuSlider.cs	2026-11-21 20:21:14
+@@ -212,7 +212,7 @@
+         }
+     }
+ 
+-    private void UpdateSegmentTextAndValue()
++    public void UpdateSegmentTextAndValue()
+     {
+         if (hasCustomOptions)
+         {

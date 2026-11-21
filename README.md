@@ -38,8 +38,8 @@ input, the scene handoff, grabbing, vehicles, fonts, the shop mirror) come from
 
 ## What works
 
-The current builder (1.3.0) is for **R.E.P.O. 0.5.2** and Unity 6.3. On 0.5.2 it has been tested on a Quest 3 in
-singleplayer: the menu, a level and the shop; builder 1.2.x on 0.5.1 also in the new Desert level, 72 FPS at its
+The current builder (1.4.0) is for **R.E.P.O. 0.5.2** and Unity 6.3. On 0.5.2 it has been tested on a Quest 3 in
+singleplayer: the menu, levels and the shop; builder 1.2.x on 0.5.1 also in the new Desert level, 72 FPS at its
 extraction point. How many lamps light the scene and
 how far the level is drawn are set in VR Settings → Rendering (Lamps, Room Distance, Small Object Distance). Builder 1.1.3 on
 0.5.0 was also tested in levels with monsters, with the shop mirror (Shop Mirror Single Pass) and joining friends on
@@ -52,7 +52,15 @@ been tested on 0.5.x yet; the notes below come from the previous version (builde
 - **Joining friends on PC.** You can join from the friends list or accept an invite inside the headset. Voice chat works
   both ways. Tested with up to 7 players on vanilla PC copies of the game.
 
-Hosting a game from the headset has not been tested yet. The port is made and tested on a Quest 3. The Quest 3S
+- **Graphics Mode** (VR Settings → Rendering). Performance, the default, renders every frame at 72. Quality (Quest
+  only) turns on Application SpaceWarp: the game renders 36 frames a second and the headset makes the ones between,
+  which leaves time for post-processing, three pixel lights and sharper shadows; 36 holds in the levels and the shop on
+  a Quest 3. Personal keeps your own mix.
+- **Inventory menu.** Hold the right stick click, tilt the stick to one of the three slots and let go to put the held
+  item away or take one out; a short click crouches.
+
+Hosting a game from the headset is not reliable yet: on 0.5.2 it returns to the main menu, so the Private Game and
+Public Game buttons are hidden (VR Settings → General → Host Game Buttons shows them). Joining friends works. The port is made and tested on a Quest 3. The Quest 3S
 should behave the same. The **Quest 2** runs the same build: tested in singleplayer, where it holds 72 FPS in
 most places and drops to 30–60 in the shop (its GPU is the Pico 4's, and slower). Quest Pro is untested.
 

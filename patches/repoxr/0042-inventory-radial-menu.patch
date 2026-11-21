@@ -1,0 +1,803 @@
+diff --git a/Source/Config.cs b/Source/Config.cs
+index 26dc172..6606701 100644
+--- a/Source/Config.cs
++++ b/Source/Config.cs
+@@ -49,6 +49,15 @@ public class Config(string assemblyPath, ConfigFile file)
+     public ConfigEntry<bool> LeftHandDominant { get; } = file.Create("Gameplay", nameof(LeftHandDominant), false,
+         "Whether to use the left or right hand as dominant hand (the hand used to pick up items)");
+ 
++    // Quest port: the inventory menu (hold the stick click of the Crouch binding) is always there; this decides whether
++    // the belt slots also take items with the grab beam
++    [ConfigDescriptor(customName: "Inventory")]
++    public ConfigEntry<InventoryModeOption> InventoryMode { get; } =
++        file.Create("Gameplay", nameof(InventoryMode), InventoryModeOption.BeltAndMenu,
++            new ConfigDescription(
++                "Hold the right stick click to open the inventory menu: tilt the stick to a slot and let go to put away the item you hold, or to take an item out. With Belt And Menu the belt slots also take items you point the grab beam at; with Menu Only the belt just shows your items.",
++                new AcceptableValueEnum<InventoryModeOption>()));
++
+     [ConfigDescriptor(customName: "Arms", falseText: "Attached", trueText: "Detached")]
+     public ConfigEntry<bool> DetachedArms { get; } = file.Create("Gameplay", nameof(DetachedArms), false,
+         "Whether your arms are attached to your body, or if they are separate");
+@@ -297,6 +306,12 @@ public class Config(string assemblyPath, ConfigFile file)
+         All
+     }
+ 
++    public enum InventoryModeOption
++    {
++        BeltAndMenu,
++        MenuOnly
++    }
++
+     public enum ShopMirrorSinglePassOption
+     {
+         Hidden,
+diff --git a/Source/Input/VRInputSystem.cs b/Source/Input/VRInputSystem.cs
+index 4a4b885..0d4876f 100644
+--- a/Source/Input/VRInputSystem.cs
++++ b/Source/Input/VRInputSystem.cs
+@@ -4,6 +4,7 @@ using System.Collections.Generic;
+ using Newtonsoft.Json;
+ using RepoXR.Assets;
+ using RepoXR.Managers;
++using RepoXR.Player;
+ using RepoXR.UI.Expressions;
+ using UnityEngine;
+ using UnityEngine.InputSystem;
+@@ -65,6 +66,8 @@ public class VRInputSystem : MonoBehaviour
+     /// </summary>
+     private void Update()
+     {
++        PollStickClick();
++
+         if (schemeCheckAt < 0 || Time.unscaledTime < schemeCheckAt)
+             return;
+ 
+@@ -173,6 +176,9 @@ public class VRInputSystem : MonoBehaviour
+ 
+     private void OnDisable()
+     {
++        stickRestoreUntil = -1;
++        SetStickActionsDisabled(false);
++
+         playerInput.actions["Chat"].performed -= ChatPerformed;
+         playerInput.actions["Chat"].canceled -= ChatCanceled;
+         playerInput.onControlsChanged -= OnControlsChanged;
+@@ -180,6 +186,127 @@ public class VRInputSystem : MonoBehaviour
+         Plugin.Config.LeftHandDominant.SettingChanged -= DominantHandChanged;
+     }
+ 
++    // Quest port: the stick click of the Crouch binding (R3). A tap crouches (as a toggle), a hold opens the
++    // inventory menu (VRInventoryRadial), like the chat button: a tap chats, a hold opens the expressions
++
++    private const float InventoryHoldTime = 0.25f;
++
++    // While the stick click is down the stick picks a slot: it must not turn, push, pull, rotate or scroll
++    private static readonly string[] StickActions = ["Turn", "Push", "Pull", "Rotation", "Scroll"];
++
++    private int stickClickFrame = -1;
++    private float stickClickPressedAt = -1;
++    private bool stickClickHeld;
++    private bool stickClickTap;
++    private bool stickClickReleased;
++    private bool stickActionsDisabled;
++    private float stickRestoreUntil = -1;
++
++    /// <summary>
++    /// The stick click was tapped this frame: crouch
++    /// </summary>
++    public bool CrouchTapped()
++    {
++        PollStickClick();
++        return stickClickTap;
++    }
++
++    /// <summary>
++    /// The stick click is held past the hold time: the inventory menu is wanted
++    /// </summary>
++    public bool InventoryHeld()
++    {
++        PollStickClick();
++        return stickClickHeld;
++    }
++
++    /// <summary>
++    /// The stick click was let go this frame after a hold: the inventory menu picks its slot
++    /// </summary>
++    public bool InventoryReleased()
++    {
++        PollStickClick();
++        return stickClickReleased;
++    }
++
++    /// <summary>
++    /// Reads the stick click once a frame, from whoever asks first (the game's crouch check can run before or after
++    /// this component's Update)
++    /// </summary>
++    private void PollStickClick()
++    {
++        if (stickClickFrame == Time.frameCount)
++            return;
++
++        stickClickFrame = Time.frameCount;
++        stickClickTap = false;
++        stickClickReleased = false;
++
++        var crouch = playerInput.actions.FindAction("Crouch");
++        if (crouch == null)
++            return;
++
++        // After the menu the stick actions come back once the stick is centered (or a second later): a stick still
++        // tilted towards a slot would snap turn or push the item away otherwise
++        if (stickRestoreUntil >= 0 && (VRInventoryRadial.StickCentered || Time.unscaledTime > stickRestoreUntil))
++        {
++            stickRestoreUntil = -1;
++            SetStickActionsDisabled(false);
++        }
++
++        if (crouch.WasPressedThisFrame())
++        {
++            stickClickPressedAt = Time.unscaledTime;
++            stickClickHeld = false;
++            stickRestoreUntil = -1;
++            SetStickActionsDisabled(VRInventoryRadial.CanOpen());
++        }
++
++        if (stickClickPressedAt < 0)
++            return;
++
++        if (crouch.IsPressed())
++        {
++            if (!stickClickHeld && Time.unscaledTime - stickClickPressedAt >= InventoryHoldTime)
++                stickClickHeld = true;
++
++            return;
++        }
++
++        // Let go: a hold that opened the menu picks a slot, anything else is a tap (a long press with no menu still
++        // crouches)
++        if (stickClickHeld && VRInventoryRadial.IsOpen)
++            stickClickReleased = true;
++        else
++            stickClickTap = true;
++
++        stickClickHeld = false;
++        stickClickPressedAt = -1;
++
++        if (stickActionsDisabled)
++            stickRestoreUntil = Time.unscaledTime + 1;
++    }
++
++    private void SetStickActionsDisabled(bool disabled)
++    {
++        if (stickActionsDisabled == disabled)
++            return;
++
++        stickActionsDisabled = disabled;
++
++        foreach (var name in StickActions)
++        {
++            var action = playerInput.actions.FindAction(name);
++            if (action == null)
++                continue;
++
++            if (disabled)
++                action.Disable();
++            else if (playerInput.inputIsActive)
++                action.Enable();
++        }
++    }
++
+     // Special chat input section
+ 
+     private Coroutine? chatHoldCoroutine;
+diff --git a/Source/Patches/InputPatches.cs b/Source/Patches/InputPatches.cs
+index c927ac4..eae3986 100644
+--- a/Source/Patches/InputPatches.cs
++++ b/Source/Patches/InputPatches.cs
+@@ -304,6 +304,11 @@ internal static class InputPatches
+                 __result = VehicleStick.Down(vehicle);
+                 return false;
+ 
++            // Quest port: the crouch button is shared with the inventory menu: a tap crouches, a hold opens the menu
++            case InputKey.Crouch:
++                __result = VRInputSystem.Instance.CrouchTapped();
++                return false;
++
+             default:
+                 __result = __instance.GetAction(key).WasPressedThisFrame();
+                 return false;
+@@ -335,6 +340,13 @@ internal static class InputPatches
+             return false;
+         }
+ 
++        // Quest port: crouching is a toggle on a tap of the crouch button (a hold opens the inventory menu)
++        if (key == InputKey.Crouch)
++        {
++            __result = false;
++            return false;
++        }
++
+         __result = __instance.GetAction(key).WasReleasedThisFrame();
+ 
+         return false;
+@@ -362,6 +374,13 @@ internal static class InputPatches
+             return false;
+         }
+ 
++        // Quest port: crouching is a toggle on a tap of the crouch button (a hold opens the inventory menu)
++        if (key == InputKey.Crouch)
++        {
++            __result = false;
++            return false;
++        }
++
+         __result = __instance.GetAction(key).IsPressed();
+ 
+         return false;
+@@ -428,6 +447,13 @@ internal static class InputPatches
+     [HarmonyPrefix]
+     private static bool InputToggleGet(ref InputKey key, ref bool __result)
+     {
++        // Quest port: a tap of the crouch button toggles crouching, holding it opens the inventory menu
++        if (key == InputKey.Crouch)
++        {
++            __result = true;
++            return false;
++        }
++
+         __result = VRInputSystem.Instance.InputToggleGet(key.ToString());
+ 
+         return false;
+diff --git a/Source/Patches/Player/InventoryPatches.cs b/Source/Patches/Player/InventoryPatches.cs
+index 2389ad3..8d837be 100644
+--- a/Source/Patches/Player/InventoryPatches.cs
++++ b/Source/Patches/Player/InventoryPatches.cs
+@@ -5,6 +5,7 @@ using HarmonyLib;
+ using Photon.Pun;
+ using RepoXR.Managers;
+ using RepoXR.Networking;
++using RepoXR.Player;
+ using UnityEngine;
+ 
+ using static HarmonyLib.AccessTools;
+@@ -113,6 +114,13 @@ internal static class InventoryPatches
+         if (VRSession.Instance is not { } session)
+             return true;
+ 
++        // Quest port: taken out through the inventory menu, the item comes out in front of the hand, on the grab beam
++        if (VRInventoryRadial.TakeUnequipPosition(__instance, out var handPosition))
++        {
++            __instance.teleportPosition = handPosition;
++            return false;
++        }
++
+         // PlayerAvatar position is at the feet, so if the visuals are below that, they're underneath the floor
+         // So when an item would be unequipped below the floor, we just re-enable the original functionality
+         if (session.Player.Rig.inventoryController.visualsTransform.position.y <
+diff --git a/Source/Player/VRInventory.cs b/Source/Player/VRInventory.cs
+index 4524ed4..b1ad64d 100644
+--- a/Source/Player/VRInventory.cs
++++ b/Source/Player/VRInventory.cs
+@@ -23,14 +23,34 @@ public class VRInventory : MonoBehaviour
+ 
+     private bool holdingItem;
+     private int hoveredSlot = -1;
+-    
++
++    // Quest port: the inventory menu on the stick click; with the Menu Only setting the belt only shows the items
++    private VRInventoryRadial? radial;
++    private bool menuOnly;
++
++    private void Start()
++    {
++        radial = VRInventoryRadial.Create();
++    }
++
++    private void OnDestroy()
++    {
++        if (radial)
++            Destroy(radial!.gameObject);
++    }
++
+     private void Update()
+     {
+-        holdingItem = IsHoldingItem();
++        menuOnly = Plugin.Config.InventoryMode.Value == Config.InventoryModeOption.MenuOnly;
++        holdingItem = !menuOnly && IsHoldingItem();
+      
+         HandleHoldItem();
+         HandleSlotHover();
+-        HandleSlotInteract();
++
++        if (menuOnly)
++            slots.Do(slot => slot.isCollided = false);
++        else
++            HandleSlotInteract();
+     }
+ 
+     /// <summary>
+@@ -95,7 +115,9 @@ public class VRInventory : MonoBehaviour
+             slot.isHolding = holdingItem;
+             slot.isHovered = slot.slotIndex == hoveredSlot;
+             
+-            if (slot.slotIndex == hoveredSlot)
++            if (menuOnly)
++                slot.targetColor = Color.clear;
++            else if (slot.slotIndex == hoveredSlot)
+                 slot.targetColor = hoverColor;
+             else if (holdingItem)
+                 slot.targetColor = holdColor;
+diff --git a/Source/Player/VRInventoryRadial.cs b/Source/Player/VRInventoryRadial.cs
+new file mode 100644
+index 0000000..7e43fd3
+--- /dev/null
++++ b/Source/Player/VRInventoryRadial.cs
+@@ -0,0 +1,468 @@
++using System.Collections;
++using RepoXR.Input;
++using RepoXR.Managers;
++using RepoXR.UI.Expressions;
++using Unity.XR.CoreUtils;
++using UnityEngine;
++using UnityEngine.InputSystem;
++using UnityEngine.Rendering;
++using UnityEngine.UI;
++
++namespace RepoXR.Player;
++
++/// <summary>
++/// Quest port: the inventory menu. Hold the stick click of the Crouch binding (R3), tilt the stick towards one of the
++/// three slots and let go: an item held with the grab beam goes into the slot (swapped with the one in there), with
++/// nothing held the slot's item comes out onto the grab beam. Let go with the stick in the middle to cancel.
++/// Built in code (no prefab in RepoXR's asset bundle): a world space canvas at the hand, three sectors and the items'
++/// icons
++/// </summary>
++public class VRInventoryRadial : MonoBehaviour
++{
++    public static VRInventoryRadial? Instance { get; private set; }
++
++    public static bool IsOpen => Instance && Instance!.isActive;
++
++    /// <summary>
++    /// The menu's stick is back in the middle (or the menu never read it)
++    /// </summary>
++    public static bool StickCentered =>
++        !Instance || Instance!.stick == null || Instance.stick.ReadValue<Vector2>().magnitude < KeepDeadzone;
++
++    private const float Radius = 200; // canvas units
++    private const float WorldScale = 0.0005f; // 0.2 m across
++    private const float SelectDeadzone = 0.5f;
++    private const float KeepDeadzone = 0.3f;
++
++    // Sector k is centered k * 120° clockwise from the top: top, lower right, lower left. The game's slots 1-2-3 are
++    // laid out left to right: lower left, top, lower right
++    private static readonly int[] SectorSlot = [1, 2, 0];
++
++    private static readonly Color SectorColor = new(0.3f, 0.3f, 0.3f, 0.6f);
++    private static readonly Color SectorHoverColor = new(0.85f, 0.85f, 0.85f, 0.8f);
++    private static readonly Color SectorUnavailableColor = new(0.15f, 0.15f, 0.15f, 0.3f);
++
++    private static ItemEquippable? pendingUnequip;
++    private static float pendingUnequipTime;
++
++    private Canvas canvas = null!;
++    private readonly Image[] sectors = new Image[3];
++    private readonly Image[] icons = new Image[3];
++    private Image dot = null!;
++
++    private bool isActive;
++    private bool putMode;
++    private int hoveredSector = -1;
++    private float openLerp;
++
++    private HapticManager.Hand hand = HapticManager.Hand.Right;
++    private InputAction? stick;
++    private string stickPath = "";
++
++    public static VRInventoryRadial Create()
++    {
++        var go = new GameObject("VR Inventory Menu", typeof(RectTransform)) { layer = 5 };
++        return go.AddComponent<VRInventoryRadial>();
++    }
++
++    private void Awake()
++    {
++        Instance = this;
++        BuildUI();
++    }
++
++    private void OnDestroy()
++    {
++        if (Instance == this)
++            Instance = null;
++
++        stick?.Dispose();
++    }
++
++    /// <summary>
++    /// Whether the menu may open now: alive, in control, no menu, chat or expression wheel in the way
++    /// </summary>
++    public static bool CanOpen()
++    {
++        if (!Instance || !VRSession.InVR || VRSession.Instance == null)
++            return false;
++
++        if (!PlayerAvatar.instance || PlayerAvatar.instance.isDisabled || !PlayerController.instance)
++            return false;
++
++        if (!Inventory.instance || SemiFunc.RunIsArena() || SemiFunc.MenuLevel())
++            return false;
++
++        if (PlayerController.instance.InputDisableTimer > 0)
++            return false;
++
++        if (MenuManager.instance && MenuManager.instance.currentMenuPage)
++            return false;
++
++        if (ChatManager.instance && ChatManager.instance.chatActive)
++            return false;
++
++        return !ExpressionRadial.instance || !ExpressionRadial.instance.isActive;
++    }
++
++    /// <summary>
++    /// Where an item taken out through the menu appears: in front of the grab beam's hand. Used once, by the unequip
++    /// patch (ItemEquippable.RayHitTestNew)
++    /// </summary>
++    internal static bool TakeUnequipPosition(ItemEquippable item, out Vector3 position)
++    {
++        position = default;
++
++        if (pendingUnequip != item || Time.time - pendingUnequipTime > 2 || VRSession.Instance is not { } session)
++            return false;
++
++        pendingUnequip = null;
++
++        var hand = session.Player.MainHand;
++        var origin = hand.position;
++        var direction = hand.forward;
++        var mask = SemiFunc.LayerMaskGetVisionObstruct() & ~LayerMask.GetMask("Ignore Raycast", "CollisionCheck");
++
++        position = Physics.Raycast(origin, direction, out var hit, 0.5f, mask)
++            ? hit.point + hit.normal * 0.1f
++            : origin + direction * 0.4f;
++
++        return true;
++    }
++
++    private void Update()
++    {
++        var input = VRInputSystem.Instance;
++
++        if (!isActive)
++        {
++            if (input.InventoryHeld() && CanOpen())
++                Open();
++        }
++        else if (!input.InventoryHeld() || !CanOpen())
++        {
++            if (input.InventoryReleased() && CanOpen() && hoveredSector >= 0)
++                Confirm();
++            else
++                MenuManager.instance.MenuEffectClick(MenuManager.MenuClickEffectType.Action, soundOnly: true);
++
++            Close();
++        }
++
++        openLerp = Mathf.Clamp01(openLerp + Time.deltaTime * (isActive ? 8 : -8));
++        canvas.enabled = openLerp > 0;
++
++        if (openLerp <= 0)
++            return;
++
++        transform.localScale = Vector3.one * (WorldScale * EaseOutBack(openLerp));
++
++        if (isActive)
++        {
++            HoverLogic();
++            UpdateVisuals();
++        }
++    }
++
++    private void LateUpdate()
++    {
++        if (openLerp <= 0 || VRSession.Instance is not { } session || !CameraUtils.Instance)
++            return;
++
++        // At the controller of the stick, a little above it, facing the eyes
++        var rig = session.Player.Rig;
++        var handTip = hand == HapticManager.Hand.Left ? rig.leftHandTip : rig.rightHandTip;
++        var cam = CameraUtils.Instance.MainCamera.transform;
++        var position = handTip.position + cam.up * 0.1f;
++
++        transform.position = position;
++        transform.rotation = Quaternion.LookRotation(position - cam.position, cam.up);
++    }
++
++    private void Open()
++    {
++        UpdateStickBinding();
++        SetLayer();
++
++        isActive = true;
++        putMode = HeldItem() != null;
++        hoveredSector = -1;
++
++        MenuManager.instance.MenuEffectClick(MenuManager.MenuClickEffectType.Confirm, soundOnly: true);
++    }
++
++    private void Close()
++    {
++        isActive = false;
++        hoveredSector = -1;
++    }
++
++    private void HoverLogic()
++    {
++        var value = stick?.ReadValue<Vector2>() ?? Vector2.zero;
++        var magnitude = value.magnitude;
++
++        dot.rectTransform.anchoredPosition = Vector2.ClampMagnitude(value, 1) * (Radius * 0.3f);
++
++        var sector = hoveredSector;
++        if (magnitude >= SelectDeadzone || (hoveredSector >= 0 && magnitude >= KeepDeadzone))
++        {
++            var angle = Mathf.Atan2(value.x, value.y) * Mathf.Rad2Deg;
++            if (angle < 0)
++                angle += 360;
++
++            sector = (int)((angle + 60) % 360 / 120);
++        }
++        else if (magnitude < KeepDeadzone)
++            sector = -1;
++
++        if (sector >= 0 && !IsAvailable(sector))
++            sector = -1;
++
++        if (sector != hoveredSector && sector >= 0)
++            HapticManager.Impulse(hand, HapticManager.Type.Impulse, 0.03f);
++
++        hoveredSector = sector;
++    }
++
++    private bool IsAvailable(int sector)
++    {
++        var spot = Inventory.instance.GetSpotByIndex(SectorSlot[sector]);
++        if (!spot)
++            return false;
++
++        // Holding an item: an empty slot takes it, a full one swaps; holding nothing: only a full slot gives
++        return putMode || (spot.IsOccupied() && spot.CurrentItem);
++    }
++
++    private void UpdateVisuals()
++    {
++        for (var i = 0; i < sectors.Length; i++)
++        {
++            var spot = Inventory.instance.GetSpotByIndex(SectorSlot[i]);
++            var item = spot && spot.IsOccupied() ? spot.CurrentItem : null;
++            var available = IsAvailable(i);
++
++            var target = i == hoveredSector ? SectorHoverColor : available ? SectorColor : SectorUnavailableColor;
++            sectors[i].color = Color.Lerp(sectors[i].color, target, 16 * Time.deltaTime);
++
++            var icon = item ? item!.GetComponent<ItemAttributes>()?.icon : null;
++            icons[i].enabled = icon;
++            if (icon)
++            {
++                icons[i].sprite = icon;
++                icons[i].color = new Color(1, 1, 1, i == hoveredSector ? 1 : 0.75f);
++                icons[i].rectTransform.localScale = Vector3.one * (i == hoveredSector ? 1.15f : 1);
++            }
++        }
++    }
++
++    private void Confirm()
++    {
++        var spot = Inventory.instance.GetSpotByIndex(SectorSlot[hoveredSector]);
++        if (!spot)
++            return;
++
++        MenuManager.instance.MenuEffectClick(MenuManager.MenuClickEffectType.Tick, soundOnly: true);
++        HapticManager.Impulse(hand, HapticManager.Type.Impulse);
++
++        var held = HeldItem();
++
++        if (held != null)
++        {
++            if (!spot.IsOccupied())
++                spot.HandleInput(); // equips the held item
++            else
++                StartCoroutine(SwapItems(spot, held));
++
++            return;
++        }
++
++        if (!spot.IsOccupied() || !spot.CurrentItem)
++            return;
++
++        pendingUnequip = spot.CurrentItem;
++        pendingUnequipTime = Time.time;
++        spot.HandleInput(); // unequips; the game force grabs the item, RepoXR puts it on the grab beam
++    }
++
++    /// <summary>
++    /// The slot's item comes out onto the beam, then the item that was held goes in once the slot is free
++    /// </summary>
++    private static IEnumerator SwapItems(InventorySpot spot, ItemEquippable held)
++    {
++        pendingUnequip = spot.CurrentItem;
++        pendingUnequipTime = Time.time;
++        spot.HandleInput();
++
++        var until = Time.time + 2;
++        while (spot && spot.IsOccupied() && Time.time < until)
++            yield return null;
++
++        if (!spot || spot.IsOccupied() || !held || held.currentState != ItemEquippable.ItemState.Idle ||
++            Inventory.instance.IsItemEquipped(held))
++            yield break;
++
++        held.RequestEquip(spot.inventorySpotIndex, PhysGrabber.instance.photonView.ViewID);
++    }
++
++    private static ItemEquippable? HeldItem()
++    {
++        if (!PhysGrabber.instance || !PhysGrabber.instance.grabbed ||
++            PhysGrabber.instance.grabbedPhysGrabObject is not { } grabbed)
++            return null;
++
++        return grabbed.GetComponent<ItemEquippable>();
++    }
++
++    /// <summary>
++    /// The stick of the controller the Crouch binding is on (the right one, the left one when left handed)
++    /// </summary>
++    private void UpdateStickBinding()
++    {
++        var crouch = Actions.Instance["Crouch"];
++        var index = Mathf.Max(crouch.GetBindingIndex(VRInputSystem.Instance.CurrentControlScheme), 0);
++        var path = index < crouch.bindings.Count ? crouch.bindings[index].effectivePath : "";
++
++        if (!Utils.GetControlHand(path, out var bindingHand))
++            bindingHand = VRSession.IsLeftHanded ? HapticManager.Hand.Left : HapticManager.Hand.Right;
++
++        hand = bindingHand;
++
++        var stickBinding = hand == HapticManager.Hand.Left
++            ? "<XRController>{LeftHand}/primary2DAxis"
++            : "<XRController>{RightHand}/primary2DAxis";
++
++        if (stick != null && stickPath == stickBinding)
++            return;
++
++        stick?.Dispose();
++        stick = new InputAction("Inventory Menu Stick", InputActionType.Value, stickBinding, expectedControlType: "Vector2");
++        stick.Enable();
++        stickPath = stickBinding;
++    }
++
++    /// <summary>
++    /// The layer of the expression wheel, which the VR cameras show at the hand
++    /// </summary>
++    private void SetLayer()
++    {
++        var layer = ExpressionRadial.instance ? ExpressionRadial.instance.gameObject.layer : 5;
++        if (gameObject.layer != layer)
++            gameObject.SetLayerRecursively(layer);
++    }
++
++    private void BuildUI()
++    {
++        canvas = gameObject.AddComponent<Canvas>();
++        canvas.renderMode = RenderMode.WorldSpace;
++        canvas.enabled = false;
++
++        var rect = (RectTransform)transform;
++        rect.sizeDelta = Vector2.one * (Radius * 2);
++        transform.localScale = Vector3.zero;
++
++        // Drawn over the world: the hand is often in a wall or a table
++        var material = new Material(Canvas.GetDefaultCanvasMaterial());
++        material.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
++
++        var sectorSprite = MakeSprite(SectorTexture(256, 0.4f, 3));
++        var dotSprite = MakeSprite(CircleTexture(64));
++
++        for (var i = 0; i < 3; i++)
++        {
++            sectors[i] = NewImage($"Sector {i + 1}", sectorSprite, material, Vector2.one * (Radius * 2));
++            sectors[i].rectTransform.localRotation = Quaternion.Euler(0, 0, -120 * i);
++            sectors[i].color = SectorColor;
++
++            var angle = 120 * i * Mathf.Deg2Rad;
++            icons[i] = NewImage($"Icon {i + 1}", null, material, Vector2.one * 90);
++            icons[i].rectTransform.anchoredPosition = new Vector2(Mathf.Sin(angle), Mathf.Cos(angle)) * (Radius * 0.7f);
++            icons[i].preserveAspect = true;
++            icons[i].enabled = false;
++        }
++
++        dot = NewImage("Stick", dotSprite, material, Vector2.one * 22);
++        dot.color = new Color(1, 1, 1, 0.8f);
++    }
++
++    private Image NewImage(string name, Sprite? sprite, Material material, Vector2 size)
++    {
++        var go = new GameObject(name, typeof(RectTransform)) { layer = gameObject.layer };
++        go.transform.SetParent(transform, false);
++
++        var image = go.AddComponent<Image>();
++        image.sprite = sprite;
++        image.material = material;
++        image.raycastTarget = false;
++        image.rectTransform.sizeDelta = size;
++
++        return image;
++    }
++
++    private static Sprite MakeSprite(Texture2D texture)
++    {
++        return Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), Vector2.one * 0.5f, 100);
++    }
++
++    /// <summary>
++    /// A ring sector of 120° pointing up (minus a gap on each side), white with soft edges
++    /// </summary>
++    private static Texture2D SectorTexture(int size, float inner, float gapDegrees)
++    {
++        var texture = new Texture2D(size, size, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp };
++        var pixels = new Color32[size * size];
++        var edge = 1.5f / size * 2;
++        var halfAngle = 60 - gapDegrees;
++
++        for (var y = 0; y < size; y++)
++        for (var x = 0; x < size; x++)
++        {
++            var u = (x + 0.5f) / size * 2 - 1;
++            var v = (y + 0.5f) / size * 2 - 1;
++            var r = Mathf.Sqrt(u * u + v * v);
++            var angle = Mathf.Abs(Mathf.Atan2(u, v) * Mathf.Rad2Deg);
++
++            var radial = Mathf.Clamp01((r - inner) / edge) * Mathf.Clamp01((1 - edge - r) / edge);
++            var angular = Mathf.Clamp01((halfAngle - angle) * Mathf.Deg2Rad * r / edge);
++            var alpha = radial * angular;
++
++            pixels[y * size + x] = new Color32(255, 255, 255, (byte)(alpha * 255));
++        }
++
++        texture.SetPixels32(pixels);
++        texture.Apply(true, true);
++
++        return texture;
++    }
++
++    private static Texture2D CircleTexture(int size)
++    {
++        var texture = new Texture2D(size, size, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp };
++        var pixels = new Color32[size * size];
++        var edge = 1.5f / size * 2;
++
++        for (var y = 0; y < size; y++)
++        for (var x = 0; x < size; x++)
++        {
++            var u = (x + 0.5f) / size * 2 - 1;
++            var v = (y + 0.5f) / size * 2 - 1;
++            var alpha = Mathf.Clamp01((1 - edge - Mathf.Sqrt(u * u + v * v)) / edge);
++
++            pixels[y * size + x] = new Color32(255, 255, 255, (byte)(alpha * 255));
++        }
++
++        texture.SetPixels32(pixels);
++        texture.Apply(true, true);
++
++        return texture;
++    }
++
++    private static float EaseOutBack(float t)
++    {
++        const float c1 = 1.70158f;
++        const float c3 = c1 + 1;
++
++        return 1 + c3 * Mathf.Pow(t - 1, 3) + c1 * Mathf.Pow(t - 1, 2);
++    }
++}

@@ -20,6 +20,12 @@
 #                     popups scaled with a Vector2 (z 0: their text drew as solid blocks in VR)
 #   0010.. see the patches' own comments; 0039-post-processing-awake-0.5.1  R.E.P.O. 0.5.1 moved PostProcessing.Start
 #                                            into Awake: the lens distortion and chromatic aberration patch follows
+#   0041-graphics-mode-host-buttons  "Graphics Mode" (Quality / Performance / Personal) setting Application SpaceWarp,
+#                                    post-processing and pixel lights; "Host Game Buttons" (hidden by default) for the
+#                                    main menu's Private Game and Public Game
+#   0042-inventory-radial-menu  hold the right stick click (the Crouch binding) for a three slot menu at the hand: tilt
+#                               to a slot and let go to put the held item away (swapping) or take one out onto the beam;
+#                               a tap still crouches (as a toggle); Gameplay → Inventory: Belt And Menu / Menu Only
 # Built against the game in work/game (RepoXR's tester mode): the REPO package on DaXcess' feed stops at 0.4.4
 set -euo pipefail
 

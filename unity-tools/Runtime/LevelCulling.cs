@@ -41,6 +41,8 @@ namespace RepoQuest
         private float smallDistance = DefaultSmallDistance;
         private float smallSize = DefaultSmallSize;
         private float farDistance = DefaultFarDistance;
+        /// <summary>The eye camera's culling mask (Camera.main), read every frame: renderers on other layers are not ours</summary>
+        private int eyeMask = ~0;
         private bool active = true;
         private bool fileOverride;
         private float settingsAt;
@@ -245,6 +247,9 @@ namespace RepoQuest
                 scanAt = Time.realtimeSinceStartup + 2f;
                 return;
             }
+            var camera = Camera.main;
+            if (camera)
+                eyeMask = camera.cullingMask;
             if (scanAt > 0f)
             {
                 if (Time.realtimeSinceStartup < scanAt)
@@ -253,7 +258,6 @@ namespace RepoQuest
                 Scan(levelParent, generator);
             }
 
-            var camera = Camera.main;
             if (!camera || roots.Count == 0)
                 return;
             var eye = camera.transform.position;
@@ -384,6 +388,10 @@ namespace RepoQuest
                     continue;
                 var id = renderer.GetInstanceID();
                 if (!seen.Add(id))
+                    continue;
+                // Layers the eye camera does not draw are left alone: hiding them saves nothing for the eyes, and
+                // render-texture cameras draw them (the shop's cosmetic machine screen: its camera draws layer 12 only)
+                if ((eyeMask & (1 << renderer.gameObject.layer)) == 0)
                     continue;
                 if (!byId.TryGetValue(id, out var entry))
                 {

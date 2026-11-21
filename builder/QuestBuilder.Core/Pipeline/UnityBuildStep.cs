@@ -204,6 +204,11 @@ public sealed partial class UnityBuildStep : BuildStep
         return TimeSpan.FromSeconds(sorted[(sorted.Count - 1) / 2]);
     }
 
+    /// <summary>
+    /// On Windows the editor starts on DirectX 11: on an integrated GPU the editor on DirectX 12 stalled the build, and
+    /// removing DX12 from the Windows Graphics APIs fixed it for the reporter (issue #4). The Android build doesn't
+    /// use the editor's graphics API
+    /// </summary>
     private async Task RunUnityAsync(BuildContext context, UnityInstall unity, string[] args, string logFile,
         IUnityLogWatcher watcher, CancellationToken ct)
     {
@@ -216,7 +221,7 @@ public sealed partial class UnityBuildStep : BuildStep
             result = await ProcessRunner.RunAsync(new ProcessSpec
             {
                 FileName = unity.Executable,
-                Arguments = args,
+                Arguments = Platform.IsWindows ? ["-force-d3d11", .. args] : args,
                 Environment = UnityEnvironment(context.Workspace),
                 LogPrefix = "[unity] ",
             }, ct: ct);

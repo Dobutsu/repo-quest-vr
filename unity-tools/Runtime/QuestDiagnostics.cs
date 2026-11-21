@@ -575,7 +575,7 @@ namespace RepoQuest
         }
 
         /// <summary>The VR view's yaw: RepoXR's VRCameraAim, which the player's body follows (the spawn rotation does not stick)</summary>
-        private static string Aim(string method, float degrees)
+        internal static string Aim(string method, float degrees)
         {
             const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
             var aimType = GameType("RepoXR.Player.Camera.VRCameraAim");
@@ -584,6 +584,49 @@ namespace RepoQuest
                 return "no VRCameraAim";
             aimType.GetMethod(method, all, null, new[] { typeof(float) }, null)!.Invoke(aim, new object[] { degrees });
             return $"{method} {degrees}";
+        }
+
+        /// <summary>
+        /// "config <section>" lists RepoXR's settings of a section; "config <section> <key>" shows one, "config <section>
+        /// <key> <value>" sets it as the VR settings menu would (its change events run: Graphics Mode and the rest)
+        /// </summary>
+        private static string RepoXRConfig(string[] words)
+        {
+            var plugin = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetType("RepoXR.Plugin")).FirstOrDefault(t => t != null);
+            var config = plugin?.GetProperty("Config", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var file = config?.GetType().GetProperty("File")?.GetValue(config);
+            if (file == null)
+                return "no RepoXR config";
+            if (words.Length < 2)
+                return "config <section> [<key> [<value>]]";
+            if (words.Length == 2)
+            {
+                var list = new StringBuilder($"{words[1]}:");
+                foreach (var item in (System.Collections.IEnumerable)file)
+                {
+                    var key = item.GetType().GetProperty("Key")?.GetValue(item);
+                    var entry = item.GetType().GetProperty("Value")?.GetValue(item);
+                    if (key == null || entry == null || !string.Equals((string)key.GetType().GetProperty("Section")!.GetValue(key), words[1], StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    list.Append($" {key.GetType().GetProperty("Key")!.GetValue(key)}={entry.GetType().GetMethod("GetSerializedValue")!.Invoke(entry, null)}");
+                }
+                return list.ToString();
+            }
+            var indexer = file.GetType().GetProperty("Item", new[] { typeof(string), typeof(string) });
+            object found;
+            try
+            {
+                found = indexer?.GetValue(file, new object[] { words[1], words[2] });
+            }
+            catch (TargetInvocationException)
+            {
+                found = null;
+            }
+            if (found == null)
+                return $"no setting {words[1]}.{words[2]}";
+            if (words.Length > 3)
+                found.GetType().GetMethod("SetSerializedValue")!.Invoke(found, new object[] { string.Join(" ", words.Skip(3)) });
+            return $"{words[1]}.{words[2]} = {found.GetType().GetMethod("GetSerializedValue")!.Invoke(found, null)}";
         }
 
         private static string RunCommand(string[] words, string line)
@@ -601,6 +644,10 @@ namespace RepoQuest
                        (camera ? $"{camera.name} far {camera.farClipPlane:0} m at {camera.transform.position}" : "none") +
                        $"; fog {RenderSettings.fog} {RenderSettings.fogMode} end {RenderSettings.fogEndDistance:0} density {RenderSettings.fogDensity:0.###}";
             }
+            if (words[0] == "spacewarp")
+                return QuestSpaceWarp.Command(words);
+            if (words[0] == "config")
+                return RepoXRConfig(words);
             if (words[0] == "yaw")
                 return Aim("SetAimNow", Number(1));
             if (words[0] == "turn")
