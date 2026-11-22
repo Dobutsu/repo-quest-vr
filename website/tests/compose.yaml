@@ -1,0 +1,29 @@
+name: repoquest-site-dev
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: local-test-root
+      MYSQL_DATABASE: repoquest
+      MYSQL_USER: repoquest
+      MYSQL_PASSWORD: local-test-only
+    volumes:
+      - ../schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u$$MYSQL_USER $$MYSQL_DATABASE -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 3s
+      retries: 50
+  web:
+    build:
+      context: .
+    environment:
+      REPOQUEST_CONFIG: /site/tests/config.local.php
+      PHP_CLI_SERVER_WORKERS: "4"
+    volumes:
+      - ..:/site:ro
+    ports:
+      - "127.0.0.1:8089:8080"
+    depends_on:
+      db:
+        condition: service_healthy

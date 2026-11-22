@@ -1,5 +1,6 @@
 using System.Reflection;
 using HarmonyLib;
+using Mono.Cecil;
 
 namespace HarmonyBaker;
 
@@ -17,6 +18,28 @@ internal sealed class PatchSelection(Assembly mod)
     public List<string> Applied { get; } = [];
     public List<string> Skipped { get; } = [];
     public List<(string Name, Exception Error)> Failed { get; } = [];
+
+    /// <summary>Explicitly opted-in standalone patches. Never scans dependencies or runs a plugin's Awake.</summary>
+    public void ApplyAdditionalPatches(Harmony harmony, Assembly assembly)
+    {
+        // Do not load every standalone type: SteamSetup also names shim-only types absent from PC Facepunch.
+        using var metadata = AssemblyDefinition.ReadAssembly(assembly.Location);
+        var types = metadata.MainModule.GetTypes()
+            .Where(t => t.CustomAttributes.Any(a => a.AttributeType.FullName == typeof(HarmonyPatch).FullName))
+            .Select(t => assembly.GetType(t.FullName.Replace('/', '+'), throwOnError: true)!)
+            .OrderBy(t => t.FullName).ToList();
+        if (types.Count == 0)
+            throw new InvalidOperationException($"{assembly.GetName().Name}: no additional Harmony patch classes found; rebuild the standalone DLL");
+        foreach (var type in types)
+        {
+            try
+            {
+                harmony.CreateClassProcessor(type, true).Patch();
+                Applied.Add(type.FullName!);
+            }
+            catch (Exception error) { Failed.Add((type.FullName!, error)); }
+        }
+    }
 
     public void ApplyPatchClasses(Harmony harmony, IReadOnlySet<Target> targets)
     {

@@ -7,6 +7,7 @@ using HarmonyLib;
 //
 //   HarmonyBaker --game <REPO_Data/Managed> --mod <RepoXR.dll> --deps <dir> [--deps <dir>...]
 //                --targets universal|all --out <dir> [--rewrite <dll>...]
+//                [--patches <assembly.dll>...] (additional Harmony classes, baked in the same pass)
 //
 // --rewrite: an assembly that platform overrides may target but that must not be loaded next to the baker's own copy
 // (BepInEx's HarmonyX 0Harmony.dll).
@@ -28,6 +29,8 @@ var targets = opts.GetValueOrDefault("targets")?.FirstOrDefault() switch
 
 var searchDirs = new List<string> { gameDir, Path.GetDirectoryName(modPath)! };
 searchDirs.AddRange(opts.GetValueOrDefault("deps", []).Select(Path.GetFullPath));
+var additionalPatchPaths = opts.GetValueOrDefault("patches", []).Select(Path.GetFullPath).ToList();
+searchDirs.AddRange(additionalPatchPaths.Select(p => Path.GetDirectoryName(p)!));
 
 var index = new AssemblyIndex(searchDirs);
 var debugBuild = opts.TryGetValue("debug-build", out var db) ? bool.Parse(db[0]) : UnityBakeShim.IsDebugCompiled(Path.Combine(gameDir, "Assembly-CSharp.dll"));
@@ -43,13 +46,22 @@ selection.ApplyPatchClasses(harmony, targets);
 if (targets.Count > 0)
     selection.ApplyNetworkRpcPrefixes(harmony);
 
+var additionalAssemblies = new HashSet<string>(StringComparer.Ordinal);
+foreach (var path in additionalPatchPaths)
+{
+    var assembly = Assembly.LoadFrom(path);
+    if (!additionalAssemblies.Add(assembly.GetName().Name!))
+        throw new ArgumentException($"additional patch assembly listed twice: {path}");
+    selection.ApplyAdditionalPatches(harmony, assembly);
+}
+
 var hooks = new NativeHooks(BakingPatcher.Instances.Where(p => p.IsNative));
 var overridesPath = opts.TryGetValue("overrides", out var ov) ? Path.GetFullPath(ov[0]) : null;
 var platform = opts.TryGetValue("platform", out var pl) ? pl[0] : "windows";
 var rewriteOnly = opts.GetValueOrDefault("rewrite", []).Select(Path.GetFullPath)
     .ToDictionary(p => Path.GetFileNameWithoutExtension(p), p => p);
 var baker = new AssemblyBaker(index, gameDir, outDir, overridesPath, platform, rewriteOnly);
-var results = baker.Write(BakingPatcher.Instances, mod.GetName().Name!, hooks);
+var results = baker.Write(BakingPatcher.Instances, mod.GetName().Name!, hooks, additionalAssemblies);
 
 Console.WriteLine($"game scripts compiled as debug build: {debugBuild}");
 Console.WriteLine($"platform: {platform}; overrides applied: {string.Join(", ", baker.OverridesApplied)}");
@@ -75,6 +87,7 @@ foreach (var r in results)
 var report = new
 {
     targets = targets.Select(t => t.ToString()),
+    additionalPatchAssemblies = additionalAssemblies,
     applied = selection.Applied,
     skipped = selection.Skipped,
     failed = selection.Failed.Select(f => new { f.Name, error = Flatten(f.Error) }),

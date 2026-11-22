@@ -1,5 +1,6 @@
 using RepoXR.ThirdParty.MRTK;
 using RepoXR.UI.Menu;
+using RepoXR.UI;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
@@ -10,7 +11,7 @@ namespace RepoXR.Standalone
     /// <summary>One of the game's popups, kept so that its text can change while it is open, and closed from code</summary>
     internal sealed class MenuPopup
     {
-        private readonly int dismissAnswer;
+        private int dismissAnswer;
         private MenuPage page;
         private TextMeshProUGUI body;
         private MenuButton button; // a one-button popup's
@@ -39,14 +40,16 @@ namespace RepoXR.Standalone
         public bool IsOpen => page && page.currentPageState != MenuPage.PageState.Closing;
 
         /// <summary>A message with one button, which closes it</summary>
-        public static MenuPopup Message(string header, Color color, string text, string button)
+        public static MenuPopup Message(string header, Color color, string text, string button, bool explicitOnly = false)
         {
-            var popup = new MenuPopup(1);
+            var popup = new MenuPopup(explicitOnly ? 2 : 1);
             if (MenuManager.instance && MenuManager.instance.currentMenuPage)
             {
                 MenuPagePopUp.instance = null;
-                MenuManager.instance.PagePopUp(header, color, text, button, true);
+                MenuManager.instance.PagePopUp(QuestText.Literal(header), color, QuestText.Literal(text), QuestText.Literal(button), true);
                 popup.Attach(MenuPagePopUp.instance ? MenuPagePopUp.instance.GetComponent<MenuPage>() : null);
+                if (explicitOnly && popup.button)
+                    popup.button.GetComponent<Button>().onClick.AddListener(() => popup.answer = 1);
             }
             return popup;
         }
@@ -71,7 +74,8 @@ namespace RepoXR.Standalone
             // the popup is the instance its Awake just set. Attached to the current page instead (the main menu), the
             // popup counted as gone at once and the login ended before LOG IN was pressed (1.0.7-qc12/qc14)
             MenuPageTwoOptions.instance = null;
-            MenuManager.instance.PagePopUpTwoOptions(host, header, null, color, text, null, option1, null, option2, null, true);
+            MenuManager.instance.PagePopUpTwoOptions(host, QuestText.Literal(header), null, color, QuestText.Literal(text), null,
+                QuestText.Literal(option1), null, QuestText.Literal(option2), null, true);
             popup.Attach(MenuPageTwoOptions.instance ? MenuPageTwoOptions.instance.GetComponent<MenuPage>() : null);
             if (!popup.page)
                 Debug.LogWarning("[RepoXR.Standalone] the game's two-option popup did not open");
@@ -82,6 +86,42 @@ namespace RepoXR.Standalone
         {
             if (body && body.text != text)
                 body.text = text;
+        }
+
+        public static MenuPopup Options(MenuButtonPopUp host, string header, Color color, string text, params string[] labels)
+        {
+            var result = Ask(host, header, color, text, labels[0], labels.Length > 1 ? labels[1] : "", labels.Length);
+            if (!result.page) return result;
+            var question = result.page.GetComponent<MenuPageTwoOptions>();
+            question.enabled = false;
+            var back = result.page.gameObject.AddComponent<MenuActionBack>();
+            back.Page = result.page;
+            back.Dismiss = () => { result.answer = result.dismissAnswer; result.Close(); };
+            var source = question.option1Button;
+            if (source.transform.parent.GetComponent<HorizontalLayoutGroup>() is HorizontalLayoutGroup layout) layout.enabled = false;
+            for (var i = 0; i < labels.Length; i++)
+            {
+                var choice = i + 1;
+                var item = i == 0 ? source : i == 1 ? question.option2Button :
+                    MenuActions.Add(source, labels[i], Vector2.zero, () => { });
+                // Native Awake ran before PagePopUpTwoOptions assigned its labels; this page's Update is disabled.
+                item.buttonTextString = labels[i];
+                item.buttonText.text = labels[i];
+                Position(item, new Vector2((i % 2) * 170f, -(i / 2) * 38f), new Vector2(160f, 30f));
+                var ui = item.GetComponent<Button>();
+                ui.onClick = new Button.ButtonClickedEvent();
+                ui.onClick.AddListener(() => { result.answer = choice; result.Close(); });
+            }
+            if (labels.Length == 1) question.option2Button.gameObject.SetActive(false);
+            return result;
+        }
+
+        public void DismissAs(int choice) => dismissAnswer = choice;
+
+        private static void Position(MenuButton button, Vector2 position, Vector2 size)
+        {
+            ((RectTransform)button.transform).anchoredPosition = position;
+            MenuActions.Center(button, size);
         }
 
         /// <summary>A one-button popup's label (MenuPagePopUp.Update copies it to the button)</summary>
@@ -119,6 +159,21 @@ namespace RepoXR.Standalone
             }
             else
                 body = opened.GetComponent<MenuPageTwoOptions>().bodyTextMesh;
+            QuestText.Fit(body, wrap: true);
+            QuestText.Fit(opened.menuHeader);
+            ModalLayout.Attach(opened, body);
+        }
+    }
+
+    internal sealed class MenuActionBack : MonoBehaviour
+    {
+        internal MenuPage Page;
+        internal UnityAction Dismiss;
+
+        private void Update()
+        {
+            if (Page && Page.isInteractable && Page.currentPageState != MenuPage.PageState.Closing &&
+                SemiFunc.InputDown(InputKey.Back)) Dismiss?.Invoke();
         }
     }
 
@@ -137,7 +192,15 @@ namespace RepoXR.Standalone
         private TextMeshProUGUI header;
         private MenuButton confirmButton;
         private MenuButton backButton;
+        private MenuButton defaultButton;
+        private MenuButton pasteButton;
+        private MenuButton cancelButton;
+        private MenuButton auxiliaryButton;
+        private TextMeshProUGUI description;
+        private string defaultText;
         private string headerText = "";
+        private string fieldTitle = "";
+        private string hintText = "";
         private Color headerColor = Color.white;
         private bool masked;
         private NonNativeKeyboard keyboard;
@@ -179,6 +242,9 @@ namespace RepoXR.Standalone
             textPage.header = page.menuHeader;
             textPage.confirmButton = prompt ? prompt.confirmButton : null;
             textPage.backButton = prompt ? prompt.backButton : null;
+            // This game version aliases bodyTextMesh and menuHeader. Give the field hint its own text object.
+            textPage.description = Instantiate(textPage.header, page.transform);
+            textPage.description.name = "Field description";
             if (prompt && prompt.bodyTextMesh)
                 prompt.bodyTextMesh.text = "";
             if (prompt)
@@ -194,6 +260,7 @@ namespace RepoXR.Standalone
 
             textPage.Wire(textPage.confirmButton, 1);
             textPage.Wire(textPage.backButton, 2);
+            ModalLayout.Attach(page, textPage.description, textPage.input);
 
             // Longer headers than the page was made for shrink instead of running out of the panel
             textPage.header.enableWordWrapping = false;
@@ -208,14 +275,45 @@ namespace RepoXR.Standalone
 
         /// <summary>Sets the page up for a field; <paramref name="masked"/> shows the text as asterisks</summary>
         public void Show(string title, string confirm, string back, string text, bool masked = false, bool upperOnly = false,
-            int maxLength = 64)
+            int maxLength = 64, string defaultValue = null, bool allowPaste = false, string defaultLabel = null,
+            string hint = null, bool allowCancel = false, string auxiliaryLabel = null, UnityAction auxiliary = null)
         {
-            headerText = title;
+            headerText = QuestText.Literal(title);
+            fieldTitle = headerText;
             headerColor = Color.white;
             this.masked = masked;
+            hintText = hint ?? "";
+            if (description)
+            {
+                description.text = hintText;
+                QuestText.Fit(description, wrap: true);
+            }
             input.upperOnly = upperOnly;
             input.maxLength = maxLength;
             input.textCurrent = text ?? "";
+            input.textMain.richText = false;
+            defaultText = defaultValue;
+            if (defaultValue != null && !defaultButton)
+                defaultButton = MenuActions.Add(confirmButton, QuestText.Get("ui.defaults"), new Vector2(0f, -36f), () =>
+                {
+                    input.textCurrent = defaultText;
+                    Answer = 0;
+                    headerColor = Color.white;
+                    headerText = fieldTitle;
+                });
+            if (defaultButton)
+            {
+                defaultButton.gameObject.SetActive(defaultValue != null);
+                SetLabel(defaultButton, defaultLabel ?? QuestText.Get("ui.defaults"));
+            }
+            if (allowPaste && !pasteButton)
+                pasteButton = MenuActions.Add(confirmButton, QuestText.Get("ui.paste"), new Vector2(180f, -36f), Paste);
+            if (pasteButton) pasteButton.gameObject.SetActive(allowPaste);
+            if (allowCancel && !cancelButton)
+                cancelButton = MenuActions.Add(confirmButton, QuestText.Get("ui.cancel"), new Vector2(0f, -76f), () => Choose(3));
+            if (cancelButton) cancelButton.gameObject.SetActive(allowCancel);
+            if (auxiliaryButton) Destroy(auxiliaryButton.gameObject);
+            auxiliaryButton = auxiliaryLabel == null ? null : MenuActions.Add(confirmButton, auxiliaryLabel, new Vector2(0f, -36f), auxiliary);
             SetLabel(confirmButton, confirm);
             SetLabel(backButton, back);
             Answer = 0;
@@ -230,6 +328,45 @@ namespace RepoXR.Standalone
             input.textCurrent = "";
             Answer = 0;
             ApplyHeader();
+        }
+
+        public void SetHint(string text)
+        {
+            hintText = text;
+            if (description)
+            {
+                description.text = hintText;
+                QuestText.Fit(description, wrap: true);
+            }
+        }
+
+        public void Reject(string title)
+        {
+            headerText = fieldTitle;
+            headerColor = Color.white;
+            if (description) description.text = hintText + "\n<color=#FF7777>" + title + "</color>";
+            Answer = 0;
+            ApplyHeader();
+        }
+
+        private void Paste()
+        {
+            if (!Application.isFocused) { Reject(QuestText.Get("input.focus")); return; }
+            try
+            {
+                var value = RepoQuest.Cloud.CloudInput.Clipboard(GUIUtility.systemCopyBuffer, input.maxLength);
+                input.textCurrent = value;
+                Answer = 0;
+                headerColor = Color.white;
+                headerText = fieldTitle;
+                if (description) description.text = hintText;
+            }
+            catch (System.FormatException error) { Reject(QuestText.Literal(error.Message)); }
+            catch (System.Exception error)
+            {
+                Debug.LogWarning("[CloudCoop] Clipboard unavailable: " + error.Message);
+                Reject(QuestText.Get("input.unavailable"));
+            }
         }
 
         /// <summary>A status in the header while the field is being checked</summary>
@@ -321,8 +458,10 @@ namespace RepoXR.Standalone
 
         private static void SetLabel(MenuButton button, string label)
         {
+            label = QuestText.Literal(label);
             button.buttonTextString = label;
             button.buttonText.text = label;
+            QuestText.Fit(button.buttonText);
         }
 
         private void ApplyHeader()
@@ -330,6 +469,7 @@ namespace RepoXR.Standalone
             if (header.text != headerText)
                 header.text = headerText;
             header.color = headerColor;
+            QuestText.Fit(header);
         }
 
         /// <summary>RepoXR's keyboard comes with the text field (MenuTextInput.Start); its Enter confirms here too</summary>
@@ -349,7 +489,7 @@ namespace RepoXR.Standalone
 
         private void OnFunctionKey(KeyboardKeyFunc key)
         {
-            if (key.ButtonFunction == KeyboardKeyFunc.Function.Enter && MenuManager.instance.currentMenuPage == page)
+            if (key.ButtonFunction == KeyboardKeyFunc.Function.Enter && IsOpen && page.isInteractable)
                 Choose(1);
         }
 

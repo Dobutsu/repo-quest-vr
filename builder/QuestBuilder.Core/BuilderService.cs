@@ -247,6 +247,7 @@ public sealed class BuilderService
     public async Task<string> BuildAsync(CancellationToken ct)
     {
         var game = Game ?? throw new BuildException("Choose the game's folder first") { Code = "game-missing" };
+        Kit.ValidateContent();
         if (!GameInstall.IsValid(game.Path))
             throw new BuildException("The game's folder no longer contains the game") { Code = "game-missing" };
 

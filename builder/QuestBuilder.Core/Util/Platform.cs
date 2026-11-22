@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Reflection;
 
 namespace RepoQuest.Builder;
 
@@ -16,5 +17,6 @@ public static class Platform
 
     /// <summary>Version of the builder (and of its kit and the APK it builds)</summary>
     public static string BuilderVersion { get; } =
-        typeof(Platform).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0";
+        typeof(Platform).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
+        ?? (typeof(Platform).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0");
 }

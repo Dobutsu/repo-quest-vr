@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using RepoQuest.Steam;
+using RepoXR.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -30,11 +31,31 @@ namespace RepoXR.Standalone
 
         /// <summary>The account name last used on this device, offered at the next login</summary>
         internal static string LastAccountName => SessionStore.Load(SessionPath).AccountName;
+        internal static bool NetworkReady => Backend != null && Backend.IsLoggedOn && !Backend.LoginRejected;
+        internal static string NetworkName => Backend?.PersonaName ?? "";
+        internal static void ShowNetworkAccount() => menu?.ShowAccount();
+        internal static IEnumerator EnsureNetworkLogin(MenuButtonPopUp popup)
+        {
+            if (!NetworkReady) yield return SteamLoginFlow.Run(popup);
+        }
+        internal static IEnumerator NetworkJoin(MenuButtonPopUp popup)
+        {
+            yield return EnsureNetworkLogin(popup);
+            if (NetworkReady && menu) yield return menu.ShowFriendsRoutine();
+        }
 
         /// <summary>Before the first scene: the game's PlatformManager (since v0.5.0; SteamManager before) calls
         /// SteamClient.Init in its Awake</summary>
         public static void Install()
         {
+            CloudCoop.Initialize();
+            if (CloudCoop.Enabled)
+            {
+                Steamworks.SteamBackend.Current = CloudCoop.Backend;
+                Steamworks.Dispatch.OnException = Debug.LogException;
+                Debug.Log("[CloudCoop] Cloud mode: Steam login and Steam Cloud are disabled");
+                return;
+            }
             SteamKitBackend.Log = message => Debug.Log(message);
             var session = SessionStore.Load(SessionPath);
             if (session.HasLogin)
@@ -52,14 +73,14 @@ namespace RepoXR.Standalone
             // The shim catches exceptions thrown by the game's Steam event handlers, like Facepunch's dispatcher does
             Steamworks.Dispatch.OnException = Debug.LogException;
 
-            // Also without Steam: Join friend and the Steam button offer the login
+            // In Steam mode the Network play flow and account button can offer sign-in.
             var host = new GameObject("RepoXR (Steam)");
             UnityEngine.Object.DontDestroyOnLoad(host);
             host.hideFlags = HideFlags.HideAndDontSave;
             menu = host.AddComponent<SteamMenu>();
             CosmeticsCloud.Install(host);
 
-            // The main menu's "Join friend" opens the Steam overlay's friends list, which the Quest does not have
+            // Steam overlay friend requests use the headset's friend picker instead.
             Steamworks.SteamFriends.OnOverlayRequested += type =>
             {
                 if (type == "friends")
@@ -140,10 +161,9 @@ namespace RepoXR.Standalone
     }
 
     /// <summary>
-    /// Steam in the Quest's menus. The main menu's Join friend button shows the friends playing R.E.P.O. in a lobby
-    /// one by one in the game's own two-option popup (JOIN / NEXT), JOIN being what "Join game" in the Steam friends
-    /// list does; without a login it offers one. A Steam button next to Quit game shows the account and logs in or
-    /// out. For development joining is also reachable from the Mac (scripts/quest-join.sh):
+    /// Steam mode in Network play: sign in before the requested action, then show friends with available rooms.
+    /// The separate Steam account button signs in/out; Cloud mode never constructs this component.
+    /// Development can also use the existing scripts/quest-join.sh file requests:
     ///   files/steam-join     friend name (or SteamID) -> join that friend's lobby
     ///   files/steam-friends  -> log the friends playing R.E.P.O. and their lobbies
     /// </summary>
@@ -298,8 +318,9 @@ namespace RepoXR.Standalone
             text.Length <= length ? text : text.Substring(0, length - 2) + "..";
 
         /// <summary>The Steam button: log in, or show the account with LOG OUT</summary>
-        private void ShowAccount()
+        internal void ShowAccount()
         {
+            if (CloudCoop.RestartRequired) { CloudCoop.Menu.Open(); return; }
             if (!showingAccount && !SteamLoginFlow.Running)
                 StartCoroutine(ShowAccountRoutine());
         }
@@ -324,8 +345,8 @@ namespace RepoXR.Standalone
 
                 var account = MenuPopup.Ask(popUp, AccountHeader, HeaderColor,
                     backend.IsLoggedOn
-                        ? $"Logged in as <b>{backend.PersonaName}</b>."
-                        : $"<b>{backend.PersonaName}</b> is not connected to Steam right now.\n\nCheck the headset's internet connection.",
+                        ? string.Format(QuestText.Get("steam.accountConnected"), backend.PersonaName)
+                        : string.Format(QuestText.Get("steam.accountDisconnected"), backend.PersonaName),
                     "LOG OUT", "BACK");
                 while (account.Answer == 0)
                     yield return null;
@@ -345,11 +366,12 @@ namespace RepoXR.Standalone
 
         public void ShowFriends()
         {
+            if (CloudCoop.RestartRequired) { CloudCoop.Menu.Open(); return; }
             if (!looking && !SteamLoginFlow.Running)
                 StartCoroutine(ShowFriendsRoutine());
         }
 
-        private IEnumerator ShowFriendsRoutine()
+        internal IEnumerator ShowFriendsRoutine()
         {
             var backend = SteamSetup.Backend;
             if (backend == null)
@@ -377,17 +399,19 @@ namespace RepoXR.Standalone
 
             if (!backend.IsLoggedOn)
             {
-                MenuManager.instance.PagePopUp(Header, HeaderColor,
-                    "Not connected to Steam yet.\n\nCheck the headset's internet connection and try again.", "OK", true);
+                MenuPopup.Message(QuestText.Get("steam.joinTitle"), HeaderColor, QuestText.Get("steam.notConnected"), QuestText.Get("ui.back"));
                 yield break;
             }
 
             var friends = backend.FriendsInGame().Where(f => f.LobbyId != 0).ToList();
             if (friends.Count == 0)
             {
-                MenuManager.instance.PagePopUp(Header, HeaderColor,
-                    "None of your Steam friends is in a R.E.P.O. lobby right now.\n\nAsk a friend to host a game, then try again.",
-                    "OK", true);
+                var empty = MenuPopup.Options(popUp, QuestText.Get("steam.noGamesTitle"), HeaderColor,
+                    QuestText.Get("steam.noGames"), QuestText.Get("steam.refresh"), QuestText.Get("ui.back"));
+                while (empty.Answer == 0) yield return null;
+                var refresh = empty.Answer == 1;
+                yield return SteamLoginFlow.MenuSettled();
+                if (refresh) yield return ShowFriendsRoutine();
                 yield break;
             }
 
@@ -405,9 +429,9 @@ namespace RepoXR.Standalone
             if (more)
                 popUp.option2Event.AddListener(() => StartCoroutine(ShowNext(friends, (index + 1) % friends.Count)));
 
-            var body = $"<b>{friend.Name}</b> is in a R.E.P.O. lobby." + (more ? $"\n\n{index + 1} of {friends.Count}" : "");
-            MenuManager.instance.PagePopUpTwoOptions(popUp, Header, null, HeaderColor, body, null,
-                "JOIN", null, more ? "NEXT" : "BACK", null, true);
+            var body = string.Format(QuestText.Get("steam.friendGame"), friend.Name) + (more ? $"\n\n{index + 1}/{friends.Count}" : "");
+            MenuManager.instance.PagePopUpTwoOptions(popUp, QuestText.Get("steam.joinTitle"), null, HeaderColor, body, null,
+                QuestText.Get("net.connect"), null, more ? QuestText.Get("steam.next") : QuestText.Get("ui.back"), null, true);
         }
 
         // The popup that was just answered is still closing; open the next one once it is gone
@@ -420,6 +444,7 @@ namespace RepoXR.Standalone
 
         private static void Join(FriendInfo friend)
         {
+            if (CloudCoop.RestartRequired) { CloudCoop.Menu.Open(); return; }
             if (SteamSetup.Backend.JoinFriend(friend.SteamId))
                 Debug.Log($"[RepoXR.Standalone] Steam: joining {friend.Name} (lobby {friend.LobbyId})");
             else
@@ -429,6 +454,7 @@ namespace RepoXR.Standalone
         /// <summary>A friend invited us: JOIN does what accepting the invite in Steam does</summary>
         public void ShowInvite(ulong friendId, ulong lobbyId)
         {
+            if (CloudCoop.RestartRequired) { CloudCoop.Menu.Open(); return; }
             var backend = SteamSetup.Backend;
             var name = friendId != 0 ? backend.GetPersonaName(friendId) : "";
             if (string.IsNullOrEmpty(name))
@@ -443,6 +469,7 @@ namespace RepoXR.Standalone
             popUp.option1Event = new UnityEngine.Events.UnityEvent();
             popUp.option1Event.AddListener(() =>
             {
+                if (CloudCoop.RestartRequired) { CloudCoop.Menu.Open(); return; }
                 if (backend.JoinInvite(friendId, lobbyId))
                     Debug.Log($"[RepoXR.Standalone] Steam: accepting the invite from {name} (lobby {lobbyId})");
                 else

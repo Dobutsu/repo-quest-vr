@@ -9,11 +9,13 @@ public sealed class ThirdParty
 {
     private readonly Workspace workspace;
     private readonly KitDownloads pins;
+    private readonly string cachedDownloads;
 
     public ThirdParty(Workspace workspace, Kit kit)
     {
         this.workspace = workspace;
         pins = kit.Manifest.Downloads;
+        cachedDownloads = Path.Combine(kit.Root, "downloads");
     }
 
     public IProgress<(string Name, DownloadProgress Progress)>? Progress { get; set; }
@@ -87,6 +89,7 @@ public sealed class ThirdParty
     {
         var pin = pins.BuiltinShaders;
         var archive = Path.Combine(workspace.Downloads, $"builtin_shaders-{pin.Version}.zip");
+        CopyCachedArchive(Path.GetFileName(archive), archive, pin.Sha256);
         await Downloader.DownloadAsync(pin.Url, archive, pin.Sha256, Report("builtin shaders"), ct);
     }
 
@@ -112,9 +115,20 @@ public sealed class ThirdParty
         if (File.Exists(marker) && File.ReadAllText(marker).Trim() == sha256)
             return;
         var archive = Path.Combine(workspace.Downloads, archiveName);
+        CopyCachedArchive(archiveName, archive, sha256);
         await Downloader.DownloadAsync(url, archive, sha256, Report(archiveName), ct);
         await Archive.ExtractAsync(archive, dir, ct);
         File.WriteAllText(marker, sha256);
+    }
+
+    private void CopyCachedArchive(string name, string destination, string sha256)
+    {
+        var source = Path.Combine(cachedDownloads, name);
+        if (!File.Exists(source)) return;
+        if (!Hashing.Sha256File(source).Equals(sha256, StringComparison.OrdinalIgnoreCase))
+            throw new BuildException($"The bundled dependency cache is damaged: {name}");
+        if (!File.Exists(destination) || !Hashing.Sha256File(destination).Equals(sha256, StringComparison.OrdinalIgnoreCase))
+            FileOps.CopyFile(source, destination);
     }
 
     private IProgress<DownloadProgress>? Report(string name) =>

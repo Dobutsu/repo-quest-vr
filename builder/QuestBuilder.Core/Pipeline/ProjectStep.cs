@@ -28,6 +28,10 @@ public sealed class ProjectStep : BuildStep
         <linker>
           <assembly fullname="RepoXR.Standalone" preserve="all"/>
           <assembly fullname="RepoXR" preserve="all"/>
+          <!-- Cloud co-op inspects the game's Photon settings and auth types under IL2CPP. -->
+          <assembly fullname="PhotonUnityNetworking" preserve="all"/>
+          <assembly fullname="PhotonRealtime" preserve="all"/>
+          <assembly fullname="PhotonVoice" preserve="all"/>
           <assembly fullname="BepInEx" preserve="all"/>
           <assembly fullname="Unity.XR.Interaction.Toolkit" preserve="all"/>
           <assembly fullname="Unity.XR.OpenXR" preserve="all"/>
@@ -258,7 +262,7 @@ public sealed class ProjectStep : BuildStep
         var discover = Path.Combine(staging, "Kistras-CustomDiscoverStateLib.dll");
         var standalone = Path.Combine(staging, "RepoXR.Standalone.dll");
         FileOps.CopyFile(Path.Combine(discoverState, "CustomDiscoverStateLib.dll"), discover);
-        FileOps.CopyFile(context.Kit.StandaloneDll, standalone);
+        FileOps.CopyFile(Path.Combine(workspace.Baked, "RepoXR.Standalone.dll"), standalone);
         await RenameAsync(context, bepInExCore, [discover, standalone], ct);
 
         var plugins = Path.Combine(workspace.Project, "Assets", "Plugins", "RepoXR");

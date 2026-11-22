@@ -17,8 +17,22 @@ public sealed class CoreTests : IDisposable
     [InlineData("0.0.0", 1)]
     [InlineData("dev", 1)]
     [InlineData("2.10.5", 21005)]
+    [InlineData("1.1.3-forked", 10103)]
+    [InlineData("1.1.3-forked-v2", 10103)]
+    [InlineData("1.1.3-forked-v3", 10103)]
+    [InlineData("1.2.0-forked-v1", 10200)]
+    [InlineData("1.2.0-forked-v2", 10200)]
+    [InlineData("1.1.3-forked+abc123", 10103)]
     public void VersionCode_GrowsWithReleases(string version, int code) =>
         Assert.Equal(code, BuildOptions.VersionCodeOf(version));
+
+    [Fact]
+    public void BuilderVersion_PreservesReleaseSuffixWithoutBuildMetadata()
+    {
+        var informational = System.Reflection.CustomAttributeExtensions
+            .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(Platform).Assembly)!;
+        Assert.Equal(informational.InformationalVersion.Split('+')[0], Platform.BuilderVersion);
+    }
 
     [Fact]
     public async Task UnityLogTail_ReportsTheLatestLineAndHowLongAgo()
@@ -76,6 +90,9 @@ public sealed class CoreTests : IDisposable
     [InlineData("1.0.0", "1.0.0", false)]
     [InlineData("0.9.0", "1.0.0", false)]
     [InlineData("garbage", "1.0.0", false)]
+    [InlineData("99.0.0", "1.1.3-forked", true)]
+    [InlineData("1.1.3", "1.1.3-forked", false)]
+    [InlineData("1.1.3-forked", "1.1.3", false)]
     public void IsNewer_ComparesVersionsNumerically(string candidate, string current, bool newer) =>
         Assert.Equal(newer, ReleaseManifest.IsNewer(candidate, current));
 
@@ -156,9 +173,10 @@ public sealed class CoreTests : IDisposable
     public void WorkspaceProblems_AreReported()
     {
         Assert.Equal("workspace-not-ascii", AppSettings.WorkspaceProblem(Path.Combine(temp, "Сборка"), null));
-        var game = Path.Combine(temp, "REPO");
+        var shortRoot = OperatingSystem.IsWindows() ? @"C:\RQTest" : temp;
+        var game = Path.Combine(shortRoot, "REPO");
         Assert.Equal("workspace-in-game", AppSettings.WorkspaceProblem(Path.Combine(game, "build"), game));
-        Assert.Null(AppSettings.WorkspaceProblem(Path.Combine(temp, "RepoQuest"), game));
+        Assert.Null(AppSettings.WorkspaceProblem(Path.Combine(shortRoot, "RepoQuest"), game));
     }
 
     [Fact]

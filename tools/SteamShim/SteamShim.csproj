@@ -17,6 +17,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="../Shared/CloudJoinCode.cs" Link="Cloud/CloudJoinCode.cs" />
         <!-- Real Steam for the Quest (RepoQuest.Steam.SteamKitBackend). 2.5 is the last SteamKit with a netstandard
              build Unity can use; 3.x targets .NET 8 only -->
         <PackageReference Include="SteamKit2" Version="2.5.0" />

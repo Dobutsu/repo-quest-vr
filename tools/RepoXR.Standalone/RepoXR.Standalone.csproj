@@ -9,14 +9,32 @@
         <GameManaged Condition="'$(GameManaged)' == ''">$(MSBuildThisFileDirectory)../../work/game/REPO_Data/Managed</GameManaged>
         <RepoXRRuntimeDeps Condition="'$(RepoXRRuntimeDeps)' == ''">$(MSBuildThisFileDirectory)../../work/downloads/RepoXR-1.2.3/BepInEx/plugins/RepoXR/RuntimeDeps</RepoXRRuntimeDeps>
         <BepInExCore Condition="'$(BepInExCore)' == ''">$(MSBuildThisFileDirectory)../../work/downloads/BepInEx5/BepInEx/core</BepInExCore>
+        <RepoXRDll Condition="'$(RepoXRDll)' == ''">$(MSBuildThisFileDirectory)../../work/repoxr-src/bin/Release/netstandard2.1/RepoXR.dll</RepoXRDll>
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="../Shared/PhotonAccess.cs" Link="Cloud/PhotonAccess.cs" />
+        <Compile Include="../Shared/CloudRoomRouting.cs" Link="Cloud/CloudRoomRouting.cs" />
+        <Compile Include="../Shared/CloudAppIds.cs" Link="Cloud/CloudAppIds.cs" />
+        <Compile Include="../Shared/CloudInput.cs" Link="Cloud/CloudInput.cs" />
+        <Compile Include="../Shared/CloudWebsite.cs" Link="Cloud/CloudWebsite.cs" />
+        <Compile Include="../Shared/CloudSettings.cs" Link="Cloud/CloudSettings.cs" />
+        <Compile Include="../Shared/CloudProfile.cs" Link="Cloud/CloudProfile.cs" />
+        <Compile Include="../Shared/CloudConfigFile.cs" Link="Cloud/CloudConfigFile.cs" />
+        <Compile Include="../Shared/DialogLabels.cs" Link="UI/DialogLabels.cs" />
+        <Compile Include="../Shared/ModalMetrics.cs" Link="UI/ModalMetrics.cs" />
+        <Reference Include="UnityEngine.IMGUIModule" HintPath="$(GameManaged)/UnityEngine.IMGUIModule.dll" Private="false" />
+        <Reference Include="Unity.Localization" HintPath="$(GameManaged)/Unity.Localization.dll" Private="false" />
+        <Reference Include="Unity.ResourceManager" HintPath="$(GameManaged)/Unity.ResourceManager.dll" Private="false" />
+        <Reference Include="UnityEngine.JSONSerializeModule">
+            <HintPath>$(GameManaged)/UnityEngine.JSONSerializeModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
         <!-- Overrides name RepoXR's internal types; compile against a publicized copy of the mod -->
         <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.3" PrivateAssets="all" />
         <Reference Include="RepoXR" Publicize="true">
             <!-- RepoXR with patches/repoxr applied (scripts/prepare-repoxr.sh) -->
-            <HintPath>$(MSBuildThisFileDirectory)../../work/repoxr-src/bin/Release/netstandard2.1/RepoXR.dll</HintPath>
+            <HintPath>$(RepoXRDll)</HintPath>
             <Private>false</Private>
         </Reference>
         <!-- RepoXR's XR dependencies as shipped in its release (RuntimeDeps); internals are needed for OpenXR features -->
@@ -41,6 +59,15 @@
         </Reference>
         <Reference Include="PhotonVoice">
             <HintPath>$(GameManaged)/PhotonVoice.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <!-- NetworkManager's cloud disconnect patch targets its PUN callback. -->
+        <Reference Include="PhotonUnityNetworking">
+            <HintPath>$(GameManaged)/PhotonUnityNetworking.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="PhotonRealtime">
+            <HintPath>$(GameManaged)/PhotonRealtime.dll</HintPath>
             <Private>false</Private>
         </Reference>
         <Reference Include="UnityEngine.CoreModule">
@@ -84,4 +111,12 @@
         </Reference>
     </ItemGroup>
 
+    <Target Name="ValidateStandaloneInputs" BeforeTargets="PrepareForBuild">
+        <Error Condition="!Exists('$(GameManaged)/Assembly-CSharp.dll')"
+               Text="R.E.P.O. assemblies missing: $(GameManaged). Set GameManaged to your game's REPO_Data/Managed directory." />
+        <Error Condition="!Exists('$(RepoXRDll)')"
+               Text="Patched RepoXR.dll missing. Prepare RepoXR from the pinned sources and patches before building standalone." />
+        <Error Condition="!Exists('$(MSBuildThisFileDirectory)../SteamShim/bin/Release/netstandard2.1/Facepunch.Steamworks.Win64.dll')"
+               Text="Build tools/SteamShim in Release before building standalone; the cloud adapter requires the matching shim." />
+    </Target>
 </Project>

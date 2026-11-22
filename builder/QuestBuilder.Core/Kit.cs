@@ -80,6 +80,37 @@ public sealed class Kit
     /// <summary>RepoXR's asset bundle and Addressables built for Android (repoxrassets, Addressables/)</summary>
     public string RepoXRAndroidAssets => Path.Combine(Root, "prebuilt", "repoxr-android");
 
+    /// <summary>Fail before starting Unity/downloads when a packaged kit is incomplete.</summary>
+    public void ValidateContent()
+    {
+        var required = new[]
+        {
+            RepoXRDll, StandaloneDll, Opus, Path.Combine(RepoXRAndroidAssets, "repoxrassets"), PythonLock,
+            Path.Combine(Scripts, "package_swap.py"), Path.Combine(Scripts, "restore_resource_names.py"),
+            Path.Combine(UnityTools, "Editor", "QuestBuild.cs"),
+        }.Concat(new[] { "Facepunch.Steamworks.Win64", "SteamKit2", "protobuf-net", "protobuf-net.Core", "System.Collections.Immutable" }
+            .Select(name => Path.Combine(SteamDir, name + ".dll")));
+        foreach (var path in required)
+            if (!File.Exists(path) || new FileInfo(path).Length == 0)
+                throw new BuildException($"Incomplete build kit: {Path.GetRelativePath(Root, path)}");
+        Span<byte> elf = stackalloc byte[20];
+        using (var opus = File.OpenRead(Opus)) opus.ReadExactly(elf);
+        if (!elf[..4].SequenceEqual(new byte[] { 0x7f, (byte)'E', (byte)'L', (byte)'F' }) || elf[4] != 2 || elf[5] != 1 ||
+            System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(elf[18..]) != 183)
+            throw new BuildException("The Opus library must be an Android arm64 ELF binary");
+        Span<byte> bundle = stackalloc byte[8];
+        using (var assets = File.OpenRead(Path.Combine(RepoXRAndroidAssets, "repoxrassets"))) assets.ReadExactly(bundle);
+        if (!bundle.SequenceEqual("UnityFS\0"u8)) throw new BuildException("RepoXR assets are not a UnityFS bundle");
+        var addressables = Path.Combine(RepoXRAndroidAssets, "Addressables");
+        if (!Directory.Exists(addressables) || !Directory.EnumerateFiles(addressables, "*.bundle", SearchOption.AllDirectories).Any() ||
+            !Directory.EnumerateFiles(addressables, "catalog*", SearchOption.AllDirectories).Any())
+            throw new BuildException("The kit is missing RepoXR's Android Addressables bundles/catalog");
+        foreach (var file in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories))
+            if (Path.GetFileName(file).StartsWith("Assembly-CSharp", StringComparison.OrdinalIgnoreCase) ||
+                Path.GetFileName(file).StartsWith("REPO.Game", StringComparison.OrdinalIgnoreCase))
+                throw new BuildException("Game assemblies must not be included in the build kit");
+    }
+
     /// <summary>Hash of the kit's content: part of the pipeline's stamps, so a new kit rebuilds what it affects</summary>
     public string ContentHash => contentHash ??= Hashing.Directory(Root,
         rel => !rel.Contains("__pycache__") && !rel.EndsWith(".pyc") && rel != ".content-hash");

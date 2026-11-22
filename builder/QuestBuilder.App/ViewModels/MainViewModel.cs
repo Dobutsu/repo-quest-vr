@@ -54,7 +54,8 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
         this.view = view;
         if (options.Workspace is not null)
             settings.WorkspacePath = options.Workspace;
-        Loc.Instance.SetLanguage(options.Language ?? settings.Language ?? "en"); // English unless the player chose Russian
+        settings.WorkspacePath ??= options.Defaults.WorkspacePath;
+        Loc.Instance.SetLanguage(options.Language ?? settings.Language ?? options.Defaults.Language ?? "en");
         Loc.Instance.LanguageChanged += OnLanguageChanged;
         Steps = new ObservableCollection<StepViewModel>(BuilderService.StepsFor(Headset.Quest).Select(id => new StepViewModel(id)));
         clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -143,6 +144,13 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             service = new BuilderService(settings, view.Prompts, this);
             var kit = options.KitDir;
             await Task.Run(() => service.Initialize(kit));
+            if (options.GameDir is { } explicitGame)
+            {
+                if (service.SetGamePath(explicitGame) is { } problem)
+                    throw new BuildException($"{explicitGame}: {problem}");
+            }
+            else if (service.Game is null && RepoQuest.Builder.Game.GameInstall.IsValid(options.Defaults.GamePath))
+                service.SetGamePath(options.Defaults.GamePath!);
             ShowHeadset();
             IsReady = true;
         }

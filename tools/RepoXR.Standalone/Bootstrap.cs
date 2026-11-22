@@ -50,6 +50,7 @@ namespace RepoXR.Standalone
 
                 var host = new GameObject("RepoXR (standalone)");
                 Object.DontDestroyOnLoad(host);
+                host.AddComponent<RussianMenuTranslations>();
                 host.AddComponent(pluginType);
 
                 Debug.Log("[RepoXR.Standalone] plugin started");

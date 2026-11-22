@@ -17,6 +17,7 @@
 
     <ItemGroup>
         <Using Include="Xunit" />
+        <EmbeddedResource Include="Fixtures/kit-resource.txt" LogicalName="kit-test.txt" />
     </ItemGroup>
 
 </Project>

@@ -46,7 +46,7 @@ public sealed class BuildOptions
     /// <summary>Android versionCode of a version: 1.2.3 -> 10203 (always growing with releases; 0.0.0 -> 1)</summary>
     public static int VersionCodeOf(string version)
     {
-        var parts = version.Split('.').Select(p => int.TryParse(p, out var n) ? n : 0).Concat([0, 0, 0]).Take(3).ToArray();
+        var parts = version.Split('-', '+')[0].Split('.').Select(p => int.TryParse(p, out var n) ? n : 0).Concat([0, 0, 0]).Take(3).ToArray();
         return Math.Max(1, parts[0] * 10000 + parts[1] * 100 + parts[2]);
     }
 }

@@ -19,6 +19,8 @@ internal static class Program
         // starts, or every tool run would open a window
         if (ToolHost.TryRun(args, out var code))
             return code;
+        if (BuilderDiagnostics.TryRun(args, out code))
+            return code;
 
         // A crash ends up in builder.log, not only in the Windows event log
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Builder.Log.Error($"crash: {e.ExceptionObject}");

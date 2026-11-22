@@ -8,6 +8,7 @@
         <LangVersion>latest</LangVersion>
         <!-- One version for the builder, its kit and the APK it builds (scripts/release.sh passes it) -->
         <Version Condition="'$(Version)' == ''">0.0.0</Version>
+        <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
         <Product>REPO Quest Builder</Product>
         <Company>Dobutsu</Company>
         <!-- HarmonyBaker, AssemblyRenamer and Il2CppFixes are framework-dependent exes; the builder runs them as its

@@ -1,0 +1,187 @@
+diff --git a/Source/Input/RebindManager.cs b/Source/Input/RebindManager.cs
+--- a/Source/Input/RebindManager.cs
++++ b/Source/Input/RebindManager.cs
+@@ -1,6 +1,7 @@
+ ﻿using System.Collections.Generic;
+ using RepoXR.Assets;
+ using RepoXR.Managers;
++using RepoXR.UI;
+ using RepoXR.UI.Controls;
+ using TMPro;
+ using UnityEngine;
+@@ -110,6 +111,7 @@
+                 var header = Instantiate(AssetCollection.RebindHeader, container).GetComponent<RectTransform>();
+                 header.localPosition = new Vector3(58.8f, yPos, 0);
+                 header.GetComponentInChildren<TextMeshProUGUI>().text = control.headerName;
++                QuestText.BindTree(header.gameObject);
+
+                 yPos -= 58;
+             }
+@@ -209,4 +211,4 @@
+         if (MenuPageLobby.instance)
+             MenuPageLobby.instance.UpdateChatPrompt();
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/Source/Patches/UI/TutorialPatches.cs b/Source/Patches/UI/TutorialPatches.cs
+--- a/Source/Patches/UI/TutorialPatches.cs
++++ b/Source/Patches/UI/TutorialPatches.cs
+@@ -4,6 +4,8 @@
+ using HarmonyLib;
+ using RepoXR.Assets;
+ using RepoXR.Player.Camera;
++using RepoXR.UI;
++using RepoQuest.Localization;
+ using TMPro;
+ using UnityEngine;
+ using static HarmonyLib.AccessTools;
+@@ -91,10 +93,9 @@
+     [HarmonyPostfix]
+     private static void OnTutorialDirectorCreate(TutorialDirector __instance)
+     {
+-        // RepoXR's VR texts exist in English only: in any other language the game's own (translated) texts stay, which
+-        // also show the VR controller icons
+         var locale = UnityEngine.Localization.Settings.LocalizationSettings.SelectedLocale;
+-        if (locale && !locale.Identifier.Code.StartsWith("en", StringComparison.OrdinalIgnoreCase))
++        if (locale && !QuestStrings.IsRussian(locale.Identifier.Code) &&
++            !locale.Identifier.Code.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+             return;
+
+         // Replace some tutorial text with VR equivalents (the pages are checked: their indices are those of 0.4.4)
+@@ -129,6 +130,19 @@
+     {
+         if (page == null)
+             return;
++
++        // The bundle contains English only. Use the shared Russian VR instructions before resolving its table.
++        if (QuestStrings.IsRussian(QuestText.Locale))
++        {
++            page.localizedText = null!;
++            page.text = QuestText.Get(textKey);
++            if (dummyKey != null)
++            {
++                page.localizedDummyText = null!;
++                page.dummyText = QuestText.Get(dummyKey);
++            }
++            return;
++        }
+
+         // Through RepoXR's translations when they load (the Quest); on PC 0.5.0's Addressables cannot read RepoXR's
+         // JSON catalog (see AssetCollection.LoadAssets), and the same English texts are built in
+@@ -190,4 +204,4 @@
+     {
+         __instance.promptText.spriteAsset = AssetCollection.TMPInputsSpriteAsset;
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/Source/UI/Controls/ControlOption.cs b/Source/UI/Controls/ControlOption.cs
+--- a/Source/UI/Controls/ControlOption.cs
++++ b/Source/UI/Controls/ControlOption.cs
+@@ -62,10 +62,18 @@
+         control = remappableControl;
+
+         controlName.text = control.controlName;
++        QuestText.BindTree(gameObject);
++        var toggle = GetComponentInChildren<MenuTwoOptions>();
++        if (toggle)
++        {
++            toggle.option1Text = QuestText.Get("ui.on");
++            toggle.option2Text = QuestText.Get("ui.off");
++        }
+     }
+
+     public void ReloadBinding()
+     {
++        QuestText.Fit(controlText);
+         if (rebindTimerCoroutine != null)
+             StopCoroutine(rebindTimerCoroutine);
+
+@@ -75,7 +83,7 @@
+
+         if (string.IsNullOrEmpty(VRInputSystem.Instance.CurrentControlScheme))
+         {
+-            controlText.text = "<sprite=37> DISCONNECTED";
++            controlText.text = QuestText.Get("control.disconnected");
+
+             return;
+         }
+@@ -84,7 +92,7 @@
+
+         if (string.IsNullOrEmpty(binding))
+         {
+-            controlText.text = "NOT BOUND";
++            controlText.text = QuestText.Get("control.notBound");
+
+             return;
+         }
+@@ -111,4 +119,4 @@
+             yield return new WaitForSeconds(0.5f);
+         }
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/Source/UI/Expressions/ExpressionRadial.cs b/Source/UI/Expressions/ExpressionRadial.cs
+--- a/Source/UI/Expressions/ExpressionRadial.cs
++++ b/Source/UI/Expressions/ExpressionRadial.cs
+@@ -37,6 +37,7 @@
+     private void Awake()
+     {
+         instance = this;
++        QuestText.BindTree(gameObject);
+
+         // Move the preview UI to the middle of the radial menu
+         var playerRenderTex = PlayerExpressionsUI.instance.transform;
+@@ -312,4 +313,4 @@
+         Crazy,
+         Happy
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/Source/UI/Menu/InputKeyboard.cs b/Source/UI/Menu/InputKeyboard.cs
+--- a/Source/UI/Menu/InputKeyboard.cs
++++ b/Source/UI/Menu/InputKeyboard.cs
+@@ -30,6 +30,7 @@
+
+     private void Start()
+     {
++        QuestText.BindTree(gameObject);
+         keyboard.OnKeyboardValueKeyPressed += OnKeyPressed;
+         keyboard.OnKeyboardFunctionKeyPressed += OnFunctionKeyPressed;
+
+@@ -91,4 +92,4 @@
+
+         // No other handlers needed
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/Source/UI/Menu/ShowcasePage.cs b/Source/UI/Menu/ShowcasePage.cs
+--- a/Source/UI/Menu/ShowcasePage.cs
++++ b/Source/UI/Menu/ShowcasePage.cs
+@@ -10,13 +10,14 @@
+
+     private void Awake()
+     {
++        QuestText.BindTree(gameObject);
+ #if DEBUG
+         versionText.text = $"v{Plugin.PLUGIN_VERSION}-dev";
+ #else
+         versionText.text = $"v{Plugin.PLUGIN_VERSION}";
+ #endif
+
+-        commitText.text = $"Commit: {Plugin.GetCommitHash()}";
++        commitText.text = string.Format(QuestText.Get("vr.commit"), Plugin.GetCommitHash());
+     }
+
+     public void MadeByClicked()
+@@ -38,4 +39,4 @@
+     {
+         Application.OpenURL("https://ko-fi.com/daxcess");
+     }
+-}
+\ No newline at end of file
++}

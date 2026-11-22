@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" PrivateAssets="all" />
+    <ProjectReference Include="../HarmonyBaker/HarmonyBaker.csproj" />
+    <ProjectReference Include="Fixture/Fixture.csproj" />
+    <Compile Remove="Fixture/**/*.cs" />
+    <!-- Exercise the real shim API without requiring SteamKit, Unity, or any game files. -->
+    <Compile Include="../SteamShim/Backend.cs" Link="Backend.cs" />
+    <Compile Include="../SteamShim/Api.cs" Link="Api.cs" />
+    <Compile Include="../SteamShim/CloudSteamBackend.cs" Link="CloudSteamBackend.cs" />
+    <Compile Include="../Shared/CloudJoinCode.cs" Link="CloudJoinCode.cs" />
+    <Compile Include="../Shared/PhotonAccess.cs" Link="PhotonAccess.cs" />
+    <Compile Include="../Shared/CloudRoomRouting.cs" Link="CloudRoomRouting.cs" />
+    <Compile Include="../Shared/CloudAppIds.cs" Link="CloudAppIds.cs" />
+    <Compile Include="../Shared/QuestStrings.cs" Link="QuestStrings.cs" />
+    <Compile Include="../Shared/CloudInput.cs" Link="CloudInput.cs" />
+    <Compile Include="../Shared/CloudWebsite.cs" Link="CloudWebsite.cs" />
+    <Compile Include="../Shared/CloudSettings.cs" Link="CloudSettings.cs" />
+    <Compile Include="../Shared/CloudProfile.cs" Link="CloudProfile.cs" />
+    <Compile Include="../Shared/CloudConfigFile.cs" Link="CloudConfigFile.cs" />
+    <Compile Include="../Shared/DialogLabels.cs" Link="DialogLabels.cs" />
+    <Compile Include="../Shared/ModalMetrics.cs" Link="ModalMetrics.cs" />
+  </ItemGroup>
+</Project>

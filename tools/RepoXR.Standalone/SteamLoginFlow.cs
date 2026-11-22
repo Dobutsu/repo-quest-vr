@@ -63,21 +63,10 @@ namespace RepoXR.Standalone
             Running = false;
         }
 
-        /// <summary>
-        /// The headset talks to Steam through SteamKit2, which Steam's subscriber agreement does not allow (third-party
-        /// clients); players decide with this in front of them (docs/public-release.md)
-        /// </summary>
-        private const string RiskNote =
-            "<size=80%>The headset logs in through an unofficial Steam client. Steam's rules do not allow that: " +
-            "the risk for your account is small, but it is there.</size>";
-
         private static IEnumerator Steps(MenuButtonPopUp host, string reason)
         {
             var intro = MenuPopup.Ask(host, Header, HeaderColor,
-                (reason != null ? reason + "\n\n" : "") +
-                "Log in with your Steam <b>account name</b> (not your profile name) and password." +
-                (reason != null ? "" : "\n\nThe password goes only to Steam.") +
-                "\n\n" + RiskNote,
+                (reason != null ? RepoXR.UI.QuestText.Literal(reason) + "\n\n" : "") + RepoXR.UI.QuestText.Get("steam.intro"),
                 "LOG IN", "BACK");
             while (intro.Answer == 0)
                 yield return null;
@@ -251,14 +240,17 @@ namespace RepoXR.Standalone
 
             progress.Close();
             yield return MenuSettled();
+            MenuPopup result;
             if (backend.IsLoggedOn)
-                MenuPopup.Message(Header, HeaderColor,
-                    $"Logged in as <b>{backend.PersonaName}</b>.\n\nJoin friend now shows friends who are in a R.E.P.O. lobby.", "OK");
+                result = MenuPopup.Message(Header, HeaderColor,
+                    string.Format(RepoXR.UI.QuestText.Get("steam.loggedIn"), backend.PersonaName), "OK");
             else if (backend.LoginRejected)
-                MenuPopup.Message(Header, ErrorColor, "Steam accepted the password, but refused the logon.\n\nTry again later.", "OK");
+                result = MenuPopup.Message(Header, ErrorColor, "Steam accepted the password, but refused the logon.\n\nTry again later.", "OK");
             else
-                MenuPopup.Message(Header, HeaderColor,
+                result = MenuPopup.Message(Header, HeaderColor,
                     "Steam accepted the login, but the connection is slow.\n\nThe headset keeps trying in the background.", "OK");
+            while (result.IsOpen && result.Answer == 0) yield return null;
+            yield return MenuSettled();
         }
 
         private static string CodeTitle(PasswordLogin login) =>

@@ -1,0 +1,670 @@
+{
+  "page.title": {
+    "ru": "REPO LINK — комнаты для совместной игры",
+    "en": "REPO LINK — multiplayer rooms"
+  },
+  "page.description": {
+    "ru": "Создайте комнату R.E.P.O. на ПК или Quest. Опубликуйте код приглашения и подключитесь через меню игры.",
+    "en": "Create a R.E.P.O. room on PC or Quest. Share an invitation code and connect through the game menu."
+  },
+  "navigation.skip_rooms": {
+    "ru": "К списку комнат",
+    "en": "Skip to rooms"
+  },
+  "brand.home_label": {
+    "ru": "REPO LINK — главная",
+    "en": "REPO LINK — home"
+  },
+  "brand.tagline": {
+    "ru": "СВЯЗЬ МЕЖДУ ПК И QUEST",
+    "en": "CONNECT PC AND QUEST"
+  },
+  "brand.unofficial": {
+    "ru": "НЕОФИЦИАЛЬНЫЙ СЕРВИС",
+    "en": "UNOFFICIAL COMMUNITY SERVICE"
+  },
+  "hero.title": {
+    "ru": "КОМАНДА ЕСТЬ.",
+    "en": "YOUR CREW IS READY."
+  },
+  "hero.subtitle": {
+    "ru": "ОСТАЛОСЬ ВОЙТИ.",
+    "en": "TIME TO CONNECT."
+  },
+  "hero.create_room": {
+    "ru": "Создайте комнату на ПК или Quest. Опубликуйте код здесь.",
+    "en": "Create a room on PC or Quest. Post the code here."
+  },
+  "hero.connect": {
+    "ru": "Скопируйте приглашение и подключитесь через меню игры.",
+    "en": "Copy an invitation and connect through the game menu."
+  },
+  "transfer.title": {
+    "ru": "ПЕРЕДАЧА ПРИГЛАШЕНИЯ",
+    "en": "INVITATION TRANSFER"
+  },
+  "transfer.pc": {
+    "ru": "ПК",
+    "en": "PC"
+  },
+  "transfer.no_signup": {
+    "ru": "БЕЗ РЕГИСТРАЦИИ",
+    "en": "NO SIGN-UP"
+  },
+  "transfer.expiry": {
+    "ru": "ХРАНЕНИЕ 24 ЧАСА",
+    "en": "EXPIRES IN 24 HOURS"
+  },
+  "guide.connect_label": {
+    "ru": "Как подключиться",
+    "en": "How to connect"
+  },
+  "guide.create_game": {
+    "ru": "Создайте игру на ПК или Quest",
+    "en": "Create a game on PC or Quest"
+  },
+  "guide.post_code": {
+    "ru": "Опубликуйте код здесь",
+    "en": "Post the code here"
+  },
+  "guide.connect_code": {
+    "ru": "Подключитесь по коду",
+    "en": "Connect with the code"
+  },
+  "rooms.eyebrow": {
+    "ru": "ДОСКА ПРИГЛАШЕНИЙ",
+    "en": "INVITATION BOARD"
+  },
+  "rooms.title": {
+    "ru": "Комнаты",
+    "en": "Rooms"
+  },
+  "rooms.refresh": {
+    "ru": "Обновить",
+    "en": "Refresh"
+  },
+  "rooms.caption": {
+    "ru": "Общий список для всех игроков. Свежие приглашения сверху.",
+    "en": "One board for all players. Newest invitations first."
+  },
+  "rooms.loading": {
+    "ru": "Загружаем приглашения…",
+    "en": "Loading invitations…"
+  },
+  "rooms.empty_title": {
+    "ru": "Комнат пока нет",
+    "en": "No rooms yet"
+  },
+  "rooms.empty_hint": {
+    "ru": "и добавьте приглашение через форму.",
+    "en": "and post an invitation with the form."
+  },
+  "rooms.add": {
+    "ru": "Добавить комнату",
+    "en": "Add a room"
+  },
+  "rooms.pagination_label": {
+    "ru": "Страницы комнат",
+    "en": "Room pages"
+  },
+  "rooms.previous": {
+    "ru": "← Назад",
+    "en": "← Previous"
+  },
+  "rooms.first_page": {
+    "ru": "Страница 1",
+    "en": "Page 1"
+  },
+  "rooms.next": {
+    "ru": "Далее →",
+    "en": "Next →"
+  },
+  "rooms.compatibility": {
+    "ru": "Публикация не подтверждает, что комната ещё открыта. На ПК и Quest нужны одинаковые Photon App ID и совместимые версии игры.",
+    "en": "A listing does not confirm that a room is still open. PC and Quest players need matching Photon App IDs and compatible game versions."
+  },
+  "publish.eyebrow": {
+    "ru": "НОВОЕ ПРИГЛАШЕНИЕ",
+    "en": "NEW INVITATION"
+  },
+  "publish.title": {
+    "ru": "Ваша комната.",
+    "en": "Your room."
+  },
+  "publish.subtitle": {
+    "ru": "Ваша команда.",
+    "en": "Your crew."
+  },
+  "publish.intro_start": {
+    "ru": "Добавьте название, по которому друзья",
+    "en": "Choose a name that your friends"
+  },
+  "publish.intro_end": {
+    "ru": "узнают вас в списке.",
+    "en": "will recognize in the list."
+  },
+  "publish.name_label": {
+    "ru": "Название комнаты",
+    "en": "Room name"
+  },
+  "publish.name_placeholder": {
+    "ru": "Например: Вечерняя смена",
+    "en": "For example: Night shift"
+  },
+  "publish.code_label": {
+    "ru": "Код приглашения",
+    "en": "Invitation code"
+  },
+  "actions.paste": {
+    "ru": "Вставить",
+    "en": "Paste"
+  },
+  "publish.code_hint": {
+    "ru": "Полный RQ1-код из игры",
+    "en": "Full RQ1 code from the game"
+  },
+  "publish.submit": {
+    "ru": "Опубликовать комнату",
+    "en": "Post room"
+  },
+  "publish.success": {
+    "ru": "Комната опубликована",
+    "en": "Room posted"
+  },
+  "publish.save_link_hint": {
+    "ru": "Сохраните ссылку ниже — только по ней можно удалить приглашение. После обновления страницы или новой публикации ссылка исчезнет.",
+    "en": "Save the link below. You need it to delete this invitation. The link disappears after a page reload or another post."
+  },
+  "publish.delete_link_label": {
+    "ru": "Личная ссылка удаления",
+    "en": "Private deletion link"
+  },
+  "actions.copy_delete_link": {
+    "ru": "Скопировать ссылку удаления",
+    "en": "Copy deletion link"
+  },
+  "publish.expiry": {
+    "ru": "Приглашение исчезнет через 24 часа.",
+    "en": "The invitation expires after 24 hours."
+  },
+  "publish.public_code": {
+    "ru": "Код будет доступен всем посетителям сайта.",
+    "en": "Everyone who visits this site can see the code."
+  },
+  "guide.paste_title": {
+    "ru": "Где вставить код в игре?",
+    "en": "Where do I paste the code in the game?"
+  },
+  "guide.cloud_open": {
+    "ru": "В режиме Cloud откройте",
+    "en": "In Cloud mode, open"
+  },
+  "game.connect_path": {
+    "ru": "Игра по сети → Подключиться",
+    "en": "Network play → Connect"
+  },
+  "guide.select": {
+    "ru": "Нажмите",
+    "en": "Select"
+  },
+  "guide.then": {
+    "ru": ", затем",
+    "en": ", then"
+  },
+  "game.connect": {
+    "ru": "Подключиться",
+    "en": "Connect"
+  },
+  "guide.website_button_prefix": {
+    "ru": "Кнопка",
+    "en": "The"
+  },
+  "game.open_website": {
+    "ru": "Открыть сайт",
+    "en": "Open website"
+  },
+  "guide.website_return": {
+    "ru": "находится в окне подключения. Скопируйте код на сайте и вернитесь в игру: введённый текст сохранится.",
+    "en": "button is in the connection window. Copy a code on the site and return to the game. Your input stays in place."
+  },
+  "guide.flow_tag": {
+    "ru": "КОМНАТА → КОД → ИГРА",
+    "en": "ROOM → CODE → GAME"
+  },
+  "faq.eyebrow": {
+    "ru": "НАСТРОЙКА СЕТЕВОЙ ИГРЫ",
+    "en": "MULTIPLAYER SETUP"
+  },
+  "faq.title": {
+    "ru": "Вопросы и ответы",
+    "en": "Frequently asked questions"
+  },
+  "faq.intro": {
+    "ru": "App ID задают сетевые приложения вашей группы. RQ1-код приглашает в конкретную комнату.",
+    "en": "App IDs identify the network applications for your group. An RQ1 code invites players to one room."
+  },
+  "faq.custom_ids.title": {
+    "ru": "Нужно ли создавать свои Photon App ID?",
+    "en": "Do I need my own Photon App IDs?"
+  },
+  "faq.custom_ids.defaults": {
+    "ru": "Создайте приложения Photon Realtime и Voice и введите их App ID в настройках Cloud. У всех участников должны совпадать оба App ID.",
+    "en": "Create Photon Realtime and Voice applications and enter their App IDs in Cloud settings. All players must use the same pair."
+  },
+  "faq.custom_ids.invitation": {
+    "ru": "Одинаковые App ID не заменяют приглашение: для входа нужен полный RQ1-код комнаты и совместимая версия игры.",
+    "en": "Matching App IDs do not replace an invitation. You need the full RQ1 room code and a compatible game version."
+  },
+  "faq.photon_setup.title": {
+    "ru": "Как создать Realtime и Voice App ID?",
+    "en": "How do I create Realtime and Voice App IDs?"
+  },
+  "faq.photon_setup.open": {
+    "ru": "Откройте",
+    "en": "Open"
+  },
+  "faq.photon_setup.register": {
+    "ru": "и зарегистрируйтесь с адресом электронной почты.",
+    "en": "and register with your email address."
+  },
+  "faq.photon_setup.email": {
+    "ru": "Откройте письмо Photon и нажмите",
+    "en": "Open the Photon email and select"
+  },
+  "faq.photon_setup.password": {
+    "ru": ". Задайте пароль.",
+    "en": ". Set a password."
+  },
+  "faq.photon_setup.dashboard": {
+    "ru": "После подтверждения аккаунта откройте",
+    "en": "After account confirmation, open"
+  },
+  "faq.photon_setup.choose_type": {
+    "ru": ". Выберите",
+    "en": ". Select"
+  },
+  "faq.photon_setup.field_prefix": {
+    "ru": "В поле",
+    "en": "Under"
+  },
+  "faq.photon_setup.select_sdk": {
+    "ru": "выберите",
+    "en": "select"
+  },
+  "faq.photon_setup.name": {
+    "ru": "Введите любое название в",
+    "en": "Enter any name under"
+  },
+  "faq.photon_setup.create": {
+    "ru": "и нажмите",
+    "en": "and select"
+  },
+  "faq.photon_setup.voice": {
+    "ru": "Создайте второе приложение тем же способом. В поле SDK выберите",
+    "en": "Create a second application the same way. For the SDK, select"
+  },
+  "faq.photon_setup.copy": {
+    "ru": "Скопируйте",
+    "en": "Copy the"
+  },
+  "faq.photon_setup.label_ids": {
+    "ru": "каждого приложения из Dashboard. Подпишите их Realtime и Voice, чтобы не перепутать.",
+    "en": "for each application from the Dashboard. Label them Realtime and Voice to keep them apart."
+  },
+  "faq.photon_setup.id_roles": {
+    "ru": "Realtime отвечает за подключение, Voice за голосовой чат. Это два разных идентификатора.",
+    "en": "Realtime handles the connection. Voice handles voice chat. They use separate IDs."
+  },
+  "faq.photon_setup.documentation": {
+    "ru": "Документация Photon об App ID",
+    "en": "Photon App ID documentation"
+  },
+  "faq.quest.title": {
+    "ru": "Куда вписать App ID на Quest?",
+    "en": "Where do I enter App IDs on Quest?"
+  },
+  "game.settings_path": {
+    "ru": "Игра по сети → Настройки Cloud",
+    "en": "Network play → Cloud settings"
+  },
+  "faq.quest.step_prefix": {
+    "ru": "На шаге",
+    "en": "At"
+  },
+  "game.realtime_step": {
+    "ru": "Cloud: подключение · 1 из 4",
+    "en": "Cloud: connection · 1 of 4"
+  },
+  "faq.quest.realtime": {
+    "ru": "вставьте Realtime App ID. Нажмите",
+    "en": "paste your Realtime App ID. Select"
+  },
+  "game.next": {
+    "ru": "ДАЛЕЕ",
+    "en": "NEXT"
+  },
+  "game.voice_step": {
+    "ru": "Cloud: голос · 2 из 4",
+    "en": "Cloud: voice · 2 of 4"
+  },
+  "faq.quest.voice": {
+    "ru": "вставьте Voice App ID. Нажмите",
+    "en": "paste your Voice App ID. Select"
+  },
+  "faq.quest.nickname_website": {
+    "ru": "Укажите ник и адрес сайта на следующих шагах.",
+    "en": "Enter your nickname and the website address in the next steps."
+  },
+  "faq.quest.review": {
+    "ru": "На экране проверки нажмите",
+    "en": "On the review screen, select"
+  },
+  "game.save": {
+    "ru": "Сохранить",
+    "en": "Save"
+  },
+  "faq.quest.restart": {
+    "ru": ". Перезапустите игру, если настройки изменились.",
+    "en": ". Restart the game if you changed the settings."
+  },
+  "faq.quest.steam_prefix": {
+    "ru": "Если включён Steam, откройте",
+    "en": "If Steam mode is active, open"
+  },
+  "game.change_cloud_path": {
+    "ru": "Игра по сети → Сменить → Cloud",
+    "en": "Network play → Change → Cloud"
+  },
+  "faq.quest.complete_setup": {
+    "ru": ". Пройдите настройку и перезапустите игру.",
+    "en": ". Complete the setup and restart the game."
+  },
+  "faq.pc.title": {
+    "ru": "Где настроить App ID, ник и SteamID64 на ПК?",
+    "en": "Where do I set App IDs, nickname, and SteamID64 on PC?"
+  },
+  "faq.pc.plugins": {
+    "ru": "Для этой сборки нужны LocalMultiplayer и плагин Quest Cloud Co-op. Запустите игру с плагинами один раз, затем закройте её.",
+    "en": "This build requires LocalMultiplayer and the Quest Cloud Co-op plugin. Start the game once with both plugins. Then close the game."
+  },
+  "faq.pc.open_config": {
+    "ru": "В папке игры откройте",
+    "en": "In the game folder, open"
+  },
+  "faq.pc.editor": {
+    "ru": "текстовым редактором.",
+    "en": "with a text editor."
+  },
+  "faq.pc.section_prefix": {
+    "ru": "В разделе",
+    "en": "In the"
+  },
+  "faq.pc.set_values": {
+    "ru": "задайте",
+    "en": "section, set"
+  },
+  "faq.pc.and": {
+    "ru": "и",
+    "en": "and"
+  },
+  "faq.pc.restart": {
+    "ru": "Замените REALTIME_APP_ID и VOICE_APP_ID своими идентификаторами. Сохраните файл и запустите игру. Используйте ту же пару App ID на ПК и шлемах.",
+    "en": "Replace REALTIME_APP_ID and VOICE_APP_ID with your IDs. Save the file and start the game. Use the same pair on PC and headsets."
+  },
+  "faq.quest.cloud_identity": {
+    "ru": "Cloud ID можно изменить на этом шаге. Нажмите «Сгенерировать новый ID», сохраните настройки и перезапустите игру. Игра может считать новый ID идентификатором другого игрока, а прогресс может остаться связанным со старым ID.",
+    "en": "You can change the Cloud ID on this step. Select “Generate new ID”, save your settings, and restart the game. The game may treat the new ID as a different player, and progress may remain linked to the old ID."
+  },
+  "faq.pc.identity_intro": {
+    "ru": "Чтобы сменить ник или SteamID64, закройте игру и откройте файл настроек Steam эмулятора:",
+    "en": "To change your nickname or SteamID64, close the game and open the Steam emulator settings file:"
+  },
+  "faq.pc.identity_nickname": {
+    "ru": "Измените значение account_name, чтобы сменить ник.",
+    "en": "Edit account_name to change your nickname."
+  },
+  "faq.pc.identity_id": {
+    "ru": "Измените account_steamid, чтобы сменить идентификатор. Вставьте 17-значный SteamID64. Создайте случайный ID кнопкой ниже или укажите свой.",
+    "en": "Edit account_steamid to change your ID. Enter a 17-digit SteamID64. Use the button below to generate a random ID or enter your own."
+  },
+  "faq.pc.identity_restart": {
+    "ru": "Сохраните файл и запустите игру. Не меняйте другие параметры.",
+    "en": "Save the file and start the game. Leave the other settings unchanged."
+  },
+  "faq.pc.identity_warning": {
+    "ru": "Смена ID может создать отдельный игровой профиль. Прогресс или предметы, связанные со старым ID, могут стать недоступны.",
+    "en": "Changing your ID can create a separate game profile. Progress or items linked to the old ID may become unavailable."
+  },
+  "faq.pc.id_generator_label": {
+    "ru": "Случайный SteamID64",
+    "en": "Random SteamID64"
+  },
+  "faq.pc.id_placeholder": {
+    "ru": "Нажмите кнопку, чтобы создать ID",
+    "en": "Select the button to generate an ID"
+  },
+  "faq.pc.id_generate": {
+    "ru": "Создать новый ID",
+    "en": "Create new ID"
+  },
+  "faq.pc.id_copied": {
+    "ru": "Новый ID скопирован. Вставьте его в account_steamid и сохраните файл настроек.",
+    "en": "New ID copied. Paste it into account_steamid and save the settings file."
+  },
+  "faq.pc.id_copy_fallback": {
+    "ru": "Автоматическое копирование недоступно. Скопируйте ID из поля и вставьте его в account_steamid.",
+    "en": "Clipboard access is unavailable. Copy the ID from this field and paste it into account_steamid."
+  },
+  "faq.host.title": {
+    "ru": "Как создать комнату и получить код?",
+    "en": "How do I create a room and get its code?"
+  },
+  "faq.host.quest_prefix": {
+    "ru": "На Quest в режиме Cloud откройте",
+    "en": "On Quest, in Cloud mode, open"
+  },
+  "game.create_path": {
+    "ru": "Игра по сети → Создать игру → Продолжить",
+    "en": "Network play → Create game → Continue"
+  },
+  "faq.host.quest_complete": {
+    "ru": ". Завершите выбор региона и сохранения. Создайте комнату без пароля.",
+    "en": ". Complete the region and save selection. Create a room without a password."
+  },
+  "faq.host.created_prefix": {
+    "ru": "После создания комнаты нажмите",
+    "en": "After room creation, select"
+  },
+  "game.copy_code": {
+    "ru": "Скопировать код",
+    "en": "Copy code"
+  },
+  "faq.host.window_prefix": {
+    "ru": "в окне",
+    "en": "under"
+  },
+  "game.created_title": {
+    "ru": "ИГРА СОЗДАНА",
+    "en": "GAME CREATED"
+  },
+  "faq.host.waiting_lobby": {
+    "ru": "До начала игры повторно откройте это окно кнопкой приглашения в лобби ожидания. После старта подключиться по коду нельзя.",
+    "en": "Before starting the game, reopen this window with the invitation button in the waiting lobby. Players cannot join with a code after the game starts."
+  },
+  "faq.host.pc": {
+    "ru": "На ПК создайте комнату с установленными плагинами. Откройте панель Quest Cloud Co-op клавишей F8 и нажмите",
+    "en": "On PC, create a room with the plugins installed. Press F8 to open the Quest Cloud Co-op panel. Select"
+  },
+  "faq.host.code_file_prefix": {
+    "ru": ". Код также находится в",
+    "en": ". You can also find the code in"
+  },
+  "faq.host.share": {
+    "ru": "Опубликуйте полный RQ1-код на сайте. Другие игроки скопируют его и подключатся через меню игры. Дождитесь подключения участников в лобби, затем начинайте игру. Когда создатель выйдет из игры, комната закроется.",
+    "en": "Post the full RQ1 code on this site. Other players can copy it and connect through the game menu. Wait for the players to join the lobby before starting the game. The room closes when the host leaves."
+  },
+  "footer.disclaimer": {
+    "ru": "Неофициальный сервис сообщества. Не связан с semiwork или Photon.",
+    "en": "An unofficial community service. Not affiliated with semiwork or Photon."
+  },
+  "footer.signoff": {
+    "ru": "ХОРОШЕЙ СМЕНЫ.",
+    "en": "HAVE A GOOD SHIFT."
+  },
+  "actions.copy_code": {
+    "ru": "Копировать код",
+    "en": "Copy code"
+  },
+  "clipboard.manual_hint": {
+    "ru": "Выделите и скопируйте код вручную",
+    "en": "Select and copy the code manually"
+  },
+  "clipboard.code_label": {
+    "ru": "Полный код комнаты для копирования",
+    "en": "Full room code to copy"
+  },
+  "delete.eyebrow": {
+    "ru": "УПРАВЛЕНИЕ ПРИГЛАШЕНИЕМ",
+    "en": "MANAGE INVITATION"
+  },
+  "delete.title": {
+    "ru": "Удалить комнату?",
+    "en": "Delete room?"
+  },
+  "delete.board_effect": {
+    "ru": "Приглашение исчезнет из общего списка.",
+    "en": "The invitation will disappear from the board."
+  },
+  "delete.game_effect": {
+    "ru": "На саму игровую комнату это не повлияет.",
+    "en": "The game room will stay open."
+  },
+  "delete.confirm": {
+    "ru": "Да, удалить",
+    "en": "Yes, delete"
+  },
+  "actions.cancel": {
+    "ru": "Отмена",
+    "en": "Cancel"
+  },
+  "page.javascript_required": {
+    "ru": "Для публикации и копирования кодов включите JavaScript в браузере.",
+    "en": "Enable JavaScript in your browser to post and copy codes."
+  },
+  "error.unavailable": {
+    "ru": "Сервис временно недоступен. Попробуйте позже.",
+    "en": "The service is unavailable. Try again later."
+  },
+  "error.request_failed": {
+    "ru": "Не удалось выполнить запрос.",
+    "en": "The request failed. Try again."
+  },
+  "rooms.hours_remaining": {
+    "ru": "Ещё {count} ч",
+    "en": "{count} h left"
+  },
+  "rooms.minutes_remaining": {
+    "ru": "Ещё {count} мин",
+    "en": "{count} min left"
+  },
+  "clipboard.copied": {
+    "ru": "Скопировано ✓",
+    "en": "Copied ✓"
+  },
+  "rooms.version_hint": {
+    "ru": "Игра: {build}; Photon: {version}",
+    "en": "Game: {build}; Photon: {version}"
+  },
+  "rooms.page_number": {
+    "ru": "Страница {page}",
+    "en": "Page {page}"
+  },
+  "error.clipboard_code": {
+    "ru": "В буфере должен быть полный RQ1-код длиной до 1024 символов.",
+    "en": "The clipboard must contain a full RQ1 code of up to 1024 characters."
+  },
+  "error.clipboard_denied": {
+    "ru": "Браузер не разрешил чтение буфера. Вставьте код вручную в поле ниже.",
+    "en": "The browser blocked clipboard access. Paste the code into the code field manually."
+  },
+  "delete.success": {
+    "ru": "Приглашение удалено.",
+    "en": "Invitation deleted."
+  },
+  "error.invalid_delete_link": {
+    "ru": "Ссылка удаления неполная или неверная.",
+    "en": "The deletion link is incomplete or invalid."
+  },
+  "error.action_not_found": {
+    "ru": "Действие не найдено.",
+    "en": "Action not found."
+  },
+  "error.method_not_allowed": {
+    "ru": "Недопустимый метод запроса.",
+    "en": "Request method not allowed."
+  },
+  "error.invalid_page": {
+    "ru": "Неверная страница.",
+    "en": "Invalid page."
+  },
+  "error.title_required": {
+    "ru": "Введите название комнаты.",
+    "en": "Enter a room name."
+  },
+  "error.invalid_title": {
+    "ru": "Название: от 1 до 60 символов, без переносов и скрытых символов.",
+    "en": "Use 1 to 60 characters for the name, without line breaks or hidden characters."
+  },
+  "error.invalid_room_code": {
+    "ru": "Нужен полный корректный RQ1-код из игры, длиной до 1024 символов.",
+    "en": "Enter a complete, valid RQ1 code from the game, up to 1024 characters."
+  },
+  "error.invalid_host": {
+    "ru": "Неверный адрес сайта.",
+    "en": "Invalid site address."
+  },
+  "error.https_required": {
+    "ru": "Откройте сайт по HTTPS.",
+    "en": "Open this site over HTTPS."
+  },
+  "error.refresh_required": {
+    "ru": "Обновите страницу и повторите действие.",
+    "en": "Reload the page and try again."
+  },
+  "error.json_required": {
+    "ru": "Нужен JSON-запрос.",
+    "en": "The request must use JSON."
+  },
+  "error.request_too_large": {
+    "ru": "Запрос слишком большой.",
+    "en": "The request is too large."
+  },
+  "error.invalid_request": {
+    "ru": "Некорректный запрос.",
+    "en": "Invalid request."
+  },
+  "error.rate_limited": {
+    "ru": "Слишком много запросов. Подождите и попробуйте снова.",
+    "en": "Too many requests. Wait and try again."
+  },
+  "error.board_full": {
+    "ru": "Список временно заполнен. Попробуйте позже.",
+    "en": "The board is full. Try again later."
+  },
+  "error.active_room_limit": {
+    "ru": "С вашего подключения уже опубликовано достаточно активных комнат.",
+    "en": "You have reached the active room limit for this connection."
+  },
+  "error.room_not_found": {
+    "ru": "Комната не найдена, уже удалена или ссылка неверна.",
+    "en": "The room was not found, was deleted, or the link is invalid."
+  },
+  "error.site_unconfigured": {
+    "ru": "Сайт ещё не настроен. Проверьте конфигурацию и подключение базы по инструкции.",
+    "en": "The site is not configured. Check the configuration and database connection with the setup guide."
+  },
+  "language.label": {
+    "ru": "Язык сайта",
+    "en": "Site language"
+  }
+}

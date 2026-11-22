@@ -16,7 +16,8 @@ internal sealed partial class AssemblyBaker(AssemblyIndex index, string gameMana
 
     public List<string> OverridesApplied { get; } = [];
 
-    public List<AssemblyResult> Write(IReadOnlyList<BakingPatcher> patchers, string modAssemblyName, NativeHooks hooks)
+    public List<AssemblyResult> Write(IReadOnlyList<BakingPatcher> patchers, string modAssemblyName, NativeHooks hooks,
+        IReadOnlySet<string>? additionalAssemblies = null)
     {
         var results = new List<AssemblyResult>();
         var netstandardTypes = LoadNetstandardSurface();
@@ -28,6 +29,7 @@ internal sealed partial class AssemblyBaker(AssemblyIndex index, string gameMana
         // The mod assembly is always rewritten; with native hooks every managed game assembly may hold call sites
         var overrides = LoadOverrides();
         var candidates = new HashSet<string>(bakedByAssembly.Keys) { modAssemblyName };
+        if (additionalAssemblies != null) candidates.UnionWith(additionalAssemblies);
         candidates.UnionWith(overrides.Select(o => o.Assembly));
         if (hooks.Any)
             candidates.UnionWith(ManagedGameAssemblies());
@@ -76,6 +78,8 @@ internal sealed partial class AssemblyBaker(AssemblyIndex index, string gameMana
                 hooks.EmitWrappers(module, transplanter);
                 Publicize(module);
             }
+            else if (additionalAssemblies?.Contains(assemblyName) == true)
+                Publicize(module);
 
             ApplyOverrides(module, transplanter, overrides.Where(o => o.Assembly == assemblyName), errors);
 
@@ -89,7 +93,8 @@ internal sealed partial class AssemblyBaker(AssemblyIndex index, string gameMana
                 errors.Add($"call site redirect: {e.Message}");
             }
 
-            if (baked == 0 && redirected == 0 && assemblyName != modAssemblyName && overrides.All(o => o.Assembly != assemblyName))
+            if (baked == 0 && redirected == 0 && assemblyName != modAssemblyName &&
+                additionalAssemblies?.Contains(assemblyName) != true && overrides.All(o => o.Assembly != assemblyName))
                 continue; // untouched
 
             RemoveStaleReferences(module);

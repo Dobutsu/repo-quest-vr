@@ -23,6 +23,8 @@ try
     {
         "build" => await Commands.BuildAsync(Options.Parse(args[1..])),
         "locate" => Commands.Locate(Options.Parse(args[1..])),
+        "extract-kit" => ReleaseCommands.ExtractKit(Options.Parse(args[1..])),
+        "preflight" => await BuilderDiagnostics.RunAsync(args[1..]),
         "player-build" => await PlayerCommands.BuildAsync(Options.Parse(args[1..])),
         "update" => await PlayerCommands.UpdateAsync(Options.Parse(args[1..]), args[1..]),
         "install" => await PlayerCommands.InstallAsync(Options.Parse(args[1..])),

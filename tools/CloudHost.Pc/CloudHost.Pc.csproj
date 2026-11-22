@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>RepoQuest.CloudHost</AssemblyName>
+    <Version Condition="'$(Version)' == ''">0.0.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <GameManaged Condition="'$(GameManaged)' == ''">$(MSBuildThisFileDirectory)../../work/game/REPO_Data/Managed</GameManaged>
+    <BepInExCore Condition="'$(BepInExCore)' == ''">$(MSBuildThisFileDirectory)../../work/downloads/BepInEx5/BepInEx/core</BepInExCore>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Shared/CloudJoinCode.cs" Link="CloudJoinCode.cs" />
+    <Compile Include="../Shared/PhotonAccess.cs" Link="PhotonAccess.cs" />
+    <Compile Include="../Shared/CloudRoomRouting.cs" Link="CloudRoomRouting.cs" />
+    <Reference Include="Facepunch.Steamworks.Win64" HintPath="$(GameManaged)/Facepunch.Steamworks.Win64.dll" Private="false" />
+    <Compile Include="../Shared/CloudAppIds.cs" Link="CloudAppIds.cs" />
+    <Reference Include="BepInEx" HintPath="$(BepInExCore)/BepInEx.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(BepInExCore)/0Harmony.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(GameManaged)/UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(GameManaged)/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(GameManaged)/UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(GameManaged)/UnityEngine.InputLegacyModule.dll" Private="false" />
+  </ItemGroup>
+</Project>

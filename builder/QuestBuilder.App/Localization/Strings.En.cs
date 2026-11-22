@@ -273,10 +273,10 @@ internal static partial class Strings
 
         ["notice.title"] = "Playing with friends",
         ["notice.offline"] =
-            "The Quest version works offline right away. To play with friends on PC, log in to Steam inside the " +
-            "headset: main menu → Steam button.",
+            "Singleplayer works offline. Cloud co-op joins your PC host without a Steam login on the headset. " +
+            "To join ordinary Steam friends' games, use the Steam button in the headset's main menu.",
         ["notice.risk"] =
-            "The headset logs in through an unofficial Steam client (SteamKit2). Steam's rules formally forbid " +
+            "If you choose Steam mode, the headset uses an unofficial Steam client (SteamKit2). Steam's rules formally forbid " +
             "third-party clients: the risk to your account is small, but it is real.",
         ["notice.privacy"] = "Your password goes only to Steam. The builder sends nothing anywhere else.",
         ["notice.ok"] = "Understood",

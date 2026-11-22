@@ -71,7 +71,10 @@ public sealed class GameTests : IDisposable
 
         var found = GameLocator.GamesInSteam(steam).Where(GameInstall.IsValid).ToList();
 
-        Assert.Contains(game, found);
+        if (OperatingSystem.IsWindows())
+            Assert.DoesNotContain(game, found); // native Windows must not remap D: into a simulated CrossOver bottle
+        else
+            Assert.Contains(game, found);
     }
 
     [Fact]

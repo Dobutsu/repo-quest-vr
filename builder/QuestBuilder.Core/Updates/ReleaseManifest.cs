@@ -25,7 +25,8 @@ public sealed record ReleaseManifest(
         Notes.TryGetValue(language, out var notes) ? notes : Notes.TryGetValue("en", out var en) ? en : "";
 
     public static bool IsNewer(string candidate, string current) =>
-        System.Version.TryParse(candidate, out var a) && System.Version.TryParse(current, out var b) && a > b;
+        System.Version.TryParse(candidate?.Split('-', '+')[0], out var a) &&
+        System.Version.TryParse(current?.Split('-', '+')[0], out var b) && a > b;
 }
 
 /// <summary>Signing and checking release manifests (scripts/release.sh signs with QuestBuilder.Cli sign-release)</summary>

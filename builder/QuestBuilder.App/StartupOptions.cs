@@ -18,18 +18,24 @@ public sealed class StartupOptions
 
     /// <summary>"ru" or "en" for this run only (not remembered)</summary>
     public string? Language { get; private init; }
+    public string? GameDir { get; private init; }
+    public BuilderLaunchDefaults Defaults { get; private init; } = new();
 
     /// <summary>Render the window and every dialog to PNG files in this folder, then exit (layout checks)</summary>
     public string? Screenshot { get; private init; }
 
     public static StartupOptions Parse(string[] args)
     {
-        string? kit = null, updateSource = null, workspace = null, language = null, screenshot = null;
+        string? kit = null, updateSource = null, workspace = null, language = null, screenshot = null, game = null;
         for (var i = 0; i < args.Length; i++)
         {
             var value = i + 1 < args.Length ? args[i + 1] : null;
             switch (args[i])
             {
+                case "--game" when value is not null:
+                    game = Path.GetFullPath(value);
+                    i++;
+                    break;
                 case "--kit" when value is not null:
                     kit = Path.GetFullPath(value);
                     i++;
@@ -55,6 +61,8 @@ public sealed class StartupOptions
         return new StartupOptions
         {
             Args = args,
+            GameDir = game,
+            Defaults = BuilderLaunchDefaults.Load(),
             KitDir = kit,
             UpdateSource = updateSource,
             Workspace = workspace,

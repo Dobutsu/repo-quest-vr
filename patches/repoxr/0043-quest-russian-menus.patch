@@ -1,0 +1,206 @@
+diff --git a/RepoXR.csproj b/RepoXR.csproj
+--- a/RepoXR.csproj
++++ b/RepoXR.csproj
+@@ -35,4 +35,5 @@
+     <ItemGroup>
++        <Compile Include="../../tools/Shared/QuestStrings.cs" Link="Source/UI/QuestStrings.cs" />
+         <PackageReference Include="BepInEx.Analyzers" Version="1.0.8" PrivateAssets="all" />
+         <PackageReference Include="BepInEx.Core" Version="5.*" />
+         <PackageReference Include="CustomDiscoverStateLib" Version="1.0.1" />
+diff --git a/Source/UI/Menu/SettingsPage.cs b/Source/UI/Menu/SettingsPage.cs
+--- a/Source/UI/Menu/SettingsPage.cs
++++ b/Source/UI/Menu/SettingsPage.cs
+@@ -6,6 +6,7 @@
+ {
+     private void Start()
+     {
++        QuestText.BindTree(gameObject);
+         MenuManager.instance.PageCloseAllAddedOnTop();
+         MenuHelper.PageAddOnTop(MenuHelper.RepoXRMenuPage.VRShowcase);
+     }
+diff --git a/Source/UI/Menu/SettingsCategoryPage.cs b/Source/UI/Menu/SettingsCategoryPage.cs
+--- a/Source/UI/Menu/SettingsCategoryPage.cs
++++ b/Source/UI/Menu/SettingsCategoryPage.cs
+@@ -18,7 +18,8 @@
+
+     private void Start()
+     {
+-        categoryText.text = categoryName;
++        QuestText.Bind(categoryText, "vr." + categoryName);
++        QuestText.BindTree(gameObject);
+
+         var positionOffset = -50f;
+
+@@ -60,8 +61,8 @@
+             {
+                 var menuOptions = setting.GetComponent<MenuTwoOptions>();
+
+-                menuOptions.option1Text = descriptor.TrueText;
+-                menuOptions.option2Text = descriptor.FalseText;
++                menuOptions.option1Text = QuestText.Literal(descriptor.TrueText);
++                menuOptions.option2Text = QuestText.Literal(descriptor.FalseText);
+             }
+             else if (val.SettingType != typeof(bool))
+             {
+@@ -77,7 +78,7 @@
+                     foreach (var variant in Enum.GetNames(val.SettingType))
+                         slider.customOptions.Add(new FloatMenuSlider.CustomOption
+                         {
+-                            customOptionText = Utils.ToHumanReadable(variant)
++                            customOptionText = QuestText.Literal(Utils.ToHumanReadable(variant))
+                         });
+
+                     slider.hasCustomOptions = true;
+diff --git a/Source/UI/Settings/SettingOption.cs b/Source/UI/Settings/SettingOption.cs
+--- a/Source/UI/Settings/SettingOption.cs
++++ b/Source/UI/Settings/SettingOption.cs
+@@ -16,7 +16,7 @@
+
+     private void Start()
+     {
+-        settingText.text = settingDisplayName ?? Utils.ToHumanReadable(settingName);
++        QuestText.Bind(settingText, "setting." + settingName);
+     }
+
+     public void FetchBoolOption()
+@@ -70,7 +70,7 @@
+         [
+             new FloatMenuSlider.CustomOption
+             {
+-                customOptionText = "System Default"
++                customOptionText = QuestText.Get("vr.runtime")
+             },
+             ..runtimes.Select(runtime => new FloatMenuSlider.CustomOption
+             {
+@@ -91,7 +91,7 @@
+         if (slider.currentValue == 0)
+         {
+             Plugin.Config.OpenXRRuntimeFile.Value = "";
+-            runtimeText.text = "System Default";
++            runtimeText.text = QuestText.Get("vr.runtime");
+             return;
+         }
+
+diff --git a/Source/Patches/UI/MenuPatches.cs b/Source/Patches/UI/MenuPatches.cs
+--- a/Source/Patches/UI/MenuPatches.cs
++++ b/Source/Patches/UI/MenuPatches.cs
+@@ -41,6 +41,7 @@
+         // and the VR Settings button at (126, 83) sat right on top of Language. It goes below Language, Back below it
+         var vrButton = Object.Instantiate(AssetCollection.VRSettingsButton, __instance.transform)
+             .GetComponent<Button>();
++        QuestText.Bind(vrButton.GetComponent<MenuButton>().buttonText, "vr.title");
+         var vrRect = vrButton.GetComponent<RectTransform>();
+         var language = __instance.transform.Find("Menu Button - Language") as RectTransform;
+
+diff --git a/Source/UI/GameFonts.cs b/Source/UI/GameFonts.cs
+--- a/Source/UI/GameFonts.cs
++++ b/Source/UI/GameFonts.cs
+@@ -15,6 +15,14 @@
+ /// </summary>
+ internal static class GameFonts
+ {
++    internal static bool SupportsRussian(TMP_FontAsset font)
++    {
++        if (!Usable(font) || FromBundle(font)) return false;
++        for (var character = 'А'; character <= 'я'; character++)
++            if (!font.HasCharacter(character, true, true)) return false;
++        return font.HasCharacter('Ё', true, true) && font.HasCharacter('ё', true, true);
++    }
++
+     private static TMP_FontAsset? applied;
+     private static bool fromMenu;
+     private static bool reportedMissing;
+diff --git a/Source/UI/QuestText.cs b/Source/UI/QuestText.cs
+new file mode 100644
+--- /dev/null
++++ b/Source/UI/QuestText.cs
+@@ -0,0 +1,89 @@
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using RepoQuest.Localization;
++using TMPro;
++using UnityEngine;
++using UnityEngine.Localization.Settings;
++
++namespace RepoXR.UI;
++
++/// <summary>The game's selected language is also the language of the additional Quest menus.</summary>
++public static class QuestText
++{
++    private static readonly HashSet<int> ReportedMissingFonts = new();
++    public static string Locale => LocalizationSettings.SelectedLocale
++        ? LocalizationSettings.SelectedLocale.Identifier.Code : "en-US";
++    public static string Get(string key) => QuestStrings.Get(key, Locale);
++    public static string Literal(string text) => QuestStrings.Literal(text, Locale);
++
++    public static void Bind(TMP_Text text, string key)
++    {
++        var binding = text.GetComponent<QuestTextBinding>() ?? text.gameObject.AddComponent<QuestTextBinding>();
++        binding.Key = key;
++        binding.Apply();
++    }
++
++    public static void BindTree(GameObject root)
++    {
++        foreach (var text in root.GetComponentsInChildren<TMP_Text>(true))
++        {
++            if (text.GetComponent<QuestTextBinding>()) continue;
++            var entry = QuestStrings.Entries.FirstOrDefault(p =>
++                string.Equals(p.Value[0], text.text, StringComparison.OrdinalIgnoreCase));
++            if (entry.Key != null) Bind(text, entry.Key);
++        }
++    }
++
++    public static void Fit(TMP_Text text, bool wrap = false)
++    {
++        if (!text) return;
++        // Reuse a game font with Cyrillic support, never a broken font from the old RepoXR bundle.
++        if (QuestStrings.IsRussian(Locale))
++        {
++            GameFonts.FixBundlePrefabs();
++            if (!GameFonts.SupportsRussian(text.font))
++            {
++                var fallback = Resources.FindObjectsOfTypeAll<TMP_FontAsset>().FirstOrDefault(GameFonts.SupportsRussian);
++                if (fallback)
++                {
++                    text.font = fallback;
++                    text.fontSharedMaterial = TmpAsset.GetMaterial(fallback);
++                }
++                else if (ReportedMissingFonts.Add(text.GetInstanceID()))
++                    Debug.LogWarning("[QuestLocale] no loaded game font supports Cyrillic for " + text.name);
++            }
++        }
++        if (!text.enableAutoSizing)
++            text.fontSizeMax = text.fontSize;
++        text.fontSizeMin = Mathf.Min(14f, text.fontSizeMax);
++        text.enableAutoSizing = true;
++        text.enableWordWrapping = wrap;
++    }
++}
++
++internal sealed class QuestTextBinding : MonoBehaviour
++{
++    public string Key = "";
++    private string locale;
++
++    private void LateUpdate()
++    {
++        if (locale != QuestText.Locale) Apply();
++    }
++
++    public void Apply()
++    {
++        if (string.IsNullOrEmpty(Key)) return;
++        locale = QuestText.Locale;
++        var text = GetComponent<TMP_Text>();
++        text.text = QuestText.Get(Key);
++        if (GetComponentInParent<MenuButton>() is { } button && button.buttonText == text)
++        {
++            button.buttonTextString = text.text;
++            // ResizeToText preserves the original bounds used for centering and navigation.
++            button.ResizeToText();
++        }
++        QuestText.Fit(text);
++    }
++}

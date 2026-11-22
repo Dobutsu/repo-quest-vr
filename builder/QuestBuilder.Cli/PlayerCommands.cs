@@ -181,7 +181,7 @@ internal static class PlayerCommands
 
         public Task ShowOnlineNoticeAsync()
         {
-            Console.WriteLine("Online play: log in to Steam in the headset; it is an unofficial Steam client (risk for the account).");
+            Console.WriteLine("Cloud co-op joins your PC host without a headset Steam login. Ordinary Steam friends mode uses the headset's Steam button.");
             return Task.CompletedTask;
         }
 

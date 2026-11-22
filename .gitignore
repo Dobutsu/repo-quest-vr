@@ -1,5 +1,6 @@
 # Game files and anything derived from them must never be committed
 work/
+dist/
 *.assets
 *.resS
 *.resource
@@ -7,6 +8,7 @@ work/
 REPO_Data/
 
 # .NET build output
+.idea/
 bin/
 obj/
 *.user

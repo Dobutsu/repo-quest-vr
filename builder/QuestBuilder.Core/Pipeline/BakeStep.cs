@@ -19,7 +19,8 @@ public sealed class BakeStep : BuildStep
     }
 
     public override bool ResultExists(BuildContext context) =>
-        File.Exists(Path.Combine(context.Workspace.Baked, "Assembly-CSharp.dll"));
+        File.Exists(Path.Combine(context.Workspace.Baked, "Assembly-CSharp.dll")) &&
+        File.Exists(Path.Combine(context.Workspace.Baked, "RepoXR.Standalone.dll"));
 
     public override async Task RunAsync(BuildContext context, CancellationToken ct)
     {
@@ -45,6 +46,7 @@ public sealed class BakeStep : BuildStep
                 "--deps", baseLib,
                 "--deps", discoverState,
                 "--overrides", context.Kit.StandaloneDll,
+                "--patches", context.Kit.StandaloneDll,
                 "--platform", "android",
                 "--rewrite", Path.Combine(bepInExCore, "0Harmony.dll"),
                 "--targets", "all",

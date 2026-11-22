@@ -19,6 +19,10 @@ release="$root/work/downloads/RepoXR-1.2.3/BepInEx/plugins/RepoXR"
 "$dotnet" build -c Release "$root/tools/RepoXR.Standalone" -v quiet -nologo >/dev/null
 
 out="$root/work/baked/$target-$platform"
+extra_patches=()
+if [ "$platform" = android ]; then
+    extra_patches=(--patches "$root/tools/RepoXR.Standalone/bin/Release/netstandard2.1/RepoXR.Standalone.dll")
+fi
 rm -rf "$out"
 "$dotnet" "$root/tools/HarmonyBaker/bin/Release/net8.0/HarmonyBaker.dll" \
     --game "$root/work/game/REPO_Data/Managed" \
@@ -27,6 +31,7 @@ rm -rf "$out"
     --deps "$HOME/.nuget/packages/bepinex.baselib" \
     --deps "$HOME/.nuget/packages/customdiscoverstatelib" \
     --overrides "$root/tools/RepoXR.Standalone/bin/Release/netstandard2.1/RepoXR.Standalone.dll" \
+    "${extra_patches[@]}" \
     --platform "$platform" \
     --rewrite "$root/work/downloads/BepInEx5/BepInEx/core/0Harmony.dll" \
     --targets "$target" \

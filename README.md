@@ -89,13 +89,20 @@ Download **RepoQuestBuilder** for Windows from [Releases](../../releases/latest)
 
 ### Steam in the headset: read this
 
-To play online, you log in to Steam inside the game, from the **Steam** button in the main menu. The headset then
+**Network play** defaults to **Cloud**. Cloud uses room codes and does not log in to Steam.
+To use Steam friends, select **Network play → Change → Steam**, confirm and restart. The headset then
 talks to Steam directly through [SteamKit2](https://github.com/SteamRE/SteamKit), an unofficial Steam client. Steam's
 Subscriber Agreement does not allow third-party clients. The risk to your account is small, but it is real, so decide
 for yourself. The login goes from the headset straight to Steam, and the builder never sees your password.
 Singleplayer works without logging in.
 
 ## How it works
+
+The **Network play** menu supports Cloud room codes and Steam friends. Cloud is the default and can host
+on a headset or PC. See [network play](docs/cloud-coop.md) for setup and [the screens](docs/quest-ui.md) for mode changes.
+PC Cloud participants need LocalMultiplayer and the additional plugin. Device acceptance testing is still required.
+Windows packaging and checks before starting the long APK build are documented in
+[`docs/windows-cloud-builder.md`](docs/windows-cloud-builder.md).
 
 ```
 your R.E.P.O. (Steam)

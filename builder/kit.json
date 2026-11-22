@@ -109,6 +109,10 @@
   },
   "testedGames": [
     {
+      "name": "v0.5.1",
+      "assemblyCSharp": "7df0ff1d03755a71a6755d01fc4c58c3cc044f8aa740f3d1c1379a6d6bd66724"
+    },
+    {
       "name": "v0.5.0",
       "assemblyCSharp": "aa6b1ce0deef8d2b7104a3722864c4ba94c107257726471f8e44b45c99e36888"
     },

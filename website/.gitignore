@@ -1,0 +1,8 @@
+/config.php
+/public_html/config.php
+/tests/.venv/
+/tests/__pycache__/
+/test-results/
+/.env
+!/bin/
+!/bin/**

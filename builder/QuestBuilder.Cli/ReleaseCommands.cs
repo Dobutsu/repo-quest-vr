@@ -11,6 +11,14 @@ namespace RepoQuest.Builder.Cli;
 /// </summary>
 internal static class ReleaseCommands
 {
+    public static int ExtractKit(Options options)
+    {
+        var destination = Require(options, "out");
+        KitArchive.Extract(Require(options, "builder"), destination);
+        Console.WriteLine($"Validated kit extracted to {Path.GetFullPath(destination)}");
+        return 0;
+    }
+
     public static int KeyGen(Options options)
     {
         var keyPath = Require(options, "key");
