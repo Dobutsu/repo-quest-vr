@@ -31,7 +31,7 @@ How to build
    SteamCMD asks, enter the password and the Steam Guard code (or approve the login in the Steam Mobile app). They go
    to Steam only; SteamCMD remembers the login, so game updates later ask for nothing. About 1.5 GB is downloaded.
    SteamCMD is an Intel program: if macOS asks to install Rosetta, agree.
-2. Pick your headset: Meta Quest (the default, for Quest 2, 3 and 3S) or Pico 4.
+2. There is nothing to pick for the headset: one APK runs on Quest 2, 3, 3S and Pico 4 / 4 Ultra.
 3. Click "Build APK" and accept the licenses. The builder downloads Unity Hub, Unity and everything else.
 4. When asked, sign in to Unity Hub with a free Unity account, then come back to the builder.
 5. The first build takes about an hour on an M1 Pro or newer, plus the downloads. Leave it running; if you stop it, the
@@ -78,7 +78,7 @@ Quest 3 или Pico 4 из вашей копии игры в Steam. Сборка
    введите пароль и код Steam Guard (или подтвердите вход в мобильном приложении Steam). Они уходят только в Steam;
    SteamCMD запоминает вход, и для обновлений игры потом ничего вводить не нужно. Скачается около 1,5 ГБ.
    SteamCMD — программа для Intel: если macOS предложит установить Rosetta, согласитесь.
-2. Выберите шлем: Meta Quest (по умолчанию, для Quest 2, 3 и 3S) или Pico 4.
+2. Выбирать шлем не нужно: один APK работает на Quest 2, 3, 3S и Pico 4 / 4 Ultra.
 3. Нажмите «Собрать APK» и примите лицензии. Программа сама скачает Unity Hub, Unity и всё остальное.
 4. Когда попросят, войдите в Unity Hub с бесплатным аккаунтом Unity и вернитесь в программу.
 5. Первая сборка идёт около часа на M1 Pro и новее, плюс загрузки. Не выключайте; если остановить, следующая сборка

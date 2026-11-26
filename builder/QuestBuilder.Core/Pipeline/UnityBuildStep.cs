@@ -127,23 +127,31 @@ public sealed partial class UnityBuildStep : BuildStep
     /// files" (the Android Gradle plugin's MergedAssetWriter.removeEmptyParents leaves a directory stream open per
     /// folder), after the whole IL2CPP build (b28, game 0.5.1). Without the earlier merge Gradle copies everything,
     /// which costs a few minutes; code-only builds (scripts/codebuild.sh) keep it.
+    /// The launcher module merges the same assets again from unityLibrary's: left there, its merge failed the same way
+    /// on the Mac (builder 1.5.0, game 0.5.2 -> 0.5.4), so every module's merge goes.
     /// </summary>
-    private static void ClearMergedAssets(Workspace workspace)
+    internal static void ClearMergedAssets(Workspace workspace)
     {
         var projects = Path.Combine(workspace.Library, "Bee", "Android", "Prj");
         if (!Directory.Exists(projects))
             return;
         foreach (var backend in Directory.EnumerateDirectories(projects))
         {
-            var intermediates = Path.Combine(backend, "Gradle", "unityLibrary", "build", "intermediates");
-            var merged = Path.Combine(intermediates, "assets");
-            if (!Directory.Exists(merged))
+            var gradle = Path.Combine(backend, "Gradle");
+            if (!Directory.Exists(gradle))
                 continue;
-            Log.Info($"clearing Gradle's merged assets: {merged}");
-            FileOps.DeleteDirectory(merged);
-            // The merge's own record of what it wrote, which would otherwise make it incremental again
-            FileOps.DeleteDirectory(Path.Combine(intermediates, "incremental", "mergeReleaseAssets"));
-            FileOps.DeleteDirectory(Path.Combine(intermediates, "incremental", "mergeDebugAssets"));
+            foreach (var module in Directory.EnumerateDirectories(gradle))
+            {
+                var intermediates = Path.Combine(module, "build", "intermediates");
+                var merged = Path.Combine(intermediates, "assets");
+                if (!Directory.Exists(merged))
+                    continue;
+                Log.Info($"clearing Gradle's merged assets: {merged}");
+                FileOps.DeleteDirectory(merged);
+                // The merge's own record of what it wrote, which would otherwise make it incremental again
+                FileOps.DeleteDirectory(Path.Combine(intermediates, "incremental", "mergeReleaseAssets"));
+                FileOps.DeleteDirectory(Path.Combine(intermediates, "incremental", "mergeDebugAssets"));
+            }
         }
     }
 
@@ -327,8 +335,13 @@ public sealed partial class UnityBuildStep : BuildStep
             return new BuildException("Unity has no license: sign in to Unity Hub and add a free Personal license", details) { Code = "unity-license" };
         if (Regex.IsMatch(log, @"No space left on device|There is not enough space on the disk|ERROR_DISK_FULL", RegexOptions.IgnoreCase))
             return new BuildException("The disk is full", details) { Code = "disk-full" };
-        if (Regex.IsMatch(log, @"Android SDK|Android NDK|JDK.*not found|Unable to (?:find|locate) (?:the )?Android", RegexOptions.IgnoreCase) &&
-            log.Contains("not found", StringComparison.OrdinalIgnoreCase))
+        // Before the Android check: a Gradle failure prints thousands of lines, among them "Android SDK" somewhere and
+        // "not found" somewhere else, which the old whole-log check took for a missing module (builder 1.4.0 on a Mac)
+        if (log.Contains("Too many open files", StringComparison.Ordinal))
+            return new BuildException("Gradle ran out of open files", details) { Code = "gradle-files" };
+        // Both on one line: "Android SDK not found", "Unable to locate Android SDK", "JDK not found"
+        if (Regex.IsMatch(log, @"(?:Android SDK|Android NDK|JDK)[^\n]*not found|Unable to (?:find|locate) (?:the )?Android (?:SDK|NDK)",
+                RegexOptions.IgnoreCase))
             return new BuildException("Unity's Android Build Support is incomplete", details) { Code = "unity-android" };
         if (log.Contains("Scripts have compiler errors", StringComparison.Ordinal))
             return new BuildException("The project's scripts do not compile", details) { Code = "unity-compile" };

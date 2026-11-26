@@ -52,6 +52,24 @@ public sealed partial class Adb
         return result.TailText.Trim();
     }
 
+    /// <summary>Every line a shell command prints (stdout and stderr), not just the last ones that
+    /// <see cref="ShellAsync"/> keeps: for listings</summary>
+    public async Task<IReadOnlyList<string>> ShellLinesAsync(string serial, string command, CancellationToken ct = default)
+    {
+        var lines = new List<string>();
+        await ProcessRunner.RunAsync(new ProcessSpec
+        {
+            FileName = Executable,
+            Arguments = ["-s", serial, "shell", command],
+            LogPrefix = null,
+        }, line =>
+        {
+            lock (lines)
+                lines.Add(line.TrimEnd('\r'));
+        }, ct);
+        return lines;
+    }
+
     public async Task<bool> IsInstalledAsync(string serial, string package, CancellationToken ct = default) =>
         (await ShellAsync(serial, $"pm list packages {package}", ct))
         .Split('\n').Any(l => l.Trim() == $"package:{package}");

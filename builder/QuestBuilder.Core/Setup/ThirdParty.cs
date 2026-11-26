@@ -3,7 +3,7 @@ namespace RepoQuest.Builder.Setup;
 /// <summary>
 /// Third-party releases the build needs, downloaded from their publishers and checked against the hashes in kit.json:
 /// AssetRipper and uv (tools), RepoXR's Thunderstore release (its RuntimeDeps), BepInEx 5 (0Harmony, MonoMod),
-/// NuGet packages RepoXR builds against, Unity's built-in shader source; for Pico, a Java 17 runtime and ovrport.
+/// NuGet packages RepoXR builds against, Unity's built-in shader source; for the universal APK, a Java 17 runtime and ovrport.
 /// </summary>
 public sealed class ThirdParty
 {
@@ -72,7 +72,7 @@ public sealed class ThirdParty
                ?? throw new BuildException($"java not found in {dir}");
     }
 
-    /// <summary>ovrport's command-line jar (github.com/ovrport/app), which turns a Quest APK into a Pico one</summary>
+    /// <summary>ovrport's command-line jar (github.com/ovrport/app), which turns the Quest APK into one for Quest and Pico</summary>
     public async Task<string> OvrportJarAsync(CancellationToken ct)
     {
         var pin = pins.Ovrport ?? throw new BuildException("kit.json has no ovrport download");

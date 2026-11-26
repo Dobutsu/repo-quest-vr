@@ -1,0 +1,85 @@
+--- a/Source/Patches/PhysGrabberPatches.cs
++++ b/Source/Patches/PhysGrabberPatches.cs
+@@ -104,55 +104,52 @@
+     /// <summary>
+     /// Make the object turning input use the controller inputs instead of mouse inputs
+     /// </summary>
+-    [HarmonyPatch(typeof(PhysGrabber), nameof(PhysGrabber.ObjectTurning))]
++    // R.E.P.O. 0.5.4 moved the turn input out of ObjectTurning (now run from FixedUpdate) into ObjectTurningInputUpdate,
++    // which takes it from ObjectTurnAccelerationGet: `InputManager.LookInputGet(out device, true)`, scaled by the
++    // mouse sensitivity (Lerp(0.2, 2.5, aimSensitivity / 100)) when the device is not a gamepad, clamped to +-5, times
++    // 225 x mass x grab strength. That call returns the Rotation action here, divided by the sensitivity factor the
++    // game multiplies in afterwards: the stick turns objects as fast as before 0.5.4 (raw stick x 15 x 15).
++    [HarmonyPatch(typeof(PhysGrabber), nameof(PhysGrabber.ObjectTurnAccelerationGet))]
+     [HarmonyTranspiler]
+     private static IEnumerable<CodeInstruction> ObjectTurningPatches(IEnumerable<CodeInstruction> instructions)
+     {
+         return new CodeMatcher(instructions)
+-            // Use VR controls for rotation instead of mouse inputs
+-            // R.E.P.O. 0.5.0: x = SemiFunc.InputMouseX() * sensitivity; y = SemiFunc.InputMouseY() * sensitivity (8 instructions)
+-            .MatchForward(false, new CodeMatch(OpCodes.Call, Method(typeof(SemiFunc), nameof(SemiFunc.InputMouseX))))
+-            .RemoveInstructions(8)
+-            .Insert(
+-                // TESTER: Check these operands in Debug vs Release builds
+-                new CodeInstruction(OpCodes.Ldloca_S, Plugin.GameDebugBuild ? 13 : 5), // Mouse X
+-                new CodeInstruction(OpCodes.Ldloca_S, Plugin.GameDebugBuild ? 14 : 6), // Mouse Y
+-                new CodeInstruction(OpCodes.Call, Method(typeof(PhysGrabberPatches), nameof(GetRotationInput)))
+-            )
++            .MatchForward(false,
++                new CodeMatch(i => (i.opcode == OpCodes.Call || i.opcode == OpCodes.Callvirt) &&
++                                   Equals(i.operand, Method(typeof(InputManager), nameof(InputManager.LookInputGet)))))
++            .ThrowIfInvalid("PhysGrabber.ObjectTurnAccelerationGet: InputManager.LookInputGet not found")
++            .Set(OpCodes.Call, Method(typeof(PhysGrabberPatches), nameof(GetRotationInput)))
+             .InstructionEnumeration();
+     }
+ 
+-    private static void GetRotationInput(out float x, out float y)
++    private static Vector2 GetRotationInput(InputManager manager, out UnityEngine.InputSystem.InputDevice? device,
++        bool useStickTravel)
+     {
++        device = null; // the game's mouse branch: only the sensitivity factor and the clamp
+         var input = Actions.Instance["Rotation"].ReadValue<Vector2>();
+-
+-        x = input.x;
+-        y = input.y;
++        var sensitivity = GameplayManager.instance
++            ? Mathf.Lerp(0.2f, 2.5f, GameplayManager.instance.aimSensitivity / 100f)
++            : 1f;
++        return sensitivity > 0.01f ? input / sensitivity : input;
+     }
+ 
+     /// <summary>
+     /// Allow a custom override to disable object turning
+     /// </summary>
+-    [HarmonyPatch(typeof(PhysGrabber), nameof(PhysGrabber.ObjectTurning))]
++    // R.E.P.O. 0.5.4: the Rotate hold is read in ObjectTurningInputUpdate
++    // (`grabbed && grabbedPhysGrabObject && InputDisableTimer <= 0 && SemiFunc.InputHold(InputKey.Rotate)`)
++    [HarmonyPatch(typeof(PhysGrabber), nameof(PhysGrabber.ObjectTurningInputUpdate))]
+     [HarmonyTranspiler]
+     private static IEnumerable<CodeInstruction> DisableTurningPatch(IEnumerable<CodeInstruction> instructions)
+     {
+-        var matcher = new CodeMatcher(instructions)
++        return new CodeMatcher(instructions)
+             .MatchForward(false, new CodeMatch(OpCodes.Call, Method(typeof(SemiFunc), nameof(SemiFunc.InputHold))))
+-            .Advance(1);
+-
+-        var jmp = matcher.Instruction;
+-
+-        matcher.Advance(1).InsertAndAdvance(
+-            new CodeInstruction(OpCodes.Call, PropertyGetter(typeof(VRSession), nameof(VRSession.Instance))),
+-            new CodeInstruction(OpCodes.Callvirt, PropertyGetter(typeof(VRSession), nameof(VRSession.Player))),
+-            new CodeInstruction(OpCodes.Ldfld, Field(typeof(VRPlayer), nameof(VRPlayer.disableRotateTimer))),
+-            new CodeInstruction(OpCodes.Ldc_R4, 0f),
+-            new CodeInstruction(OpCodes.Bgt_Un_S, jmp.operand)
+-        );
+-
+-        return matcher
++            .ThrowIfInvalid("PhysGrabber.ObjectTurningInputUpdate: SemiFunc.InputHold not found")
++            .SetOperandAndAdvance(((Func<InputKey, bool>)RotateHeld).Method)
+             .InstructionEnumeration();
++
++        static bool RotateHeld(InputKey key) => SemiFunc.InputHold(key) &&
++                                                !(VRSession.Instance is { } session && session.Player.disableRotateTimer > 0);
+     }
+ 
+     /// <summary>

@@ -200,11 +200,7 @@
                 <Border Classes="card">
                     <StackPanel Spacing="6">
                         <TextBlock Text="{l:Tr headset.title}" Classes="heading" />
-                        <StackPanel Orientation="Horizontal" Spacing="18" IsEnabled="{Binding IsIdle}">
-                            <RadioButton GroupName="headset" Content="{l:Tr headset.quest}" IsChecked="{Binding IsQuest}" />
-                            <RadioButton GroupName="headset" Content="{l:Tr headset.pico}" IsChecked="{Binding IsPico}" />
-                        </StackPanel>
-                        <TextBlock Text="{l:Tr headset.picoAbout}" Classes="dim" IsVisible="{Binding IsPico}" />
+                        <TextBlock Text="{l:Tr headset.about}" Classes="dim" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
 

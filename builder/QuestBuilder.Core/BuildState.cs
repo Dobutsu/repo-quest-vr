@@ -16,7 +16,7 @@ public sealed class BuildState
     public Dictionary<string, string> Stamps { get; set; } = new();
 
     public string? LastApk { get; set; }
-    /// <summary>"quest" or "pico": the headset <see cref="LastApk"/> is for (null: quest, from before Pico)</summary>
+    /// <summary>"universal" (Quest and Pico), or "quest" / "pico" (null: quest) from builders before 1.5.0</summary>
     public string? LastApkHeadset { get; set; }
     public string? LastApkVersion { get; set; }
     /// <summary>Fingerprint of the game the last APK was built from (a game update means: rebuild)</summary>
@@ -25,9 +25,8 @@ public sealed class BuildState
 
     /// <summary>The player accepted the downloads and licenses listed in the consent dialog</summary>
     public bool DownloadsAccepted { get; set; }
-    /// <summary>The headset the builder builds for: "quest" (null) or "pico"</summary>
-    public string? Headset { get; set; }
-    /// <summary>The player accepted the downloads only a Pico build needs (Java, ovrport)</summary>
+    /// <summary>The player accepted the downloads the universal step needs (Java, ovrport; the name is from when only
+    /// Pico builds needed them)</summary>
     public bool PicoDownloadsAccepted { get; set; }
     /// <summary>The note about Steam login in the headset was shown</summary>
     public bool OnlineNoticeShown { get; set; }

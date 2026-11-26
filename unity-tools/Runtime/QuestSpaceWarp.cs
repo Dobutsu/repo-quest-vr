@@ -324,6 +324,7 @@ namespace RepoQuest
             }
             var config = repoXRConfig.GetValue(null);
             var entry = config != null ? spaceWarpSetting?.GetValue(config) : null;
+            // The Pico 4's default (Graphics Mode Performance with SpaceWarp) is RepoXR's: patches/repoxr/0045
             if (!(entry?.GetType().GetProperty("Value")?.GetValue(entry) is bool value) || value == settingSeen)
                 return;
             settingSeen = value;
@@ -367,14 +368,61 @@ namespace RepoQuest
                 LastResult = $"on: XrResult {result} (app space {position}/{rotation})";
                 if (!On)
                     Wanted = false;
+                else
+                    ConfigureCadence(true);
             }
             else
             {
                 var result = SpaceWarpXr.SetSpaceWarp(false);
                 On = false;
                 LastResult = $"off: XrResult {result}";
+                ConfigureCadence(false);
             }
             Debug.Log($"[QuestSpaceWarp] {LastResult}");
+        }
+
+        private static bool? isPico, isPicoUltra;
+
+        /// <summary>A Pico headset (Unity's deviceModel is Build.MANUFACTURER + " " + Build.MODEL, "Pico A8110")</summary>
+        public static bool IsPico => isPico ??= Application.platform == RuntimePlatform.Android &&
+                                                SystemInfo.deviceModel.IndexOf("pico", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        /// <summary>Pico 4 Ultra: Adreno 740 (model A9210); the Pico 4 has an Adreno 650</summary>
+        public static bool IsPicoUltra => isPicoUltra ??= IsPico &&
+            (SystemInfo.graphicsDeviceName.Contains("740") || SystemInfo.deviceModel.IndexOf("A9210", StringComparison.OrdinalIgnoreCase) >= 0);
+
+        private static (int vSync, int targetFrameRate, float hz)? beforeCadence;
+
+        /// <summary>
+        /// The game's frame rate under SpaceWarp. The Quest's runtime halves it by itself (xrWaitFrame paces to two
+        /// display frames, VrApi VSnc=2): nothing to do there. Pico's runtime does not, and Unity went on rendering at
+        /// 86-90 a second with SpaceWarp on (pico-appsw, docs/appsw.md): on a Pico the frame rate is capped to half the
+        /// display rate, the Pico 4 at 72 Hz (36), the Pico 4 Ultra at 90 Hz (45, not tested on an Ultra yet). Turning
+        /// SpaceWarp off puts back the vSync count, frame rate cap and display rate from before.
+        /// </summary>
+        private static void ConfigureCadence(bool spaceWarpOn)
+        {
+            if (!IsPico)
+                return;
+            if (spaceWarpOn)
+            {
+                beforeCadence ??= (QualitySettings.vSyncCount, Application.targetFrameRate, PerfXr.RefreshRate());
+                var hz = IsPicoUltra ? 90f : 72f;
+                var request = PerfXr.RequestRefreshRate(hz);
+                QualitySettings.vSyncCount = 0;
+                Application.targetFrameRate = Mathf.RoundToInt(hz / 2f);
+                Debug.Log($"[QuestSpaceWarp] Pico{(IsPicoUltra ? " 4 Ultra" : "")}: display {hz:0} Hz ({request}), " +
+                          $"frame rate capped to {Application.targetFrameRate}, vSyncCount 0");
+            }
+            else if (beforeCadence is { } before)
+            {
+                beforeCadence = null;
+                QualitySettings.vSyncCount = before.vSync;
+                Application.targetFrameRate = before.targetFrameRate;
+                var request = before.hz > 0f ? PerfXr.RequestRefreshRate(before.hz) : "display rate unknown before";
+                Debug.Log($"[QuestSpaceWarp] Pico: vSyncCount {before.vSync}, frame rate cap {before.targetFrameRate}, " +
+                          $"display {before.hz:0.#} Hz ({request}) as before SpaceWarp");
+            }
         }
 
         private bool DisplayRunning(out XRDisplaySubsystem display)

@@ -6,7 +6,7 @@ namespace RepoQuest.Builder.Cli;
 /// <summary>
 /// The players' flow without the window, through the same BuilderService the window drives: for testing the whole
 /// path (embedded kit, consent, Unity, license, pipeline, install, self-update) on the Mac.
-///   player-build [--workspace &lt;dir&gt;] [--kit &lt;dir&gt;] [--game &lt;dir&gt;] [--headset quest|pico] [--yes]
+///   player-build [--workspace &lt;dir&gt;] [--kit &lt;dir&gt;] [--game &lt;dir&gt;] [--yes]   (one APK for Quest and Pico)
 ///   update [--update-source &lt;url|dir&gt;] [--workspace &lt;dir&gt;] [--then-build] [--yes]
 ///   install [--workspace &lt;dir&gt;] [--kit &lt;dir&gt;]
 ///   uninstall [--workspace &lt;dir&gt;] [--headset] [--files] [--defender]
@@ -19,8 +19,6 @@ internal static class PlayerCommands
         var service = Start(options);
         if (options.Get("game") is { } game && service.SetGamePath(game) is { } problem)
             throw new BuildException($"{game}: {problem}");
-        if (options.Has("headset"))
-            service.SetHeadset(BuildOptions.ParseHeadset(options.Get("headset")));
         using var cancel = CancelOnCtrlC();
         var apk = await service.BuildAsync(cancel.Token);
         Console.WriteLine($"APK: {apk}");

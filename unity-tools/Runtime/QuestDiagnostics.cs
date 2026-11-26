@@ -575,14 +575,33 @@ namespace RepoQuest
         }
 
         /// <summary>The VR view's yaw: RepoXR's VRCameraAim, which the player's body follows (the spawn rotation does not stick)</summary>
+        private static Type cachedAimType;
+        private static FieldInfo cachedAimInstance;
+        private static MethodInfo cachedAimMethod;
+        private static string cachedAimMethodName;
+
         internal static string Aim(string method, float degrees)
         {
             const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
-            var aimType = GameType("RepoXR.Player.Camera.VRCameraAim");
-            var aim = aimType?.GetField("instance", all)?.GetValue(null);
+            if (cachedAimType == null)
+            {
+                cachedAimType = GameType("RepoXR.Player.Camera.VRCameraAim");
+                if (cachedAimType != null)
+                    cachedAimInstance = cachedAimType.GetField("instance", all);
+            }
+            if (cachedAimType == null || cachedAimInstance == null)
+                return "no VRCameraAim";
+            var aim = cachedAimInstance.GetValue(null);
             if (aim == null)
                 return "no VRCameraAim";
-            aimType.GetMethod(method, all, null, new[] { typeof(float) }, null)!.Invoke(aim, new object[] { degrees });
+            if (cachedAimMethod == null || cachedAimMethodName != method)
+            {
+                cachedAimMethod = cachedAimType.GetMethod(method, all, null, new[] { typeof(float) }, null);
+                cachedAimMethodName = method;
+            }
+            if (cachedAimMethod == null)
+                return $"no method {method}";
+            cachedAimMethod.Invoke(aim, new object[] { degrees });
             return $"{method} {degrees}";
         }
 

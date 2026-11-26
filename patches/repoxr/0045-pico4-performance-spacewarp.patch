@@ -1,0 +1,49 @@
+--- a/Source/Config.cs
++++ b/Source/Config.cs
+@@ -147,7 +147,7 @@
+     public ConfigEntry<GraphicsModeOption> GraphicsMode { get; } =
+         file.Create("Rendering", nameof(GraphicsMode), GraphicsModeOption.Performance,
+             new ConfigDescription(
+-                "Quality: Application SpaceWarp (the game renders 36 frames a second and the headset makes the frames between), post-processing, more pixel lights. Performance: every frame rendered at 72, no post-processing, one pixel light. Personal: your own combination; changing any of these settings by hand switches to it.",
++                "Quality: Application SpaceWarp (the game renders 36 frames a second and the headset makes the frames between), post-processing, more pixel lights. Performance: every frame rendered at 72, no post-processing, one pixel light (on the Pico 4 also Application SpaceWarp: 36 frames a second, shown at 72). Personal: your own combination; changing any of these settings by hand switches to it.",
+                 new AcceptableValueEnum<GraphicsModeOption>()));
+ 
+     // Quest port: unity-tools/Runtime/QuestSpaceWarp.cs reads it (XR_FB_space_warp)
+--- a/Source/Rendering/GraphicsPreset.cs
++++ b/Source/Rendering/GraphicsPreset.cs
+@@ -2,6 +2,7 @@
+ using System.Collections.Generic;
+ using BepInEx.Configuration;
+ using RepoXR.UI.Menu;
++using UnityEngine;
+ 
+ namespace RepoXR.Rendering;
+ 
+@@ -26,8 +27,9 @@
+     {
+         config = cfg;
+         managed.Clear();
+-        // Quality fits 36 frames a second (Application SpaceWarp); Performance is the build without it, at 72
+-        managed.Add(new Managed(cfg.SpaceWarp, true, false));
++        // Quality fits 36 frames a second (Application SpaceWarp); Performance is the build without it, at 72, except on
++        // the Pico 4 (Adreno 650): there Performance has SpaceWarp too (36 shown at 72; docs/pico.md, tested 2026-11-24)
++        managed.Add(new Managed(cfg.SpaceWarp, true, IsPico4));
+         managed.Add(new Managed(cfg.PostProcessing, true, false));
+         managed.Add(new Managed(cfg.PixelLightCount, 3, 1));
+         // MSAA stays off in both: X2 took 9 ms of GPU time in the shop and Manor (appsw7), so Quality fell to 32 a second
+@@ -46,6 +48,15 @@
+         Apply();
+     }
+ 
++    /// <summary>
++    /// Pico 4 (not the Ultra): a Pico with an Adreno 650 (the Quest 2 has one too, hence the maker). Unity's deviceModel
++    /// is Build.MANUFACTURER + " " + Build.MODEL ("Pico A8110")
++    /// </summary>
++    private static bool IsPico4 =>
++        Application.platform == RuntimePlatform.Android &&
++        SystemInfo.deviceModel.IndexOf("pico", StringComparison.OrdinalIgnoreCase) >= 0 &&
++        SystemInfo.graphicsDeviceName.Contains("650");
++
+     /// <summary>Sets every managed setting to the mode's value (nothing for Personal)</summary>
+     private static void Apply()
+     {

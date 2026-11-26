@@ -5,7 +5,7 @@ internal static partial class Strings
 {
     public static readonly IReadOnlyDictionary<string, string> En = new Dictionary<string, string>
     {
-        ["app.subtitle"] = "Builds R.E.P.O. for Meta Quest 2 / 3 and Pico 4 from your own copy of the game",
+        ["app.subtitle"] = "Builds R.E.P.O. for Meta Quest 2 / 3 / 3S and Pico 4 / 4 Ultra from your own copy of the game",
         ["app.version"] = "version {0}",
         ["lang.tooltip"] = "Interface language",
         ["unit.gb"] = "{0} GB",
@@ -61,13 +61,11 @@ internal static partial class Strings
         ["problem.workspace-program-files"] = "Windows protects Program Files. Pick another place, like D:\\RepoQuest.",
 
 
-        ["headset.title"] = "Headset",
-        ["headset.quest"] = "Meta Quest 2 / 3 / 3S",
-        ["headset.pico"] = "Pico 4 / 4 Ultra",
-        ["headset.picoAbout"] =
-            "The Quest build, converted for Pico by ovrport (a free tool, GPL license). Tested on Pico 4. On the first " +
-            "start the game shows \"Preparing graphics\" for about a minute while things appear one by one: Pico 4 " +
-            "hangs otherwise.",
+        ["headset.title"] = "Headsets",
+        ["headset.about"] =
+            "One APK for Meta Quest 2 / 3 / 3S and Pico 4 / 4 Ultra: ovrport (a free tool, GPL license) adds Pico's VR " +
+            "runtime and controllers to the Quest build. On a Pico 4 the first start shows \"Preparing graphics\" for " +
+            "about a minute while things appear one by one: Pico 4 hangs otherwise.",
         ["build.title"] = "Build",
         ["build.about"] =
             "The first build takes 1–1.5 hours on a fast computer and 3–5 hours on a slower one, plus downloads: " +
@@ -91,8 +89,8 @@ internal static partial class Strings
         ["step.unity.title"] = "APK",
         ["step.unity.about"] = "Unity imports everything and builds the game for Quest. The longest step.",
 
-        ["step.pico.title"] = "Pico version",
-        ["step.pico.about"] = "ovrport converts the APK for Pico: its VR runtime and controllers. A few minutes.",
+        ["step.universal.title"] = "Quest + Pico APK",
+        ["step.universal.about"] = "ovrport adds Pico's VR runtime and controllers: one APK for both headsets. A few minutes.",
         ["stage.export.download"] = "Downloading AssetRipper",
         ["stage.export.load"] = "Reading the game's files",
         ["stage.export.export"] = "Exporting assets",
@@ -112,8 +110,8 @@ internal static partial class Strings
         ["activity.hint"] =
             "Unity can stay quiet for half an hour or longer while it compiles the game's code or packs the APK, more on a " +
             "slower computer. If Task Manager shows Unity, il2cpp or java using the CPU, it is still working.",
-        ["stage.pico.download"] = "Downloading Java and ovrport",
-        ["stage.pico.patch"] = "Converting the APK for Pico",
+        ["stage.universal.download"] = "Downloading Java and ovrport",
+        ["stage.universal.patch"] = "Making the APK for Quest and Pico",
         ["stage.unity-setup.hub-download"] = "Downloading Unity Hub",
         ["stage.unity-setup.hub-install"] = "Installing Unity Hub",
         ["stage.unity-setup.editor"] = "Downloading Unity",
@@ -221,7 +219,7 @@ internal static partial class Strings
         ["consent.java.title"] = "Java {0} (Eclipse Temurin)",
         ["consent.java.about"] = "Runs ovrport. Only inside the working folder. GPL license with the Classpath Exception.",
         ["consent.ovrport.title"] = "ovrport {0}",
-        ["consent.ovrport.about"] = "Converts the Quest APK for Pico. GPL license.",
+        ["consent.ovrport.about"] = "Makes the APK run on Pico as well as Quest. GPL license.",
         ["consent.long-paths.title"] = "Long file paths in Windows",
         ["consent.long-paths.about"] =
             "A system setting the build needs. Windows will ask for administrator rights.",
@@ -354,6 +352,10 @@ internal static partial class Strings
         ["err.unity-android"] =
             "Unity is missing its Android modules. In Unity Hub open Installs → Unity 6000.3.17f1 → Add modules and add " +
             "Android Build Support with OpenJDK and Android SDK & NDK Tools.",
+        ["err.gradle-files"] =
+            "Gradle (the last part of Unity's build) ran out of open files. Press \"Build APK\" again: the builder " +
+            "clears what Gradle left and the build continues from where it stopped. If it happens again, create a " +
+            "report and send it to us.",
         ["err.unity-compile"] =
             "The project's code did not compile. That is the builder's fault, not yours: create a report and send it to us.",
         ["err.unity-failed"] =
@@ -390,8 +392,8 @@ internal static partial class Strings
         ["err.adb-missing"] =
             "The program that installs games on the headset (adb) comes with Unity, which is not installed yet. Build " +
             "the APK first, or install it with SideQuest or Meta Quest Developer Hub.",
-        ["err.pico-convert"] =
-            "Converting the APK for Pico failed. The details and logs\\ovrport.log in the working folder say why; " +
+        ["err.universal-convert"] =
+            "Making the APK for Quest and Pico failed. The details and logs\\ovrport.log in the working folder say why; " +
             "\"Create report\" collects them.",
         ["err.update-signature"] = "The update is not signed by the builder's authors, so it was not installed.",
         ["err.update-offline"] = "Could not check for updates. Check your internet connection.",
@@ -412,17 +414,14 @@ internal static partial class Strings
         ["install.none.title"] = "Headset not found",
         ["install.none.intro"] = "Connect the headset to this computer:",
         ["install.none.step1"] =
-            "Turn on Developer Mode for the headset in the Meta Horizon app on your phone (headset settings → " +
-            "Developer Mode).",
-        ["install.none.step1Pico"] =
-            "Turn on developer mode on the Pico: Settings → General → About, tap \"Software version\" 7 times; " +
-            "then Settings → Developer → USB debugging.",
+            "Turn on developer mode. Quest: in the Meta Horizon app on your phone (headset settings → Developer " +
+            "Mode). Pico: Settings → General → About, tap \"Software version\" 7 times; then Settings → Developer → " +
+            "USB debugging.",
         ["install.none.step2"] = "Connect it with a USB-C cable that carries data (some cables only charge).",
         ["install.none.step3"] = "Put the headset on and allow USB debugging.",
         ["install.none.drivers"] = "On Windows, also install Meta's \"Oculus ADB Drivers\":",
         ["install.none.alternative"] =
-            "You can also install the APK yourself with SideQuest or Meta Quest Developer Hub.",
-        ["install.none.alternativePico"] = "You can also install the APK yourself with adb or SideQuest.",
+            "You can also install the APK yourself with SideQuest, Meta Quest Developer Hub (Quest) or adb.",
         ["install.unauthorized.title"] = "Allow USB debugging",
         ["install.unauthorized.text"] =
             "The headset is connected but does not trust this computer yet. Put it on and accept \"Allow USB " +

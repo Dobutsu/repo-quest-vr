@@ -2,13 +2,14 @@ namespace RepoQuest.Builder.Pipeline;
 
 /// <summary>
 /// The build: export (AssetRipper) → bake (RepoXR's patches into the game's code) → project (the Unity project for
-/// Quest) → unity (import and APK) → pico (only for Pico: the APK converted by ovrport). Each step runs only if its inputs changed since it last finished, so a new builder
+/// Quest) → unity (import and APK) → universal (ovrport: the same APK for Quest and Pico). Each step runs only if its
+/// inputs changed since it last finished, so a new builder
 /// version rebuilds from the bake on, a game update from the export, and an interrupted build resumes where it stopped.
 /// </summary>
 public static class BuildPipeline
 {
     public static IReadOnlyList<BuildStep> Steps { get; } =
-        [new ExportStep(), new BakeStep(), new ProjectStep(), new UnityBuildStep(), new PicoStep()];
+        [new ExportStep(), new BakeStep(), new ProjectStep(), new UnityBuildStep(), new UniversalStep()];
 
     /// <summary>The steps that would run now, without running them</summary>
     public static IReadOnlyList<string> Pending(BuildContext context)

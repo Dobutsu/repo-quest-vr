@@ -38,7 +38,8 @@ input, the scene handoff, grabbing, vehicles, fonts, the shop mirror) come from
 
 ## What works
 
-The current builder (1.4.0) is for **R.E.P.O. 0.5.2** and Unity 6.3. On 0.5.2 it has been tested on a Quest 3 in
+The current builder (1.5.0) is for **R.E.P.O. 0.5.4** and Unity 6.3. On 0.5.4 it has been tested on a Quest 3: the
+menu, grabbing and turning objects, Application SpaceWarp. Builder 1.4.0 on 0.5.2 was tested on a Quest 3 in
 singleplayer: the menu, levels and the shop; builder 1.2.x on 0.5.1 also in the new Desert level, 72 FPS at its
 extraction point. How many lamps light the scene and
 how far the level is drawn are set in VR Settings → Rendering (Lamps, Room Distance, Small Object Distance). Builder 1.1.3 on
@@ -52,21 +53,23 @@ been tested on 0.5.x yet; the notes below come from the previous version (builde
 - **Joining friends on PC.** You can join from the friends list or accept an invite inside the headset. Voice chat works
   both ways. Tested with up to 7 players on vanilla PC copies of the game.
 
-- **Graphics Mode** (VR Settings → Rendering). Performance, the default, renders every frame at 72. Quality (Quest
-  only) turns on Application SpaceWarp: the game renders 36 frames a second and the headset makes the ones between,
+- **Graphics Mode** (VR Settings → Rendering). Performance, the default, renders every frame at 72. Quality turns
+  on Application SpaceWarp: the game renders 36 frames a second and the headset makes the ones between,
   which leaves time for post-processing, three pixel lights and sharper shadows; 36 holds in the levels and the shop on
-  a Quest 3. Personal keeps your own mix.
+  a Quest 3. On the Pico 4 Performance uses SpaceWarp too (its GPU cannot hold 72 otherwise). Personal keeps your own
+  mix.
 - **Inventory menu.** Hold the right stick click, tilt the stick to one of the three slots and let go to put the held
   item away or take one out; a short click crouches.
 
-Hosting a game from the headset is not reliable yet: on 0.5.2 it returns to the main menu, so the Private Game and
+Hosting a game from the headset is not reliable yet: on 0.5.2 it returned to the main menu, so the Private Game and
 Public Game buttons are hidden (VR Settings → General → Host Game Buttons shows them). Joining friends works. The port is made and tested on a Quest 3. The Quest 3S
 should behave the same. The **Quest 2** runs the same build: tested in singleplayer, where it holds 72 FPS in
 most places and drops to 30–60 in the shop (its GPU is the Pico 4's, and slower). Quest Pro is untested.
 
 **Pico 4** and **Pico 4 Ultra** work too: tested on both, and on the Pico 4 also in multiplayer with friends on PC.
-The builder makes the Quest version and converts it with [ovrport](https://github.com/ovrport/app), which swaps the
-OpenXR loader for one that runs on Pico and maps the controllers. Two things are different on Pico: on the first start
+Since builder 1.5.0 there is **one APK for Quest and Pico**: the builder makes the Quest version and converts it with
+[ovrport](https://github.com/ovrport/app), whose OpenXR loader picks Meta's runtime on a Quest and Pico's on a Pico,
+where it also maps the controllers. The same file was tested on a Quest 3. Two things are different on Pico: on the first start
 on a Pico 4 the game brings its graphics in one by one for about a minute ("Preparing graphics"), because the Pico 4 GPU
 hangs when the main menu draws everything at once (the Ultra does not need it); and the game asks for the microphone in
 the main menu rather than at startup, where the permission prompt crashed it. See [`docs/pico.md`](docs/pico.md).
@@ -76,8 +79,7 @@ the main menu rather than at startup, where the permission prompt crashed it. Se
 Download **RepoQuestBuilder** for Windows from [Releases](../../releases/latest) and follow its `README.txt`. In short:
 
 1. You need Windows 10/11 (64-bit), 16 GB RAM, about 60 GB of free disk space, R.E.P.O. on Steam, a Quest 2, Quest 3 or
-   Pico 4 in developer mode with a USB cable, and a free Unity account. Pick the headset in the builder; Quest is the
-   default.
+   Pico 4 in developer mode with a USB cable, and a free Unity account. The APK it makes runs on all of them.
 2. The builder finds your game and downloads everything else itself: Unity 6.3, AssetRipper and Python packages,
    each from its original source with a pinned SHA-256. It then builds the APK on your PC.
 3. The first build takes 1–1.5 hours on a fast computer and 3–5 hours on a slower one: Unity compiles the game's
@@ -102,8 +104,7 @@ your R.E.P.O. (Steam)
   └─ AssetRipper ──────────► Unity project (the game's scenes, prefabs, scripts as DLLs)
   └─ HarmonyBaker ─────────► RepoXR's Harmony patches baked into the game's assemblies (no runtime patching on IL2CPP)
   └─ scripts/ (Python) ────► fixes for the export: shaders rewritten for mobile and multiview, Addressables, halos
-  └─ Unity 6.3 (IL2CPP, OpenXR, Vulkan) ─► Android APK ─► Quest
-                                                         └─ ovrport ─► Pico
+  └─ Unity 6.3 (IL2CPP, OpenXR, Vulkan) ─► Android APK ─► ovrport ─► one APK for Quest and Pico
 ```
 
 - `builder/` is the Windows builder (Avalonia app plus a CLI) and runs the whole pipeline. See `docs/builder.md`.

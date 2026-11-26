@@ -1,45 +1,47 @@
 namespace RepoQuest.Builder.Pipeline;
 
 /// <summary>
-/// For Pico 4 / 4 Ultra: ovrport (github.com/ovrport/app, GPL-3.0) converts the Quest APK. It swaps the OpenXR loader
-/// for its own, which picks Pico's runtime and maps the Touch controller bindings to Pico's, and adds the manifest
-/// entries Pico needs; the game's own libraries stay as Unity built them. ovrport signs with a key it makes once in
-/// <see cref="Workspace.Ovrport"/>, so a new APK installs over the old one. The game itself does the rest at runtime
-/// (unity-tools/Runtime/ShaderWarmup.cs: Pico 4 hangs its GPU when the menu draws everything at once).
+/// One APK for Meta Quest and Pico 4 / 4 Ultra: ovrport (github.com/ovrport/app, GPL-3.0) converts Unity's Quest APK.
+/// It swaps the OpenXR loader for its own, which loads the headset maker's runtime by ro.product.brand (Meta's on a
+/// Quest, Pico's on a Pico, where it also maps the Touch controller bindings to Pico's), and adds the manifest entries
+/// Pico needs next to the Quest's; the game's own libraries stay as Unity built them. ovrport signs with a key it makes
+/// once in <see cref="Workspace.Ovrport"/>, so a new APK installs over the old one (the first universal APK replaces a
+/// Quest-only one signed with Unity's key: the installer keeps the data). The game does the rest at runtime
+/// (unity-tools/Runtime: ShaderWarmup for the Pico 4's GPU hang, QuestSpaceWarp's frame rate cap on Pico).
 /// </summary>
-public sealed class PicoStep : BuildStep
+public sealed class UniversalStep : BuildStep
 {
     /// <summary>ovrport's OpenXR loader release (an "instance"): the newest one not marked experimental, tested 16.10</summary>
     private const string Instance = "3.3.0";
 
     /// <summary>ovrport's recommended patches, without patch_replace_icon_label (it looks the package up in Meta's
-    /// store, where ours is not)</summary>
+    /// store, where ours is not) and patch_mark_as_debuggable (Android runs debuggable apps slower, on Quest too)</summary>
     private const string Patches =
         "patch_copy_libraries;patch_copy_ovrplugin_vrapi;patch_fix_min_android_sdk;patch_generate_config;" +
         "patch_remove_localized_names;patch_clean_up_frida;patch_oculus_unity;patch_oculus_unreal;patch_vr_metadata;" +
         "patch_launcher_entry;patch_remove_uses_library;patch_fix_unreal_crash;patch_meta_xr_audio;" +
-        "patch_mark_as_debuggable;patch_mark_allow_backup";
+        "patch_mark_allow_backup";
 
-    public override string Id => "pico";
+    public override string Id => "universal";
 
-    public override bool AppliesTo(BuildContext context) => context.Options.Headset == Headset.Pico;
+    public override bool AppliesTo(BuildContext context) => context.Options.Universal;
 
     public override string Stamp(BuildContext context, IReadOnlyDictionary<string, string> earlierStamps)
     {
         var downloads = context.Kit.Manifest.Downloads;
         return Hashing.Combine(Id, earlierStamps.GetValueOrDefault("unity"), downloads.Ovrport?.Sha256,
-            downloads.Java?.Version, Instance, Patches, context.Options.HeadsetApkPath(context.Workspace));
+            downloads.Java?.Version, Instance, Patches, context.Options.UniversalApkPath(context.Workspace));
     }
 
-    public override bool ResultExists(BuildContext context) => File.Exists(context.Options.HeadsetApkPath(context.Workspace));
+    public override bool ResultExists(BuildContext context) => File.Exists(context.Options.UniversalApkPath(context.Workspace));
 
     public override async Task RunAsync(BuildContext context, CancellationToken ct)
     {
         var workspace = context.Workspace;
         var input = context.Options.ApkPath(workspace);
-        var output = context.Options.HeadsetApkPath(workspace);
+        var output = context.Options.UniversalApkPath(workspace);
         if (!File.Exists(input))
-            throw new BuildException($"The Quest APK to convert is missing: {input}");
+            throw new BuildException($"Unity's APK to convert is missing: {input}");
 
         Report(context, null, "download");
         var java = await context.ThirdParty.JavaAsync(ct);
@@ -72,12 +74,12 @@ public sealed class PicoStep : BuildStep
                 Log.Info($"[ovrport] {line.Trim()}");
         }, ct);
         if (result.ExitCode != 0 || !File.Exists(output))
-            throw new BuildException($"ovrport could not convert the APK for Pico (exit code {result.ExitCode})",
-                $"log: {log}\n{result.TailText}") { Code = "pico-convert" };
+            throw new BuildException($"ovrport could not make the universal APK (exit code {result.ExitCode})",
+                $"log: {log}\n{result.TailText}") { Code = "universal-convert" };
 
         var state = context.State;
         state.LastApk = output;
-        state.LastApkHeadset = "pico";
+        state.LastApkHeadset = "universal";
         context.SaveState();
     }
 }

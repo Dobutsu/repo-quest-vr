@@ -57,9 +57,8 @@ public sealed record BuilderStatus(
 public sealed class BuilderService
 {
     /// <summary>Steps as the window lists them: Unity installation, Python, then the pipeline's steps</summary>
-    public static IReadOnlyList<string> StepsFor(Headset headset) => headset == Headset.Pico
-        ? ["unity-setup", "setup", "export", "bake", "project", "unity", "pico"]
-        : ["unity-setup", "setup", "export", "bake", "project", "unity"];
+    public static IReadOnlyList<string> Steps { get; } =
+        ["unity-setup", "setup", "export", "bake", "project", "unity", "universal"];
 
     /// <summary>A first build: export ~2.5 GB, project with Unity's Library ~30 GB, APKs and tools</summary>
     private const long FirstBuildBytes = 40L << 30;
@@ -163,25 +162,15 @@ public sealed class BuilderService
         settings.Save();
     }
 
-    /// <summary>The headset the builder builds for (kept in the workspace's state; Quest unless the player chose Pico)</summary>
-    public Headset Headset => BuildOptions.ParseHeadset(State.Headset);
-
-    public void SetHeadset(Headset headset)
-    {
-        State.Headset = headset == Headset.Quest ? null : BuildOptions.HeadsetId(headset);
-        State.Save(Workspace.StatePath);
-    }
-
     public BuildOptions Options => new()
     {
         ApkName = $"REPO-Quest-{Kit.Version}",
         VersionName = Kit.Version,
         VersionCode = BuildOptions.VersionCodeOf(Kit.Version),
-        Headset = Headset,
     };
 
-    /// <summary>The APK for the chosen headset</summary>
-    public string ApkPath => Options.HeadsetApkPath(Workspace);
+    /// <summary>The APK the build ends with (Quest and Pico)</summary>
+    public string ApkPath => Options.FinalApkPath(Workspace);
 
     public BuilderStatus GetStatus()
     {
@@ -189,8 +178,9 @@ public sealed class BuilderService
         var pending = Game is null ? BuildPipeline.Steps.Select(s => s.Id).ToList() : PendingSteps(Game);
         var freshProject = !Directory.Exists(Workspace.Library);
         var needed = (freshProject ? FirstBuildBytes : RebuildBytes);
-        // An APK of an earlier version still installs, but only one for the chosen headset
-        var lastFits = (State.LastApkHeadset ?? "quest") == BuildOptions.HeadsetId(Headset);
+        // An APK of an earlier version still installs, but only a universal one (a Pico-only or Quest-only APK from
+        // before 1.5.0 is not offered: it may be for the other headset)
+        var lastFits = State.LastApkHeadset == "universal";
         var apk = File.Exists(ApkPath) ? ApkPath : lastFits && State.LastApk is { } last && File.Exists(last) ? last : null;
         return new BuilderStatus(
             Game?.Path,
@@ -325,7 +315,7 @@ public sealed class BuilderService
             await EnsureLicenseAsync(afterFailure: true);
             await BuildPipeline.RunAsync(context, ct);
         }
-        return Options.HeadsetApkPath(Workspace);
+        return Options.FinalApkPath(Workspace);
     }
 
     private async Task AskConsentAsync(bool unityNeeded, CancellationToken ct)
@@ -344,8 +334,8 @@ public sealed class BuilderService
                 "https://github.com/AssetRipper/AssetRipper/blob/master/License.md"));
             items.Add(new ConsentItem("python", Kit.Manifest.Python, 150L << 20, "https://docs.python.org/3/license.html"));
         }
-        var pico = Headset == Headset.Pico && !State.PicoDownloadsAccepted;
-        if (pico && Kit.Manifest.Downloads is { Java: { } java, Ovrport: { } ovrport })
+        var universal = !State.PicoDownloadsAccepted;
+        if (universal && Kit.Manifest.Downloads is { Java: { } java, Ovrport: { } ovrport })
         {
             items.Add(new ConsentItem("java", java.Version, 45L << 20, "https://openjdk.org/legal/gplv2+ce.html"));
             items.Add(new ConsentItem("ovrport", ovrport.Version, 25L << 20, "https://github.com/ovrport/app/blob/main/LICENSE"));
@@ -358,7 +348,7 @@ public sealed class BuilderService
         if (!await prompts.AcceptDownloadsAsync(items))
             throw new OperationCanceledException();
         State.DownloadsAccepted = true;
-        if (pico)
+        if (universal)
             State.PicoDownloadsAccepted = true;
         State.Save(Workspace.StatePath);
         if (items.Any(i => i.Id == "long-paths"))

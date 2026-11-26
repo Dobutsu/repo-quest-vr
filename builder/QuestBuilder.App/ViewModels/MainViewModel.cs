@@ -22,7 +22,7 @@ public interface IWindowServices
     Task<bool> ConfirmAsync(string title, string text, string yes, string no);
     Task<AdbDevice?> PickDeviceAsync(IReadOnlyList<AdbDevice> devices);
     /// <summary>No headset (or one that has not allowed USB debugging): help; true = try again</summary>
-    Task<bool> ShowInstallHelpAsync(bool unauthorized, bool pico);
+    Task<bool> ShowInstallHelpAsync(bool unauthorized);
     Task<UninstallChoice?> AskUninstallAsync(string workspace, bool defenderExclusion, string unityVersion);
     IBuilderPrompts Prompts { get; }
     /// <summary>macOS: the Steam account to download the game with (null: cancelled)</summary>
@@ -56,7 +56,7 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             settings.WorkspacePath = options.Workspace;
         Loc.Instance.SetLanguage(options.Language ?? settings.Language ?? "en"); // English unless the player chose Russian
         Loc.Instance.LanguageChanged += OnLanguageChanged;
-        Steps = new ObservableCollection<StepViewModel>(BuilderService.StepsFor(Headset.Quest).Select(id => new StepViewModel(id)));
+        Steps = new ObservableCollection<StepViewModel>(BuilderService.Steps.Select(id => new StepViewModel(id)));
         clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         clock.Tick += (_, _) => OnTick();
         clock.Start();
@@ -74,27 +74,6 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
         {
             if (value)
                 SetLanguage("ru");
-        }
-    }
-
-    /// <summary>The headset choice (Quest unless the player picks Pico); see <see cref="SetHeadsetAsync"/></summary>
-    public bool IsQuest
-    {
-        get => service?.Headset != Headset.Pico;
-        set
-        {
-            if (value)
-                _ = SetHeadsetAsync(Headset.Quest);
-        }
-    }
-
-    public bool IsPico
-    {
-        get => service?.Headset == Headset.Pico;
-        set
-        {
-            if (value)
-                _ = SetHeadsetAsync(Headset.Pico);
         }
     }
 
@@ -143,7 +122,6 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             service = new BuilderService(settings, view.Prompts, this);
             var kit = options.KitDir;
             await Task.Run(() => service.Initialize(kit));
-            ShowHeadset();
             IsReady = true;
         }
         catch (Exception e)
@@ -210,29 +188,6 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             };
             step.Reset(done ? StepStatus.UpToDate : StepStatus.Pending);
         }
-    }
-
-    private async Task SetHeadsetAsync(Headset headset)
-    {
-        if (service is null || IsBusy || service.Headset == headset)
-            return;
-        service.SetHeadset(headset);
-        ShowHeadset();
-        ShowSuccess = false;
-        await RefreshAsync();
-    }
-
-    /// <summary>The choice and the steps that go with it (Pico has one more)</summary>
-    private void ShowHeadset()
-    {
-        OnPropertyChanged(nameof(IsQuest));
-        OnPropertyChanged(nameof(IsPico));
-        var ids = BuilderService.StepsFor(service?.Headset ?? Headset.Quest);
-        if (Steps.Select(s => s.Id).SequenceEqual(ids))
-            return;
-        Steps.Clear();
-        foreach (var id in ids)
-            Steps.Add(new StepViewModel(id));
     }
 
     [RelayCommand]
@@ -402,7 +357,7 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             BusyText = null;
             if (ready.Count > 0)
                 return ready.Count == 1 ? ready[0] : await view.PickDeviceAsync(ready);
-            if (!await view.ShowInstallHelpAsync(unauthorized: devices.Any(d => d.Unauthorized), pico: IsPico))
+            if (!await view.ShowInstallHelpAsync(unauthorized: devices.Any(d => d.Unauthorized)))
                 return null;
         }
     }

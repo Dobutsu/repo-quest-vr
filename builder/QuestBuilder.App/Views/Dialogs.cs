@@ -136,7 +136,7 @@ public static class Dialogs
     }
 
     /// <summary>No headset, or one that has not allowed USB debugging; true = try again</summary>
-    public static Dialog<bool> InstallHelp(bool unauthorized, bool pico = false)
+    public static Dialog<bool> InstallHelp(bool unauthorized)
     {
         if (unauthorized)
         {
@@ -147,14 +147,14 @@ public static class Dialogs
         }
         var dialog = new Dialog<bool>(Loc.T("install.none.title"), false)
             .Text(Loc.T("install.none.intro"))
-            .Steps(Loc.T(pico ? "install.none.step1Pico" : "install.none.step1"), Loc.T("install.none.step2"),
+            .Steps(Loc.T("install.none.step1"), Loc.T("install.none.step2"),
                 Loc.T("install.none.step3"));
-        if (OperatingSystem.IsWindows() && !pico)
+        if (OperatingSystem.IsWindows())
         {
             dialog.Text(Loc.T("install.none.drivers"))
                 .Link("Oculus ADB Drivers", "https://developers.meta.com/horizon/downloads/package/oculus-adb-drivers/");
         }
-        return dialog.Text(Loc.T(pico ? "install.none.alternativePico" : "install.none.alternative"), opacity: 0.7)
+        return dialog.Text(Loc.T("install.none.alternative"), opacity: 0.7)
             .Button(Loc.T("common.cancel"), false)
             .Button(Loc.T("common.tryAgain"), true, accent: true);
     }

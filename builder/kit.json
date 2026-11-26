@@ -115,6 +115,10 @@
     {
       "name": "v0.5.2",
       "assemblyCSharp": "98a0fedcdf70fc47fa49257bf8aab80955d9b947717d236bceb9da6fd44f4d40"
+    },
+    {
+      "name": "v0.5.4",
+      "assemblyCSharp": "fd720445ea0f5912062e71c9cabc90cdb17d95576112e48a4758baa29b5e878a"
     }
   ]
 }

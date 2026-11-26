@@ -29,8 +29,8 @@ public sealed class Workspace
     public string ReimportMarker => Path.Combine(Library, "RepoQuest.game-assets-reimported");
 
     public string Build => Path.Combine(Root, "build");
-    /// <summary>ovrport's workspace (the pico step): its libraries and the key it signs Pico APKs with, kept so that a
-    /// new APK installs over the old one</summary>
+    /// <summary>ovrport's workspace (the universal step): its libraries and the key it signs the APK with, kept so that
+    /// a new APK installs over the old one (the folder keeps its old name, pico/, for workspaces from Pico builds)</summary>
     public string Ovrport => Path.Combine(Root, "pico", "ovrport-ws");
     public string Logs => Path.Combine(Root, "logs");
     /// <summary>Downloaded tools: AssetRipper, uv, Python and its packages</summary>

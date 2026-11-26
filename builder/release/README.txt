@@ -21,8 +21,8 @@ You need
 How to build
 1. Unzip anywhere and run RepoQuestBuilder.exe.
    If Windows says "Windows protected your PC", click "More info" → "Run anyway".
-2. Check that the builder found the game, or choose the game's folder yourself. Pick your headset: Meta Quest
-   (the default, for Quest 2, 3 and 3S) or Pico 4.
+2. Check that the builder found the game, or choose the game's folder yourself. There is nothing to pick for the
+   headset: one APK runs on Quest 2, 3, 3S and Pico 4 / 4 Ultra.
 3. Click "Build APK" and accept the licenses. The builder downloads Unity and everything else. It also offers to
    exclude its working folder from Windows Defender scanning, which makes builds faster; you can say no.
 4. When asked, sign in to Unity Hub with a free Unity account, then come back to the builder.
@@ -51,8 +51,10 @@ mode. It needs a free developer organization on developers.meta.com.
 If the headset does not show up over USB, install the Oculus ADB Drivers:
 https://developers.meta.com/horizon/downloads/package/oculus-adb-drivers/
 
-Pico 4 / 4 Ultra: the builder makes the Quest version and converts it with ovrport (https://github.com/ovrport/app,
-GPL-3.0), downloading ovrport and Java 17 for that. Tested on a Pico 4 and a Pico 4 Ultra. On the first start on a
+One APK for Quest and Pico: the builder makes the Quest version and converts it with ovrport
+(https://github.com/ovrport/app, GPL-3.0), downloading ovrport and Java 17 for that. The converted APK picks the
+headset's own runtime when it starts. Tested on a Quest 3, a Pico 4 and a Pico 4 Ultra. The first APK from builder
+1.5.0 is signed with a new key, so installing it over an older one reinstalls the game; the builder keeps your saves. On the first start on a
 Pico 4 the game shows "Preparing graphics" for about a minute while things appear one by one (Pico 4 hangs otherwise),
 and it asks for the microphone in the main menu. Developer mode on the Pico: Settings → General → About, tap "Software version" 7 times, then
 Settings → Developer → USB debugging.
@@ -74,8 +76,8 @@ Quest 3 или Pico 4 из вашей копии игры в Steam. Сборка
 Как собрать
 1. Распакуйте архив в любую папку и запустите RepoQuestBuilder.exe.
    Если Windows покажет «Система Windows защитила ваш компьютер», нажмите «Подробнее» → «Выполнить в любом случае».
-2. Проверьте, что программа нашла игру, или укажите папку игры вручную. Выберите шлем: Meta Quest (по умолчанию,
-   для Quest 2, 3 и 3S) или Pico 4.
+2. Проверьте, что программа нашла игру, или укажите папку игры вручную. Выбирать шлем не нужно: один APK работает
+   на Quest 2, 3, 3S и Pico 4 / 4 Ultra.
 3. Нажмите «Собрать APK» и примите лицензии. Программа сама скачает Unity и всё остальное. Ещё она предложит
    исключить свою рабочую папку из проверки Защитником Windows, чтобы сборка шла быстрее; можно отказаться.
 4. Когда программа попросит, войдите в Unity Hub с бесплатным аккаунтом Unity и вернитесь в программу.
@@ -105,8 +107,10 @@ Quest 3 или Pico 4 из вашей копии игры в Steam. Сборка
 Если шлем не виден по кабелю, установите драйвер Oculus ADB Drivers:
 https://developers.meta.com/horizon/downloads/package/oculus-adb-drivers/
 
-Pico 4 / 4 Ultra: программа собирает версию для Quest и переделывает её программой ovrport
-(https://github.com/ovrport/app, GPL-3.0), для этого скачивает ovrport и Java 17. Проверено на Pico 4 и Pico 4 Ultra.
+Один APK для Quest и Pico: программа собирает версию для Quest и переделывает её программой ovrport
+(https://github.com/ovrport/app, GPL-3.0), для этого скачивает ovrport и Java 17. При запуске APK сам выбирает
+среду шлема. Проверено на Quest 3, Pico 4 и Pico 4 Ultra. Первый APK из сборщика 1.5.0 подписан новым ключом,
+поэтому установка поверх старого переустанавливает игру; сохранения программа сберегает.
 При первом запуске на Pico 4 игра около минуты показывает «Preparing graphics», а предметы появляются по одному
 (иначе Pico 4 зависает);
 доступ к микрофону она спросит в главном меню. Режим разработчика на Pico: Настройки → Общие → О устройстве,

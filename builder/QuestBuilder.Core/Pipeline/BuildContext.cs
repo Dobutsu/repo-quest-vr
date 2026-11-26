@@ -3,12 +3,9 @@ using RepoQuest.Builder.Setup;
 
 namespace RepoQuest.Builder.Pipeline;
 
-/// <summary>The headset the APK is for: Unity builds for Quest; for Pico the pico step converts that APK</summary>
-public enum Headset { Quest, Pico }
-
 public sealed class BuildOptions
 {
-    /// <summary>APK file name in the workspace's build folder, without .apk</summary>
+    /// <summary>APK file name in the workspace's build folder, without .apk (Unity's APK; the universal one is named after it)</summary>
     public string ApkName { get; init; } = "REPO-Quest";
     /// <summary>Unity development build (-developmentBuild)</summary>
     public bool Development { get; init; }
@@ -20,28 +17,23 @@ public sealed class BuildOptions
     public bool Force { get; init; }
     /// <summary>Run only these steps (ids); null: all that are not up to date</summary>
     public IReadOnlySet<string>? Only { get; init; }
-    public Headset Headset { get; init; } = Headset.Quest;
+    /// <summary>
+    /// The universal step runs (ovrport: one APK for Quest and Pico). False only for quick Quest test builds
+    /// (QuestBuilder.Cli build --quest-only): the APK is then Unity's.
+    /// </summary>
+    public bool Universal { get; init; } = true;
 
-    /// <summary>The APK Unity builds (for Quest)</summary>
+    /// <summary>The APK Unity builds (Quest only)</summary>
     public string ApkPath(Workspace workspace) => Path.Combine(workspace.Build, ApkName + ".apk");
 
-    /// <summary>The APK for <see cref="Headset"/>: Unity's, or the pico step's next to it (REPO-Quest-1.0.5 -> REPO-Pico-1.0.5)</summary>
-    public string HeadsetApkPath(Workspace workspace) => Headset == Headset.Pico
-        ? Path.Combine(workspace.Build, PicoApkName(ApkName) + ".apk")
-        : ApkPath(workspace);
+    /// <summary>The universal step's APK next to Unity's (REPO-Quest-1.5.0 -> REPO-VR-1.5.0)</summary>
+    public string UniversalApkPath(Workspace workspace) => Path.Combine(workspace.Build, UniversalApkName(ApkName) + ".apk");
 
-    public static string PicoApkName(string apkName) =>
-        apkName.Contains("Quest", StringComparison.Ordinal) ? apkName.Replace("Quest", "Pico", StringComparison.Ordinal) : apkName + "-pico";
+    /// <summary>The APK the build ends with: the universal one, or Unity's for a Quest-only test build</summary>
+    public string FinalApkPath(Workspace workspace) => Universal ? UniversalApkPath(workspace) : ApkPath(workspace);
 
-    /// <summary>"quest" or "pico", as state.json and the command line spell it</summary>
-    public static string HeadsetId(Headset headset) => headset == Headset.Pico ? "pico" : "quest";
-
-    public static Headset ParseHeadset(string? id) => id switch
-    {
-        null or "quest" => Headset.Quest,
-        "pico" => Headset.Pico,
-        _ => throw new BuildException($"unknown headset {id}: quest or pico"),
-    };
+    public static string UniversalApkName(string apkName) =>
+        apkName.Contains("Quest", StringComparison.Ordinal) ? apkName.Replace("Quest", "VR", StringComparison.Ordinal) : apkName + "-universal";
 
     /// <summary>Android versionCode of a version: 1.2.3 -> 10203 (always growing with releases; 0.0.0 -> 1)</summary>
     public static int VersionCodeOf(string version)

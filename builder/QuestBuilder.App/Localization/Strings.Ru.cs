@@ -6,7 +6,7 @@ internal static partial class Strings
 {
     public static readonly IReadOnlyDictionary<string, string> Ru = new Dictionary<string, string>
     {
-        ["app.subtitle"] = "Собирает R.E.P.O. для Meta Quest 2 / 3 и Pico 4 из вашей копии игры",
+        ["app.subtitle"] = "Собирает R.E.P.O. для Meta Quest 2 / 3 / 3S и Pico 4 / 4 Ultra из вашей копии игры",
         ["app.version"] = "версия {0}",
         ["lang.tooltip"] = "Язык интерфейса",
         ["unit.gb"] = "{0} ГБ",
@@ -64,13 +64,11 @@ internal static partial class Strings
             "Папку Program Files защищает Windows. Выберите другое место, например D:\\RepoQuest.",
 
 
-        ["headset.title"] = "Шлем",
-        ["headset.quest"] = "Meta Quest 2 / 3 / 3S",
-        ["headset.pico"] = "Pico 4 / 4 Ultra",
-        ["headset.picoAbout"] =
-            "Версия для Quest, переделанная для Pico программой ovrport (бесплатная, лицензия GPL). Проверено на Pico 4. " +
-            "При первом запуске игра около минуты показывает «Preparing graphics», а предметы появляются по одному: " +
-            "иначе Pico 4 зависает.",
+        ["headset.title"] = "Шлемы",
+        ["headset.about"] =
+            "Один APK для Meta Quest 2 / 3 / 3S и Pico 4 / 4 Ultra: ovrport (бесплатная программа, лицензия GPL) " +
+            "добавляет в сборку для Quest VR-среду и контроллеры Pico. На Pico 4 при первом запуске игра около минуты " +
+            "показывает «Preparing graphics», а предметы появляются по одному: иначе Pico 4 зависает.",
         ["build.title"] = "Сборка",
         ["build.about"] =
             "Первая сборка займёт 1–1,5 часа на быстром компьютере и 3–5 часов на медленном, плюс время на " +
@@ -94,8 +92,8 @@ internal static partial class Strings
         ["step.unity.title"] = "APK",
         ["step.unity.about"] = "Unity импортирует всё и собирает игру для Quest. Самый долгий шаг.",
 
-        ["step.pico.title"] = "Версия для Pico",
-        ["step.pico.about"] = "ovrport переделывает APK для Pico: его VR-среда и контроллеры. Несколько минут.",
+        ["step.universal.title"] = "APK для Quest и Pico",
+        ["step.universal.about"] = "ovrport добавляет VR-среду и контроллеры Pico: один APK для обоих шлемов. Несколько минут.",
         ["stage.export.download"] = "Скачиваем AssetRipper",
         ["stage.export.load"] = "Читаем файлы игры",
         ["stage.export.export"] = "Переносим ресурсы",
@@ -115,8 +113,8 @@ internal static partial class Strings
         ["activity.hint"] =
             "Пока Unity компилирует код игры или упаковывает APK, она может молчать полчаса и дольше, на медленном " +
             "компьютере ещё дольше. Если в диспетчере задач Unity, il2cpp или java нагружают процессор, сборка идёт.",
-        ["stage.pico.download"] = "Скачивание Java и ovrport",
-        ["stage.pico.patch"] = "Переделка APK для Pico",
+        ["stage.universal.download"] = "Скачиваем Java и ovrport",
+        ["stage.universal.patch"] = "Делаем APK для Quest и Pico",
         ["stage.unity-setup.hub-download"] = "Скачиваем Unity Hub",
         ["stage.unity-setup.hub-install"] = "Устанавливаем Unity Hub",
         ["stage.unity-setup.editor"] = "Скачиваем Unity",
@@ -223,7 +221,7 @@ internal static partial class Strings
         ["consent.java.title"] = "Java {0} (Eclipse Temurin)",
         ["consent.java.about"] = "Запускает ovrport. Только внутри рабочей папки. Лицензия GPL с исключением Classpath.",
         ["consent.ovrport.title"] = "ovrport {0}",
-        ["consent.ovrport.about"] = "Переделывает APK для Quest в APK для Pico. Лицензия GPL.",
+        ["consent.ovrport.about"] = "Делает так, чтобы APK работал и на Pico, и на Quest. Лицензия GPL.",
         ["consent.long-paths.title"] = "Длинные пути к файлам в Windows",
         ["consent.long-paths.about"] =
             "Системная настройка, без которой сборка не работает. Windows попросит права администратора.",
@@ -358,6 +356,10 @@ internal static partial class Strings
         ["err.unity-android"] =
             "У Unity не хватает модулей для Android. В Unity Hub откройте Installs → Unity 6000.3.17f1 → Add modules " +
             "и добавьте Android Build Support вместе с OpenJDK и Android SDK & NDK Tools.",
+        ["err.gradle-files"] =
+            "Gradle (последняя часть сборки Unity) упёрся в лимит открытых файлов. Нажмите «Собрать APK» ещё раз: " +
+            "сборщик уберёт то, что Gradle оставил, и сборка продолжится с того же места. Если повторится — соберите " +
+            "отчёт и отправьте его нам.",
         ["err.unity-compile"] =
             "Код проекта не скомпилировался. Это ошибка сборщика, а не ваша: соберите отчёт и отправьте его нам.",
         ["err.unity-failed"] =
@@ -394,8 +396,8 @@ internal static partial class Strings
         ["err.adb-missing"] =
             "Программа для установки на шлем (adb) ставится вместе с Unity, а её пока нет. Сначала соберите APK — " +
             "или установите его через SideQuest или Meta Quest Developer Hub.",
-        ["err.pico-convert"] =
-            "Не получилось переделать APK для Pico. Причина — в подробностях и в logs\\ovrport.log рабочей папки; " +
+        ["err.universal-convert"] =
+            "Не получилось сделать APK для Quest и Pico. Причина — в подробностях и в logs\\ovrport.log рабочей папки; " +
             "«Собрать отчёт» соберёт их.",
         ["err.update-signature"] = "Обновление не подписано авторами сборщика, поэтому мы его не установили.",
         ["err.update-offline"] = "Не удалось проверить обновления. Проверьте подключение к интернету.",
@@ -416,16 +418,13 @@ internal static partial class Strings
         ["install.none.title"] = "Шлем не найден",
         ["install.none.intro"] = "Подключите шлем к компьютеру:",
         ["install.none.step1"] =
-            "Включите режим разработчика для шлема в приложении Meta Horizon на телефоне (настройки шлема → " +
-            "Developer Mode).",
-        ["install.none.step1Pico"] =
-            "Включите режим разработчика на Pico: Настройки → Общие → О устройстве, 7 раз нажмите «Версия ПО»; " +
-            "затем Настройки → Разработчик → Отладка по USB.",
+            "Включите режим разработчика. Quest: в приложении Meta Horizon на телефоне (настройки шлема → Developer " +
+            "Mode). Pico: Настройки → Общие → О устройстве, 7 раз нажмите «Версия ПО»; затем Настройки → Разработчик → " +
+            "Отладка по USB.",
         ["install.none.step2"] = "Подключите шлем USB-C-кабелем, который передаёт данные (некоторые кабели только заряжают).",
         ["install.none.step3"] = "Наденьте шлем и разрешите отладку по USB (Allow USB debugging).",
         ["install.none.drivers"] = "В Windows также установите драйвер Meta «Oculus ADB Drivers»:",
-        ["install.none.alternative"] = "Или установите APK сами — через SideQuest или Meta Quest Developer Hub.",
-        ["install.none.alternativePico"] = "APK можно поставить и самому — через adb или SideQuest.",
+        ["install.none.alternative"] = "Или установите APK сами — через SideQuest, Meta Quest Developer Hub (Quest) или adb.",
         ["install.unauthorized.title"] = "Разрешите отладку по USB",
         ["install.unauthorized.text"] =
             "Шлем подключён, но ещё не доверяет этому компьютеру. Наденьте его и подтвердите запрос «Allow USB " +

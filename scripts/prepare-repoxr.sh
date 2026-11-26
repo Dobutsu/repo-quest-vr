@@ -26,6 +26,10 @@
 #   0042-inventory-radial-menu  hold the right stick click (the Crouch binding) for a three slot menu at the hand: tilt
 #                               to a slot and let go to put the held item away (swapping) or take one out onto the beam;
 #                               a tap still crouches (as a toggle); Gameplay → Inventory: Belt And Menu / Menu Only
+#   0044-repo-0.5.4-object-turning  R.E.P.O. 0.5.4 moved the grab rotate input into ObjectTurningInputUpdate /
+#                                    ObjectTurnAccelerationGet (LookInputGet): the Rotation action and the rotate lock
+#                                    (disableRotateTimer) go there, at the speed they had before
+#   0045-pico4-performance-spacewarp  Graphics Mode Performance has Application SpaceWarp on the Pico 4 (Adreno 650)
 # Built against the game in work/game (RepoXR's tester mode): the REPO package on DaXcess' feed stops at 0.4.4
 set -euo pipefail
 

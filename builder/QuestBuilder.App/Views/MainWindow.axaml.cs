@@ -94,7 +94,7 @@ public partial class MainWindow : Window, IWindowServices
 
     public RepoQuest.Builder.Game.ISteamLoginPrompts SteamPrompts => new SteamWindowPrompts(this);
 
-    public Task<bool> ShowInstallHelpAsync(bool unauthorized, bool pico) => Dialogs.InstallHelp(unauthorized, pico).ShowAsync(this);
+    public Task<bool> ShowInstallHelpAsync(bool unauthorized) => Dialogs.InstallHelp(unauthorized).ShowAsync(this);
 
     public Task<UninstallChoice?> AskUninstallAsync(string workspace, bool defenderExclusion, string unityVersion) =>
         Dialogs.Uninstall(workspace, defenderExclusion, unityVersion).ShowAsync(this);
@@ -170,7 +170,6 @@ public partial class MainWindow : Window, IWindowServices
                 ("error-unexpected", Dialogs.Error(new InvalidOperationException("Something odd"), () => { }, null)),
                 ("install-none", Dialogs.InstallHelp(unauthorized: false)),
                 ("install-unauthorized", Dialogs.InstallHelp(unauthorized: true)),
-                ("install-none-pico", Dialogs.InstallHelp(unauthorized: false, pico: true)),
                 ("installed", Dialogs.Message(Loc.T("install.done.title"), Loc.T("install.done.text"), Loc.T("install.done.reinstalled"))),
                 ("cancel", Dialogs.Confirm(Loc.T("cancel.title"), Loc.T("cancel.text"), Loc.T("cancel.stop"), Loc.T("cancel.continue"))),
                 ("steam-user", Dialogs.SteamUser("player123")),

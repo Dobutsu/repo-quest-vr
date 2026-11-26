@@ -7,10 +7,12 @@ public enum InstallOutcome { Installed, ReinstalledWithData }
 /// machine) cannot replace the installed one; then the game's data (saves, RepoXR settings, Steam login, cosmetics) is
 /// copied to the computer, the old app removed, the new one installed and the data put back.
 /// </summary>
-public static class QuestInstaller
+public static partial class QuestInstaller
 {
     public const string Package = "io.repoxr.quest";
     public const string DataDir = "/sdcard/Android/data/" + Package + "/files";
+    /// <summary>Where a backup goes on the headset before it is copied into <see cref="DataDir"/></summary>
+    private const string RestoreStaging = "/data/local/tmp/repoquest-restore";
 
     public static async Task<InstallOutcome> InstallAsync(Adb adb, AdbDevice device, string apk, string backupRoot,
         IProgress<string>? status, CancellationToken ct)
@@ -35,6 +37,22 @@ public static class QuestInstaller
         if (result.ExitCode == 0 && output.Contains("Success", StringComparison.Ordinal))
             return InstallOutcome.Installed;
 
+        if (output.Contains("INSTALL_FAILED_VERSION_DOWNGRADE"))
+        {
+            // An older port version than the one installed: allowed, the player chose to build it
+            var downgrade = await adb.RunAsync(device.Serial, ["install", "-r", "-d", apk], ct);
+            if (downgrade.ExitCode == 0 && downgrade.TailText.Contains("Success", StringComparison.Ordinal))
+                return InstallOutcome.Installed;
+            // Android checks the version first: an older APK with another signature only says so now. And -d is only
+            // honoured for debuggable apps (Quest OS of 2026-11 refused it for a release APK): then the old version goes
+            // in as a new install, with the data kept the same way as for another signature
+            output = downgrade.TailText;
+            if (output.Contains("INSTALL_FAILED_VERSION_DOWNGRADE"))
+            {
+                await ReinstallKeepingDataAsync(adb, device, apk, backupRoot, status, ct);
+                return InstallOutcome.ReinstalledWithData;
+            }
+        }
         if (output.Contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE") || output.Contains("signatures do not match"))
         {
             await ReinstallKeepingDataAsync(adb, device, apk, backupRoot, status, ct);
@@ -42,14 +60,6 @@ public static class QuestInstaller
         }
         if (output.Contains("INSTALL_FAILED_INSUFFICIENT_STORAGE"))
             throw new BuildException("The headset has no room for the game (about 4 GB needed)", output) { Code = "quest-storage" };
-        if (output.Contains("INSTALL_FAILED_VERSION_DOWNGRADE"))
-        {
-            // An older port version than the one installed: allowed, the player chose to build it
-            var downgrade = await adb.RunAsync(device.Serial, ["install", "-r", "-d", apk], ct);
-            if (downgrade.ExitCode == 0 && downgrade.TailText.Contains("Success", StringComparison.Ordinal))
-                return InstallOutcome.Installed;
-            output = downgrade.TailText;
-        }
         throw new BuildException("Installing on the headset failed", output) { Code = "quest-install" };
     }
 
@@ -97,11 +107,51 @@ public static class QuestInstaller
         {
             var pull = await adb.RunAsync(device.Serial, ["pull", DataDir, backup], ct);
             if (pull.ExitCode != 0)
-                throw new BuildException("Could not copy the game's data from the headset; nothing was changed",
-                    pull.TailText) { Code = "quest-backup" };
+                await PullFileByFileAsync(adb, device, backup, pull.TailText, ct);
             Log.Info($"headset data saved in {backup}");
         }
         return (backup, hasData);
+    }
+
+    /// <summary>
+    /// adb pull stops at the first file it may not read. Files the game made inside a folder an earlier restore created
+    /// (before builder 1.5.0 those folders lost the setgid ext_data_rw group, see <see cref="RestoreAsync"/>) belong to
+    /// the game's own group, which adb (shell) is not in. Then every file is pulled on its own and the unreadable ones
+    /// are left out: RepoXR's unpacked assets and their stamp, which the game makes again. A save or setting among them
+    /// stops the install before anything is changed.
+    /// </summary>
+    private static async Task PullFileByFileAsync(Adb adb, AdbDevice device, string backup, string firstError,
+        CancellationToken ct)
+    {
+        // The whole listing (ShellAsync keeps only the last lines: a backup of 2026-11-26 lost RepoXR/config so).
+        // find prints "find: ./<folder>: Permission denied" for folders it may not open: their files count as skipped
+        var lines = await adb.ShellLinesAsync(device.Serial, $"cd {DataDir} && find . -type f", ct);
+        var files = lines.Where(l => l.StartsWith("./", StringComparison.Ordinal)).Select(l => l[2..]).ToList();
+        var skipped = lines
+            .Select(l => DeniedFolderRegex().Match(l))
+            .Where(m => m.Success)
+            .Select(m => m.Groups[1].Value + "/")
+            .ToList();
+        if (files.Count == 0)
+            throw new BuildException("Could not copy the game's data from the headset; nothing was changed",
+                firstError) { Code = "quest-backup" };
+        foreach (var file in files)
+        {
+            var target = Path.Combine([backup, "files", .. file.Split('/')]);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            var one = await adb.RunAsync(device.Serial, ["pull", $"{DataDir}/{file}", target], ct);
+            if (one.ExitCode != 0)
+                skipped.Add(file);
+        }
+        if (skipped.Count == 0)
+            return;
+        Log.Info($"left out of the backup (adb may not read them): {string.Join(", ", skipped)}");
+        var needed = skipped.Where(f => f.StartsWith("saves/", StringComparison.Ordinal) ||
+                                        f.EndsWith(".es3", StringComparison.OrdinalIgnoreCase) ||
+                                        f.StartsWith("RepoXR/config/", StringComparison.Ordinal)).ToList();
+        if (needed.Count > 0)
+            throw new BuildException("Could not copy the game's saves from the headset; nothing was changed",
+                $"adb may not read: {string.Join(", ", needed)}\n{firstError}") { Code = "quest-backup" };
     }
 
     private static async Task ReinstallKeepingDataAsync(Adb adb, AdbDevice device, string apk, string backupRoot,
@@ -118,16 +168,34 @@ public static class QuestInstaller
                 install.TailText) { Code = "quest-install" };
 
         if (hasData)
-        {
-            status?.Report("restore");
-            await adb.ShellAsync(device.Serial, $"mkdir -p {DataDir}", ct);
-            // adb pull put the folder itself into the backup: push its content back
-            var restore = await adb.RunAsync(device.Serial, ["push", Path.Combine(backup, "files") + "/.", DataDir], ct);
-            if (restore.ExitCode != 0)
-                throw new BuildException($"The game is installed, but its data could not be put back; it is saved in {backup}",
-                    restore.TailText) { Code = "quest-restore" };
-            // Pushed files belong to the shell user; the game must be able to replace them when it saves
-            await adb.ShellAsync(device.Serial, $"chmod -R 777 {DataDir}", ct);
-        }
+            await RestoreAsync(adb, device, backup, status, ct);
     }
+
+    /// <summary>Puts a backup made by <see cref="BackupDataAsync"/> back into <see cref="DataDir"/></summary>
+    private static async Task RestoreAsync(Adb adb, AdbDevice device, string backup, IProgress<string>? status,
+        CancellationToken ct)
+    {
+        status?.Report("restore");
+        // adb pull put the folder itself into the backup: push its content back. Not straight into Android/data:
+        // on Quest OS of 2026-11 (Android 14) adb push there fails after a few files ("remote fchown failed:
+        // Operation not permitted"); pushed to /data/local/tmp and copied by the shell, all of it arrives
+        await adb.ShellAsync(device.Serial, $"rm -rf {RestoreStaging}; mkdir -p {RestoreStaging} {DataDir}", ct);
+        var restore = await adb.RunAsync(device.Serial, ["push", Path.Combine(backup, "files") + "/.", RestoreStaging], ct);
+        var copied = restore.ExitCode == 0
+            ? await adb.ShellAsync(device.Serial, $"cp -r {RestoreStaging}/. {DataDir}/ && echo restored", ct)
+            : "";
+        await adb.ShellAsync(device.Serial, $"rm -rf {RestoreStaging}", ct);
+        if (!copied.Contains("restored", StringComparison.Ordinal))
+            throw new BuildException($"The game is installed, but its data could not be put back; it is saved in {backup}",
+                restore.TailText + "\n" + copied) { Code = "quest-restore" };
+        // Copied files belong to the shell user; the game must be able to replace them when it saves. The app's
+        // folders are setgid with the ext_data_rw group, which adb (shell) is in, so whatever the game makes later
+        // stays readable for the next backup; cp gives its folders the shell group without setgid, and the game's
+        // new files (saves too) then got the game's own group, which adb may not read (seen 2026-11-26)
+        await adb.ShellAsync(device.Serial,
+            $"chgrp -R ext_data_rw {DataDir}; chmod -R 777 {DataDir}; find {DataDir} -type d -exec chmod 2777 {{}} +", ct);
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^find: '?\./(.+?)'?: Permission denied")]
+    internal static partial System.Text.RegularExpressions.Regex DeniedFolderRegex();
 }
