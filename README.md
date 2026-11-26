@@ -76,12 +76,14 @@ the main menu rather than at startup, where the permission prompt crashed it. Se
 
 ## How to get it
 
-Download **RepoQuestBuilder** for Windows from [Releases](../../releases/latest) and follow its `README.txt`. In short:
+Download **RepoQuestBuilder** for Windows or for a Mac with Apple Silicon (since 1.5.1) from
+[Releases](../../releases/latest) and follow its `README.txt` (`README-mac.txt` on a Mac). In short:
 
-1. You need Windows 10/11 (64-bit), 16 GB RAM, about 60 GB of free disk space, R.E.P.O. on Steam, a Quest 2, Quest 3 or
+1. You need Windows 10/11 (64-bit) or a Mac with an M1 or newer chip, 16 GB RAM, about 60 GB of free disk space, R.E.P.O. on Steam, a Quest 2, Quest 3 or
    Pico 4 in developer mode with a USB cable, and a free Unity account. The APK it makes runs on all of them.
 2. The builder finds your game and downloads everything else itself: Unity 6.3, AssetRipper and Python packages,
-   each from its original source with a pinned SHA-256. It then builds the APK on your PC.
+   each from its original source with a pinned SHA-256. It then builds the APK on your computer. R.E.P.O. has no Mac
+   version: on a Mac the builder downloads the Windows one with SteamCMD, Valve's command-line Steam client.
 3. The first build takes 1–1.5 hours on a fast computer and 3–5 hours on a slower one: Unity compiles the game's
    shaders and data once. Later updates take 20 minutes to an hour.
 4. It installs the APK on the headset. The game appears in the Library under *Unknown Sources*.
@@ -107,7 +109,7 @@ your R.E.P.O. (Steam)
   └─ Unity 6.3 (IL2CPP, OpenXR, Vulkan) ─► Android APK ─► ovrport ─► one APK for Quest and Pico
 ```
 
-- `builder/` is the Windows builder (Avalonia app plus a CLI) and runs the whole pipeline. See `docs/builder.md`.
+- `builder/` is the builder for Windows and macOS (Avalonia app plus a CLI) and runs the whole pipeline. See `docs/builder.md`.
 - `tools/RepoXR.Standalone` starts RepoXR without BepInEx and adds the in-headset Steam login and invites.
 - `tools/SteamShim` replaces Facepunch.Steamworks with a SteamKit2 backend: lobbies, auth tickets for Photon, friends.
 - `tools/HarmonyBaker`, `tools/AssemblyRenamer` and `tools/Il2CppFixes` make the Mono mod work under IL2CPP.
@@ -115,8 +117,8 @@ your R.E.P.O. (Steam)
 - `docs/` contains the design notes: `feasibility.md` (how the port came together), `builder.md` (the builder and
   releases), `public-release.md` (the legal side) and `shader-gallery.md` (checking our shaders against the PC game).
 
-Development happens on a Mac with the same pipeline (`scripts/build.sh`). The Windows builder is the supported way for
-players.
+Development happens on a Mac with the same pipeline (`scripts/build.sh`). The builder (Windows or Mac) is the
+supported way for players.
 
 ## Legal
 

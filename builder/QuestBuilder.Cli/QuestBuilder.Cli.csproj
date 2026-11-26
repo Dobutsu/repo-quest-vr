@@ -19,7 +19,10 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(SingleFile)' == 'true'">
         <PublishSingleFile>true</PublishSingleFile>
-        <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+        <!-- Windows only: on osx-arm64 the compressed single file died with an AccessViolationException in
+             Socket.LoadSocketTypeFromHandle the first time it read a child process's output (.NET 8.0.31, seen in the
+             PEAK builder 2026-11-18); uncompressed it works -->
+        <EnableCompressionInSingleFile Condition="$(RuntimeIdentifier.StartsWith('win'))">true</EnableCompressionInSingleFile>
     </PropertyGroup>
     <ItemGroup>
         <EmbeddedResource Include="$(KitZip)" LogicalName="kit.zip" Condition="'$(KitZip)' != ''" />

@@ -1,3 +1,5 @@
+using System.IO.Compression;
+
 namespace RepoQuest.Builder.Pipeline;
 
 /// <summary>
@@ -9,7 +11,7 @@ namespace RepoQuest.Builder.Pipeline;
 /// Quest-only one signed with Unity's key: the installer keeps the data). The game does the rest at runtime
 /// (unity-tools/Runtime: ShaderWarmup for the Pico 4's GPU hang, QuestSpaceWarp's frame rate cap on Pico).
 /// </summary>
-public sealed class UniversalStep : BuildStep
+public sealed partial class UniversalStep : BuildStep
 {
     /// <summary>ovrport's OpenXR loader release (an "instance"): the newest one not marked experimental, tested 16.10</summary>
     private const string Instance = "3.3.0";
@@ -50,6 +52,18 @@ public sealed class UniversalStep : BuildStep
         Report(context, null, "patch");
         Directory.CreateDirectory(workspace.Ovrport);
         FileOps.DeleteFile(output);
+        // ovrport unpacks the APK into <workspace>/dec. Unity's APK has resource names that differ only in case
+        // (res/Dm.xml and res/dM.xml), and on a Mac's case-insensitive disk one of each pair was lost (builder 1.5.0,
+        // checked against a Windows run): on a Mac ovrport works on a case-sensitive disk image instead
+        await using var volume = Platform.IsMac
+            ? await CaseSensitiveVolume.MountAsync(Path.Combine(workspace.Tools, "ovrport-volume"), ct)
+            : null;
+        var ovrportWorkspace = workspace.Ovrport;
+        if (volume is not null)
+        {
+            ovrportWorkspace = Path.Combine(volume.Root, "ovrport-ws");
+            FileOps.CopyDirectory(workspace.Ovrport, ovrportWorkspace);
+        }
         var log = Path.Combine(workspace.Logs, "ovrport.log");
         using var writer = new StreamWriter(log, append: false);
         var result = await ProcessRunner.RunAsync(new ProcessSpec
@@ -60,7 +74,7 @@ public sealed class UniversalStep : BuildStep
             [
                 "-Xmx4g", "-jar", jar, "patch",
                 $"--input={input}", $"--output={workspace.Build}", $"--output-name={Path.GetFileName(output)}",
-                $"--workspace={workspace.Ovrport}", $"--version={Instance}", $"--patches={Patches}",
+                $"--workspace={ovrportWorkspace}", $"--version={Instance}", $"--patches={Patches}",
             ],
             WorkingDirectory = workspace.Build,
             LogPrefix = null,
@@ -76,10 +90,119 @@ public sealed class UniversalStep : BuildStep
         if (result.ExitCode != 0 || !File.Exists(output))
             throw new BuildException($"ovrport could not make the universal APK (exit code {result.ExitCode})",
                 $"log: {log}\n{result.TailText}") { Code = "universal-convert" };
+        if (volume is not null)
+            KeepOvrportFiles(ovrportWorkspace, workspace.Ovrport);
+        if (MissingCaseTwins(input, output) is { Count: > 0 } missing)
+        {
+            FileOps.DeleteFile(output);
+            throw new BuildException("ovrport's APK lacks files whose names differ only in case",
+                string.Join('\n', missing)) { Code = "universal-convert" };
+        }
 
         var state = context.State;
         state.LastApk = output;
         state.LastApkHeadset = "universal";
         context.SaveState();
+    }
+
+    /// <summary>What ovrport keeps in its workspace between runs: its signing key (the same one for every APK, so a new
+    /// one installs over the old) and the loader releases it downloaded</summary>
+    private static void KeepOvrportFiles(string from, string to)
+    {
+        foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(from, file);
+            if (relative.StartsWith("dec" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                continue;
+            var target = Path.Combine(to, relative);
+            if (File.Exists(target) && !relative.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                continue;
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, overwrite: true);
+        }
+    }
+
+    /// <summary>Entries of <paramref name="input"/> that have a twin differing only in case and are missing from
+    /// <paramref name="output"/> (ovrport keeps every resource; it only adds and replaces)</summary>
+    internal static List<string> MissingCaseTwins(string input, string output)
+    {
+        using var inZip = ZipFile.OpenRead(input);
+        using var outZip = ZipFile.OpenRead(output);
+        var twins = inZip.Entries.Select(e => e.FullName)
+            .GroupBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .SelectMany(g => g)
+            .ToList();
+        if (twins.Count == 0)
+            return [];
+        var present = outZip.Entries.Select(e => e.FullName).ToHashSet(StringComparer.Ordinal);
+        return twins.Where(n => !present.Contains(n)).ToList();
+    }
+
+    /// <summary>A case-sensitive APFS disk image, mounted for one ovrport run and deleted after it (macOS). It mounts
+    /// where macOS puts it (/Volumes/RepoQuest-ovrport, " 1" etc. when taken): hdiutil -mountpoint into a folder on an
+    /// external disk failed with "Permission denied" (2026-11-26)</summary>
+    private sealed partial class CaseSensitiveVolume : IAsyncDisposable
+    {
+        private const string VolumeName = "RepoQuest-ovrport";
+        private readonly string image;
+
+        private CaseSensitiveVolume(string root, string image)
+        {
+            Root = root;
+            this.image = image;
+        }
+
+        public string Root { get; }
+
+        /// <param name="imageBase">The image's path without ".sparseimage"</param>
+        public static async Task<CaseSensitiveVolume> MountAsync(string imageBase, CancellationToken ct)
+        {
+            var image = imageBase + ".sparseimage";
+            // A run stopped before it could clean up leaves the volume attached (detach takes its mount point)
+            if (Directory.Exists("/Volumes/" + VolumeName))
+                await Hdiutil(["detach", "-force", "/Volumes/" + VolumeName], null, ct);
+            FileOps.DeleteFile(image);
+            // Sparse: it takes only what ovrport writes (the unpacked APK, ~1-2 GB), up to the size given
+            await Hdiutil(["create", "-size", "16g", "-type", "SPARSE", "-fs", "Case-sensitive APFS", "-volname",
+                VolumeName, imageBase], "Could not create a case-sensitive disk image for ovrport", ct);
+            var lines = new List<string>();
+            var attach = await ProcessRunner.RunAsync(new ProcessSpec
+            {
+                FileName = "/usr/bin/hdiutil",
+                Arguments = ["attach", "-plist", "-nobrowse", "-noautoopen", image],
+                LogPrefix = "[hdiutil] ",
+            }, line =>
+            {
+                lock (lines)
+                    lines.Add(line);
+            }, ct);
+            var mount = MountPointRegex().Match(string.Join('\n', lines));
+            if (attach.ExitCode != 0 || !mount.Success)
+            {
+                FileOps.DeleteFile(image);
+                throw new BuildException($"Could not mount the disk image for ovrport (exit code {attach.ExitCode})",
+                    attach.TailText);
+            }
+            return new CaseSensitiveVolume(mount.Groups[1].Value, image);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if ((await Hdiutil(["detach", Root], null, CancellationToken.None)).ExitCode != 0)
+                await Hdiutil(["detach", "-force", Root], null, CancellationToken.None);
+            FileOps.DeleteFile(image);
+        }
+
+        private static async Task<ProcessResult> Hdiutil(string[] arguments, string? failure, CancellationToken ct)
+        {
+            var spec = new ProcessSpec { FileName = "/usr/bin/hdiutil", Arguments = arguments, LogPrefix = "[hdiutil] " };
+            return failure is null
+                ? await ProcessRunner.RunAsync(spec, ct: ct)
+                : await ProcessRunner.RunCheckedAsync(spec, failure, ct: ct);
+        }
+
+        [System.Text.RegularExpressions.GeneratedRegex(@"<key>mount-point</key>\s*<string>([^<]+)</string>")]
+        private static partial System.Text.RegularExpressions.Regex MountPointRegex();
     }
 }

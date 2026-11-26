@@ -45,3 +45,32 @@ public sealed class UniversalTests
         return dir;
     }
 }
+
+public sealed class CaseTwinTests
+{
+    private static string Zip(string dir, string name, params string[] entries)
+    {
+        var path = Path.Combine(dir, name);
+        using var zip = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Create);
+        foreach (var entry in entries)
+            using (var writer = new StreamWriter(zip.CreateEntry(entry).Open()))
+                writer.Write(entry);
+        return path;
+    }
+
+    [Fact]
+    public void MissingCaseTwins_FindsTheLostOne()
+    {
+        var dir = Directory.CreateTempSubdirectory("repoquest-twins").FullName;
+        try
+        {
+            var input = Zip(dir, "in.apk", "res/Dm.xml", "res/dM.xml", "res/ab.xml", "lib/x.so");
+            Assert.Equal(["res/dM.xml"], UniversalStep.MissingCaseTwins(input, Zip(dir, "lost.apk", "res/Dm.xml", "res/ab.xml", "lib/x.so", "lib/new.so")));
+            Assert.Empty(UniversalStep.MissingCaseTwins(input, Zip(dir, "kept.apk", "res/Dm.xml", "res/dM.xml", "lib/x.so")));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+}

@@ -18,7 +18,10 @@
         <!-- Avalonia's native libraries (Skia, HarfBuzz) are unpacked on start. The .NET tools do not run in this
              process: MonoMod cannot hook the JIT of a single-file app, so they come as a normal folder (tools.zip) -->
         <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-        <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+        <!-- Windows only: on osx-arm64 the compressed single file died with an AccessViolationException in
+             Socket.LoadSocketTypeFromHandle the first time it read a child process's output (.NET 8.0.31, seen in the
+             PEAK builder 2026-11-18); uncompressed it works -->
+        <EnableCompressionInSingleFile Condition="$(RuntimeIdentifier.StartsWith('win'))">true</EnableCompressionInSingleFile>
         <!-- Cecil, Harmony and the bindings work by reflection: trimming would break them -->
         <PublishTrimmed>false</PublishTrimmed>
     </PropertyGroup>
