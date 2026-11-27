@@ -115,7 +115,6 @@ internal static partial class Strings
         ["activity.hint"] =
             "Пока Unity компилирует код игры или упаковывает APK, она может молчать полчаса и дольше, на медленном " +
             "компьютере ещё дольше. Если в диспетчере задач Unity, il2cpp или java нагружают процессор, сборка идёт.",
-        ["stage.universal.download"] = "Скачиваем Java и ovrport",
         ["stage.universal.patch"] = "Делаем APK для Quest и Pico",
         ["stage.universal-setup.java"] = "Проверяем Java",
         ["stage.universal-setup.ovrport"] = "Подготавливаем ovrport",

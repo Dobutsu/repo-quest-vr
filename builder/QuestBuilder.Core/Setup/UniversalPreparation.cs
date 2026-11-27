@@ -8,7 +8,7 @@ public static class UniversalPreparation
     public const string StepId = "universal-setup";
     public const string DefaultVersion = "3.3.0";
 
-    public static async Task EnsureAsync(Workspace workspace, Kit kit, IBuildProgress progress, CancellationToken ct)
+    public static async Task<(string Java, string Jar)> EnsureAsync(Workspace workspace, Kit kit, IBuildProgress progress, CancellationToken ct)
     {
         workspace.Create();
         var stage = "java";
@@ -46,6 +46,7 @@ public static class UniversalPreparation
 
             ct.ThrowIfCancellationRequested();
             progress.StepFinished(StepId, StepStatus.Done);
+            return (java, jar);
         }
         catch (OperationCanceledException)
         {
@@ -56,7 +57,7 @@ public static class UniversalPreparation
         {
             progress.StepFinished(StepId, StepStatus.Failed);
             throw new BuildException($"Could not prepare {stage} for the Quest and Pico APK.",
-                $"{e.Message}\n{(e as BuildException)?.Details}\n{Path.Combine(workspace.Logs, "builder.log")}", e)
+                $"{e.Message}\n{(e as BuildException)?.Details}\n{Log.FilePath ?? Path.Combine(workspace.Logs, "builder.log")}", e)
                 { Code = $"universal-setup-{stage}" };
         }
     }

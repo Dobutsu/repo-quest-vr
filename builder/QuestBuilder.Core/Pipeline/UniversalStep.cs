@@ -47,9 +47,8 @@ public sealed partial class UniversalStep : BuildStep
         if (!File.Exists(input))
             throw new BuildException($"Unity's APK to convert is missing: {input}");
 
-        Report(context, null, "download");
-        var java = await context.ThirdParty.JavaAsync(ct);
-        var jar = await context.ThirdParty.OvrportJarAsync(ct);
+        var (java, jar) = context.UniversalTools
+            ?? throw new BuildException("Prepare the Quest and Pico tools before converting the APK.");
 
         Report(context, null, "patch");
         Directory.CreateDirectory(workspace.Ovrport);

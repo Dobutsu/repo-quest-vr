@@ -112,7 +112,6 @@ internal static partial class Strings
         ["activity.hint"] =
             "Unity can stay quiet for half an hour or longer while it compiles the game's code or packs the APK, more on a " +
             "slower computer. If Task Manager shows Unity, il2cpp or java using the CPU, it is still working.",
-        ["stage.universal.download"] = "Downloading Java and ovrport",
         ["stage.universal.patch"] = "Making the APK for Quest and Pico",
         ["stage.universal-setup.java"] = "Checking Java",
         ["stage.universal-setup.ovrport"] = "Preparing ovrport",

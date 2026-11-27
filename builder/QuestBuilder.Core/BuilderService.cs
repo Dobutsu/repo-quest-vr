@@ -267,7 +267,7 @@ public sealed class BuilderService
             throw new OperationCanceledException();
 
         using var awake = SleepBlocker.Start();
-        await UniversalPreparation.EnsureAsync(Workspace, Kit, progress, ct);
+        var universalTools = await UniversalPreparation.EnsureAsync(Workspace, Kit, progress, ct);
         // Unity installs (Hub CLI) while AssetRipper exports and the patches are baked
         using var unityCancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var unityTask = EnsureUnityAsync(unityCancel.Token);
@@ -280,6 +280,7 @@ public sealed class BuilderService
         {
             context = await BuildSession.PrepareAsync(Workspace, Kit, game, null, Options, State, progress,
                 prepareCancel.Token);
+            context.UniversalTools = universalTools;
             await BuildPipeline.RunAsync(context, prepareCancel.Token, until: "bake");
         }
         catch (OperationCanceledException) when (unityTask.IsFaulted && !ct.IsCancellationRequested)
