@@ -1,0 +1,172 @@
+diff --git a/Source/Input/RebindManager.cs b/Source/Input/RebindManager.cs
+index b4d8884..2524109 100644
+--- a/Source/Input/RebindManager.cs
++++ b/Source/Input/RebindManager.cs
+@@ -2,2 +2 @@
+ using RepoXR.Assets;
+-using RepoXR.Managers;
+@@ -156,7 +155,8 @@ public class RebindManager : MonoBehaviour
+         currentOption = option;
+         currentOperation = option.action.PerformInteractiveRebinding(bindingIndex)
+             .OnMatchWaitForAnother(0.1f).WithControlsHavingToMatchPath("<XRController>").WithTimeout(5)
+-            .OnComplete(_ => CompleteRebind(option)).OnCancel(_ => CompleteRebind(option));
++            .OnComplete(_ => CompleteRebind(option, changed: true))
++            .OnCancel(_ => CompleteRebind(option, changed: false));
+ 
+         foreach (var exclude in DISALLOWED_BINDINGS)
+             currentOperation.WithControlsExcluding(exclude);
+@@ -167,26 +167,22 @@ public class RebindManager : MonoBehaviour
+     /// <summary>
+     /// Save the current binding overrides to the configuration
+     /// </summary>
+-    public void SaveBindings()
+-    {
+-        if (VRSession.IsLeftHanded)
+-            Plugin.Config.ControllerBindingsOverrideLeft.Value = playerInput.actions.SaveBindingOverridesAsJson();
+-        else
+-            Plugin.Config.ControllerBindingsOverride.Value = playerInput.actions.SaveBindingOverridesAsJson();
+-    }
++    public void SaveBindings() => VRInputSystem.Instance.SaveBindings();
+ 
+     /// <summary>
+     /// Finalize the rebinding operation, and update the binding configuration
+     /// </summary>
+-    private void CompleteRebind(ControlOption option)
++    private void CompleteRebind(ControlOption option, bool changed)
+     {
+         currentOperation?.Dispose();
+         currentOperation = null;
+         
+         playerInput.ActivateInput();
+         
++        if (changed)
++            SaveBindings();
++
+         option.ReloadBinding();
+-        SaveBindings();
+ 
+         lastRebindTime = Time.realtimeSinceStartup;
+     }
+@@ -196,9 +192,8 @@ public class RebindManager : MonoBehaviour
+     /// </summary>
+     public void ResetControls()
+     {
+-        playerInput.actions.RemoveAllBindingOverrides();
+-        
+-        SaveBindings();
++        currentOperation?.Cancel();
++        VRInputSystem.Instance.ResetBindings();
+         ReloadBindings();
+     }
+     
+diff --git a/Source/Input/VRInputSystem.cs b/Source/Input/VRInputSystem.cs
+index 0d4876f..56ba189 100644
+--- a/Source/Input/VRInputSystem.cs
++++ b/Source/Input/VRInputSystem.cs
+@@ -44,14 +44,7 @@ public class VRInputSystem : MonoBehaviour
+         playerInput.neverAutoSwitchControlSchemes = false;
+         playerInput.notificationBehavior = PlayerNotifications.InvokeCSharpEvents;
+ 
+-        if (VRSession.IsLeftHanded)
+-        {
+-            playerInput.actions.LoadBindingOverridesFromJson(AssetCollection.RemappableControls.defaultLeftHandedBindings);
+-            ApplyPortLeftHandedDefaults(playerInput.actions);
+-            playerInput.actions.LoadBindingOverridesFromJson(Plugin.Config.ControllerBindingsOverrideLeft.Value, false);
+-        }
+-        else
+-            playerInput.actions.LoadBindingOverridesFromJson(Plugin.Config.ControllerBindingsOverride.Value);
++        LoadBindings();
+ 
+         playerInput.ActivateInput();
+ 
+@@ -441,16 +434,41 @@ public class VRInputSystem : MonoBehaviour
+     /// <summary>
+     /// Reload bindings on dominant hand change
+     /// </summary>
+-    private void DominantHandChanged(object sender, EventArgs e)
++    private void DominantHandChanged(object sender, EventArgs e) => LoadBindings();
++
++    private string SavedBindings
++    {
++        get => VRSession.IsLeftHanded
++            ? Plugin.Config.ControllerBindingsOverrideLeft.Value
++            : Plugin.Config.ControllerBindingsOverride.Value;
++        set
++        {
++            if (VRSession.IsLeftHanded)
++                Plugin.Config.ControllerBindingsOverrideLeft.Value = value;
++            else
++                Plugin.Config.ControllerBindingsOverride.Value = value;
++        }
++    }
++
++    internal void SaveBindings() => SavedBindings = Actions.SaveBindingOverridesAsJson();
++
++    internal void ResetBindings()
++    {
++        SavedBindings = "";
++        LoadBindings();
++    }
++
++    private void LoadBindings()
+     {
++        var actions = Actions;
++        actions.RemoveAllBindingOverrides();
+         if (VRSession.IsLeftHanded)
+         {
+-            playerInput.actions.LoadBindingOverridesFromJson(AssetCollection.RemappableControls.defaultLeftHandedBindings);
+-            ApplyPortLeftHandedDefaults(playerInput.actions);
+-            playerInput.actions.LoadBindingOverridesFromJson(Plugin.Config.ControllerBindingsOverrideLeft.Value, false);
++            actions.LoadBindingOverridesFromJson(AssetCollection.RemappableControls.defaultLeftHandedBindings, false);
++            ApplyPortLeftHandedDefaults(actions);
+         }
+-        else
+-            playerInput.actions.LoadBindingOverridesFromJson(Plugin.Config.ControllerBindingsOverride.Value);
++
++        actions.LoadBindingOverridesFromJson(SavedBindings, false);
+     }
+ 
+     private static void OnControlsChanged(PlayerInput input)
+diff --git a/Source/UI/Controls/ControlOption.cs b/Source/UI/Controls/ControlOption.cs
+index 1ed776e..a16c20a 100644
+--- a/Source/UI/Controls/ControlOption.cs
++++ b/Source/UI/Controls/ControlOption.cs
+@@ -11,7 +11,9 @@ public class ControlOption : MonoBehaviour
+     [SerializeField] protected TextMeshProUGUI controlName;
+     [SerializeField] protected TextMeshProUGUI controlText;
+ 
+-    public InputAction? action => control?.currentInput.action;
++    public InputAction? action => control?.currentInput.action is { } reference
++        ? playerInput.actions.FindAction(reference.id)
++        : null;
+ 
+     private PlayerInput playerInput;
+     private RebindManager manager;
+@@ -38,8 +40,8 @@ public class ControlOption : MonoBehaviour
+ 
+         action.ApplyBindingOverride(bindingIndex, "");
+ 
+-        ReloadBinding();
+         manager.SaveBindings();
++        ReloadBinding();
+     }
+ 
+     public void SetBindToggle(bool toggle)
+@@ -79,7 +81,7 @@ public class ControlOption : MonoBehaviour
+ 
+         bindingIndex = Mathf.Max(control.bindingIndex, 0) +
+                        Mathf.Max(
+-                           control.currentInput.action.GetBindingIndex(VRInputSystem.Instance.CurrentControlScheme), 0);
++                           action!.GetBindingIndex(VRInputSystem.Instance.CurrentControlScheme), 0);
+         
+         if (string.IsNullOrEmpty(VRInputSystem.Instance.CurrentControlScheme))
+         {
+@@ -88,7 +90,7 @@ public class ControlOption : MonoBehaviour
+             return;
+         }
+ 
+-        var binding = control.currentInput.action.bindings[bindingIndex].effectivePath;
++        var binding = action!.bindings[bindingIndex].effectivePath;
+ 
+         if (string.IsNullOrEmpty(binding))
+         {
