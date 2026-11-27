@@ -86,7 +86,11 @@ internal static class Commands
         };
         var progress = new ConsoleProgress();
         using var awake = SleepBlocker.Start();
+        (string Java, string Jar)? universalTools = null;
+        if (buildOptions.Universal && (buildOptions.Only?.Contains("universal") ?? true))
+            universalTools = await UniversalPreparation.EnsureAsync(workspace, kit, progress, cancel.Token);
         var context = await BuildSession.PrepareAsync(workspace, kit, game, unity, buildOptions, state, progress, cancel.Token);
+        context.UniversalTools = universalTools;
         await BuildPipeline.RunAsync(context, cancel.Token);
         if (File.Exists(buildOptions.FinalApkPath(workspace)))
             Console.WriteLine($"APK: {buildOptions.FinalApkPath(workspace)}");

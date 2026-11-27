@@ -16,7 +16,7 @@ public static class Dialogs
         var explained = build?.Code is { } code ? Loc.TryT($"err.{code}") : null;
         var dialog = new Dialog<bool>(Loc.T("error.title"), false)
             .Text(explained ?? (build is not null ? build.Message : Loc.F("error.unexpected", error.Message)));
-        if (explained is not null)
+        if (explained is not null && build?.Code?.StartsWith("universal-setup-", StringComparison.Ordinal) != true)
             dialog.Text(build!.Message, opacity: 0.7);
         if (build?.Code is { } hubCode && HubInstallCodes.Contains(hubCode) && installInHub is not null)
         {

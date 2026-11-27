@@ -146,6 +146,9 @@ public partial class MainWindow : Window, IWindowServices
             Loc.Instance.SetLanguage(language);
             await Task.Delay(800);
             Render(this, Path.Combine(folder, $"main-{language}.png"));
+            vm.ShowSampleBuild(preparing: true);
+            await Task.Delay(800);
+            Render(this, Path.Combine(folder, $"preparing-{language}.png"));
             vm.ShowSampleBuild();
             await Task.Delay(800);
             Render(this, Path.Combine(folder, $"building-{language}.png"));
@@ -167,6 +170,8 @@ public partial class MainWindow : Window, IWindowServices
                 ("untested", Dialogs.Untested("v0.4.5.0")),
                 ("error-hub", Dialogs.Error(new BuildException("Unity Hub did not install Unity 6000.3.17f1",
                     "[hub] Error: install failed (exit code 1)") { Code = "unity-install-failed" }, () => { }, () => { })),
+                ("error-ovrport", Dialogs.Error(new BuildException("Could not prepare OpenXR.",
+                    "CantCheckoutException\nC:\\RepoQuest\\logs\\builder.log") { Code = "universal-setup-openxr" }, () => { }, null)),
                 ("error-unexpected", Dialogs.Error(new InvalidOperationException("Something odd"), () => { }, null)),
                 ("install-none", Dialogs.InstallHelp(unauthorized: false)),
                 ("install-unauthorized", Dialogs.InstallHelp(unauthorized: true)),

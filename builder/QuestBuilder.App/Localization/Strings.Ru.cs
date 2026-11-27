@@ -78,6 +78,8 @@ internal static partial class Strings
         ["build.running"] = "Идёт сборка… {0}",
         ["build.stopping"] = "Останавливаем…",
 
+        ["step.universal-setup.title"] = "Подготовка Quest и Pico",
+        ["step.universal-setup.about"] = "Проверяет инструменты для APK Quest и Pico до запуска Unity.",
         ["step.unity-setup.title"] = "Unity",
         ["step.unity-setup.about"] = "Движок, который собирает версию для Quest. Ставится один раз, около 15 ГБ.",
         ["step.setup.title"] = "Инструменты",
@@ -113,8 +115,10 @@ internal static partial class Strings
         ["activity.hint"] =
             "Пока Unity компилирует код игры или упаковывает APK, она может молчать полчаса и дольше, на медленном " +
             "компьютере ещё дольше. Если в диспетчере задач Unity, il2cpp или java нагружают процессор, сборка идёт.",
-        ["stage.universal.download"] = "Скачиваем Java и ovrport",
         ["stage.universal.patch"] = "Делаем APK для Quest и Pico",
+        ["stage.universal-setup.java"] = "Проверяем Java",
+        ["stage.universal-setup.ovrport"] = "Подготавливаем ovrport",
+        ["stage.universal-setup.openxr"] = "Подготавливаем OpenXR 3.3.0",
         ["stage.unity-setup.hub-download"] = "Скачиваем Unity Hub",
         ["stage.unity-setup.hub-install"] = "Устанавливаем Unity Hub",
         ["stage.unity-setup.editor"] = "Скачиваем Unity",
@@ -396,6 +400,9 @@ internal static partial class Strings
         ["err.adb-missing"] =
             "Программа для установки на шлем (adb) ставится вместе с Unity, а её пока нет. Сначала соберите APK — " +
             "или установите его через SideQuest или Meta Quest Developer Hub.",
+        ["err.universal-setup-java"] = "Не удалось подготовить Java. Причина указана в подробностях и в builder.log. Нажмите «Собрать APK», чтобы повторить попытку.",
+        ["err.universal-setup-ovrport"] = "Не удалось подготовить ovrport. Причина указана в подробностях и в builder.log. Нажмите «Собрать APK», чтобы повторить попытку.",
+        ["err.universal-setup-openxr"] = "Не удалось подготовить OpenXR 3.3.0. Причина указана в подробностях и в builder.log. Нажмите «Собрать APK», чтобы повторить попытку.",
         ["err.universal-convert"] =
             "Не получилось сделать APK для Quest и Pico. Причина — в подробностях и в logs\\ovrport.log рабочей папки; " +
             "«Собрать отчёт» соберёт их.",

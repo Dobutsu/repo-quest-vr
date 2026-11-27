@@ -54,6 +54,7 @@ public sealed class BuildContext
     public required PythonEnv Python { get; init; }
     public required ToolLauncher Tools { get; init; }
     public required ThirdParty ThirdParty { get; init; }
+    public (string Java, string Jar)? UniversalTools { get; set; }
     public required BuildState State { get; init; }
     public required BuildOptions Options { get; init; }
     public required IBuildProgress Progress { get; init; }
