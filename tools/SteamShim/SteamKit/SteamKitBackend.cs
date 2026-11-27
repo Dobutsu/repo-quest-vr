@@ -49,6 +49,7 @@ namespace RepoQuest.Steam
         /// </summary>
         private static readonly TimeSpan TicketAckTimeout = TimeSpan.FromSeconds(5);
         private const string MachineName = "RepoXR Quest";
+        private static int announcedGame;
 
         private readonly SessionStore session;
         private readonly SteamClient client;
@@ -456,7 +457,8 @@ namespace RepoQuest.Steam
 
             reconnectDelaySeconds = 1;
             friends.SetPersonaState(EPersonaState.Online);
-            SendGamesPlayed();
+            if (running && !signingOut && Interlocked.Exchange(ref announcedGame, 1) == 0)
+                SendGamesPlayed();
             loggedOn.Set();
             Log($"[Steam] logged on as {client.SteamID?.ConvertToUInt64()}");
             RefreshFriends();
