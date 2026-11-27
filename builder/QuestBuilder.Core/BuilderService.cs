@@ -58,7 +58,7 @@ public sealed class BuilderService
 {
     /// <summary>Steps as the window lists them: Unity installation, Python, then the pipeline's steps</summary>
     public static IReadOnlyList<string> Steps { get; } =
-        ["unity-setup", "setup", "export", "bake", "project", "unity", "universal"];
+        [UniversalPreparation.StepId, "unity-setup", "setup", "export", "bake", "project", "unity", "universal"];
 
     /// <summary>A first build: export ~2.5 GB, project with Unity's Library ~30 GB, APKs and tools</summary>
     private const long FirstBuildBytes = 40L << 30;
@@ -267,6 +267,7 @@ public sealed class BuilderService
             throw new OperationCanceledException();
 
         using var awake = SleepBlocker.Start();
+        await UniversalPreparation.EnsureAsync(Workspace, Kit, progress, ct);
         // Unity installs (Hub CLI) while AssetRipper exports and the patches are baked
         using var unityCancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var unityTask = EnsureUnityAsync(unityCancel.Token);

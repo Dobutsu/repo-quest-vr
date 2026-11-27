@@ -136,7 +136,7 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
     }
 
     /// <summary>Reads the builder's status (hashes game files: a second or so) and shows it</summary>
-    private async Task RefreshAsync()
+    private async Task RefreshAsync(bool keepBuildSteps = false)
     {
         if (service is null)
             return;
@@ -144,7 +144,7 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
         try
         {
             status = await Task.Run(service.GetStatus);
-            Apply(status, resetSteps: !IsBuilding);
+            Apply(status, resetSteps: !IsBuilding && !keepBuildSteps);
         }
         catch (Exception e)
         {
@@ -183,7 +183,7 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             var done = step.Id switch
             {
                 "unity-setup" => s.UnityReady,
-                "setup" => false,
+                "setup" or "universal-setup" => false,
                 _ => s.GamePath is not null && !s.PendingSteps.Contains(step.Id),
             };
             step.Reset(done ? StepStatus.UpToDate : StepStatus.Pending);
@@ -296,7 +296,7 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
             work.Dispose();
             work = null;
         }
-        await RefreshAsync();
+        await RefreshAsync(keepBuildSteps: true);
     }
 
     [RelayCommand]
@@ -508,8 +508,20 @@ public sealed partial class MainViewModel : ObservableObject, IBuildProgress
     }
 
     /// <summary>--screenshot: a build in its last step, for checking the layout</summary>
-    public void ShowSampleBuild()
+    public void ShowSampleBuild(bool preparing = false)
     {
+        if (preparing)
+        {
+            foreach (var step in Steps)
+                step.Reset(StepStatus.Pending);
+            var preparation = Steps.First(step => step.Id == "universal-setup");
+            preparation.Start();
+            preparation.Report(null, "openxr", null);
+            IsBusy = IsBuilding = true;
+            BusyText = BuildLine(TimeSpan.FromSeconds(8));
+            return;
+        }
+
         foreach (var step in Steps)
         {
             if (step.Id == "unity")

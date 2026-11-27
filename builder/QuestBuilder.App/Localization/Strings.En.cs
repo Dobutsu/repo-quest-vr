@@ -75,6 +75,8 @@ internal static partial class Strings
         ["build.running"] = "Building… {0}",
         ["build.stopping"] = "Stopping…",
 
+        ["step.universal-setup.title"] = "Prepare Quest and Pico",
+        ["step.universal-setup.about"] = "Checks the tools for a Quest and Pico APK before Unity starts.",
         ["step.unity-setup.title"] = "Unity",
         ["step.unity-setup.about"] = "The engine that builds the Quest version. Installed once, about 15 GB.",
         ["step.setup.title"] = "Build tools",
@@ -112,6 +114,9 @@ internal static partial class Strings
             "slower computer. If Task Manager shows Unity, il2cpp or java using the CPU, it is still working.",
         ["stage.universal.download"] = "Downloading Java and ovrport",
         ["stage.universal.patch"] = "Making the APK for Quest and Pico",
+        ["stage.universal-setup.java"] = "Checking Java",
+        ["stage.universal-setup.ovrport"] = "Preparing ovrport",
+        ["stage.universal-setup.openxr"] = "Preparing OpenXR 3.3.0",
         ["stage.unity-setup.hub-download"] = "Downloading Unity Hub",
         ["stage.unity-setup.hub-install"] = "Installing Unity Hub",
         ["stage.unity-setup.editor"] = "Downloading Unity",
@@ -392,6 +397,9 @@ internal static partial class Strings
         ["err.adb-missing"] =
             "The program that installs games on the headset (adb) comes with Unity, which is not installed yet. Build " +
             "the APK first, or install it with SideQuest or Meta Quest Developer Hub.",
+        ["err.universal-setup-java"] = "Could not prepare Java. See the details and builder.log. Select Build APK to retry.",
+        ["err.universal-setup-ovrport"] = "Could not prepare ovrport. See the details and builder.log. Select Build APK to retry.",
+        ["err.universal-setup-openxr"] = "Could not prepare OpenXR 3.3.0. See the details and builder.log. Select Build APK to retry.",
         ["err.universal-convert"] =
             "Making the APK for Quest and Pico failed. The details and logs\\ovrport.log in the working folder say why; " +
             "\"Create report\" collects them.",

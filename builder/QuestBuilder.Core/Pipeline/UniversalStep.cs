@@ -1,5 +1,7 @@
 using System.IO.Compression;
 
+using RepoQuest.Builder.Setup;
+
 namespace RepoQuest.Builder.Pipeline;
 
 /// <summary>
@@ -14,7 +16,7 @@ namespace RepoQuest.Builder.Pipeline;
 public sealed partial class UniversalStep : BuildStep
 {
     /// <summary>ovrport's OpenXR loader release (an "instance"): the newest one not marked experimental, tested 16.10</summary>
-    private const string Instance = "3.3.0";
+    private const string Instance = UniversalPreparation.DefaultVersion;
 
     /// <summary>ovrport's recommended patches, without patch_replace_icon_label (it looks the package up in Meta's
     /// store, where ours is not) and patch_mark_as_debuggable (Android runs debuggable apps slower, on Quest too)</summary>

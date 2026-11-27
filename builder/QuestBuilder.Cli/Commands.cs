@@ -86,6 +86,8 @@ internal static class Commands
         };
         var progress = new ConsoleProgress();
         using var awake = SleepBlocker.Start();
+        if (buildOptions.Universal && (buildOptions.Only?.Contains("universal") ?? true))
+            await UniversalPreparation.EnsureAsync(workspace, kit, progress, cancel.Token);
         var context = await BuildSession.PrepareAsync(workspace, kit, game, unity, buildOptions, state, progress, cancel.Token);
         await BuildPipeline.RunAsync(context, cancel.Token);
         if (File.Exists(buildOptions.FinalApkPath(workspace)))
