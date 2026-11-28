@@ -362,6 +362,9 @@ def build_shader(name: str, props_block: str, declared: dict[str, str], stored: 
     metallic = "_Metallic" if "_Metallic" in floats else None
     smoothness = pick(["_Smoothness", "_Glossiness"], floats, own)
     cutoff = "_Cutoff" if "_Cutoff" in floats and ("clip" in lname or "cutout" in lname or "decal" in lname) else None
+    ciconia_lite_cutout = name == "Ciconia Studio/CS_Standard/Builtin/Lite/Standard (Specular setup)/Cutout"
+    if ciconia_lite_cutout:
+        cutoff = "_IntensityCutoutMap"
     overlay = "_ColorOverlay" if "_ColorOverlay" in colors and "_ColorOverlayAmount" in floats else None
     fresnel = "_FresnelColor" if "_FresnelColor" in colors and "_FresnelPower" in floats else None
     tiling_xy = "_TilingX" in floats and "_TilingY" in floats
@@ -430,6 +433,10 @@ def build_shader(name: str, props_block: str, declared: dict[str, str], stored: 
         uv = f"IN.texUV * {albedo}_ST.xy + {albedo}_ST.zw"
     else:
         uv = "IN.texUV"
+    if ciconia_lite_cutout:
+        tiling = "_GlobalXYTilingXYZWOffsetXY"
+        declare("float4", tiling)
+        uv = f"({uv}) * {tiling}.xy + {tiling}.zw"
     if scroll:
         declare("float", "_Scroll")
         uv = f"({uv}) + _Time.y * _Scroll * 0.05"
@@ -440,9 +447,23 @@ def build_shader(name: str, props_block: str, declared: dict[str, str], stored: 
         body.append(f"fixed4 c = tex2D({albedo}, uv);")
     else:
         body.append("fixed4 c = fixed4(1, 1, 1, 1);")
+    if ciconia_lite_cutout:
+        # The original clips the texture mask before applying the material tint.
+        declare("sampler2D", "_CutoutMap")
+        declare("float4", "_CutoutMap_ST")
+        for prop in ("_InvertABaseColor", "_UseBaseColorAlpha", "_InvertCutout", cutoff):
+            declare("float", prop)
+        body.extend([
+            "float baseAlpha = _InvertABaseColor != 0 ? 1 - c.a : c.a;",
+            "float2 cutoutUV = IN.texUV * _CutoutMap_ST.xy + _CutoutMap_ST.zw;",
+            "float mask = _UseBaseColorAlpha != 0 ? baseAlpha : tex2D(_CutoutMap, cutoutUV).r;",
+            "mask = _InvertCutout != 0 ? 1 - mask : mask;",
+            "clip(saturate(mask) - _IntensityCutoutMap);",
+        ])
     if color:
         declare("fixed4", color)
-        channels = "" if colour_has_alpha(props_block, color, stored["alpha"].get(color), bool(cutoff)) else ".rgb"
+        channels = "" if colour_has_alpha(props_block, color, stored["alpha"].get(color),
+                                         bool(cutoff) and not ciconia_lite_cutout) else ".rgb"
         body.append(f"c{channels} *= {color}{channels};")
     if "particles" in lname or unlit_ui:
         body.append("c *= IN.color;")
@@ -451,9 +472,9 @@ def build_shader(name: str, props_block: str, declared: dict[str, str], stored: 
         declare("float", "_ColorOverlayAmount")
         if unlit or self_lit:
             body.append("c.rgb = lerp(c.rgb, _ColorOverlay.rgb, saturate(_ColorOverlayAmount));")
-    if cutoff:
-        declare("float", "_Cutoff")
-        body.append("clip(c.a - _Cutoff);")
+    if cutoff and not ciconia_lite_cutout:
+        declare("float", cutoff)
+        body.append(f"clip(c.a - {cutoff});")
 
     if unlit or self_lit:
         body.append("o.Albedo = 0;")
